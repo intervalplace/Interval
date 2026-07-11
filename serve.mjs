@@ -79,7 +79,7 @@ const server = http.createServer((req, res) => {
   const json = (obj) => { res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(obj)) }
   try {
     if (path === '/api/world') return json({
-      tick: node.state.tick, worldId: client.worldId,
+      tick: node.state.tick, worldId: RULES_HASH.slice(0, 12),
       players: Object.keys(node.state.players).length,
       mobs: Object.values(node.state.mobs).filter(m => m.hp > 0).length })
     if (path === '/api/hiscores') return json({ tick: node.state.tick, players: hiscores() })
@@ -108,6 +108,11 @@ wss.on('connection', (ws) => {
   sockets.set(ws, null)
   ws.on('close', () => sockets.delete(ws))
   ws.on('message', (buf) => {
+    try { handle(ws, buf) } catch (err) { console.error('ws action error:', err.message) }
+  })
+})
+
+function handle(ws, buf) {
     let m; try { m = JSON.parse(buf) } catch { return }
     if (m.type === 'auth') {
       const id = identityFor(m.uid)
@@ -135,8 +140,7 @@ wss.on('connection', (ws) => {
     else if (a.do === 'chat') client.chat(String(a.text))
     else if (a.do === 'name') client.claimName(String(a.name))
     else if (a.do === 'stop') client.stop()
-  })
-})
+}
 
 node.onChat = (msg) => {
   const name = node.state.players[msg.playerId]?.name ?? msg.playerId.slice(0, 6)
