@@ -140,6 +140,7 @@ let cam = { x: 0, y: 0 }      // top-left tile of the viewport
 const DAY = 2400              // ticks per day: a full day every 24 minutes
 // the sky is derived from the tick: shared by every window, stored by none
 const lightCv = document.createElement('canvas')
+let vignette = null
 const cv = document.getElementById('world'), cx = cv.getContext('2d')
 const ICONS = { 'logs': '🪵', 'ore': '🪨', 'raw-fish': '🐟', 'cooked-fish': '🍖', 'burnt-fish': '💀', 'bones': '🦴',
                 'bronze-sword': '🗡️', 'bronze-hatchet': '🪓', 'bronze-pickaxe': '⛏️' }
@@ -230,7 +231,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b34'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b35'  // stamp: if your screen says an older build, hard-refresh
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
@@ -889,8 +890,13 @@ function drawScene(now) {
     cx.fillRect(0, 0, cv.width, cv.height)
   }
   if (darkness > 0.03) {
-    lightCv.width = cv.width; lightCv.height = cv.height
+    // resizing a canvas reallocates it; do that only when the size changed
+    if (lightCv.width !== cv.width || lightCv.height !== cv.height) {
+      lightCv.width = cv.width; lightCv.height = cv.height
+    }
     const L = lightCv.getContext('2d')
+    L.globalCompositeOperation = 'source-over'
+    L.clearRect(0, 0, cv.width, cv.height)
     L.fillStyle = 'rgba(8,12,38,' + darkness + ')'
     L.fillRect(0, 0, cv.width, cv.height)
     // campfires hold back the night
@@ -916,17 +922,20 @@ function drawScene(now) {
     }
   }
 
-  // soft vignette: the old-monitor glow
-  const vg = cx.createRadialGradient(cv.width/2, cv.height/2, cv.height*0.55, cv.width/2, cv.height/2, cv.height*1.05)
-  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(10,14,6,.34)')
-  cx.fillStyle = vg; cx.fillRect(0, 0, cv.width, cv.height)
+  // soft vignette: the old-monitor glow (built once, reused every frame)
+  if (!vignette) {
+    vignette = cx.createRadialGradient(cv.width/2, cv.height/2, cv.height*0.55, cv.width/2, cv.height/2, cv.height*1.05)
+    vignette.addColorStop(0, 'rgba(0,0,0,0)'); vignette.addColorStop(1, 'rgba(10,14,6,.34)')
+  }
+  cx.fillStyle = vignette; cx.fillRect(0, 0, cv.width, cv.height)
 
   const phase = cyc < 0.06 ? 'dawn' : cyc < 0.44 ? 'day' : cyc < 0.56 ? 'dusk'
               : cyc < 0.94 ? 'night' : 'dawn'
   cx.fillStyle = 'rgba(217,201,163,.75)'; cx.font = '10px Verdana'; cx.textAlign = 'left'
   cx.fillText('world ' + curWorldId + '  \u00b7  tick ' + s.tick + '  \u00b7  ' + phase + '  \u00b7  ' + BUILD, 6, cv.height - 6)
 }
-requestAnimationFrame(function frame(now) { drawScene(now); requestAnimationFrame(frame) })
+requestAnimationFrame(function frame(now) {
+  if (document.hidden) { requestAnimationFrame(frame); return } drawScene(now); requestAnimationFrame(frame) })
 
 function panel(s) {
   const me = s.players[myId]; if (!me) return
