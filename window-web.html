@@ -23,8 +23,9 @@
     display: flex; justify-content: center; align-items: flex-start;
     min-height: 100vh; padding: 16px;
   }
-  #frame { display: flex; gap: 0; border: 3px solid var(--stone-dk); }
-  canvas { display: block; background: #253a17; image-rendering: pixelated; cursor: crosshair; }
+  #frame { display: flex; gap: 0; border: 3px solid var(--stone-dk); flex-wrap: wrap; max-width: 1100px; }
+  canvas { display: block; background: #253a17; image-rendering: pixelated; cursor: crosshair;
+           width: min(100%, 840px); height: auto; }
   /* the classic stone bevel: light top-left, dark bottom-right */
   .stone {
     background: var(--stone);
@@ -190,7 +191,11 @@ document.getElementById('inv').addEventListener('click', (e) => {
 cv.addEventListener('click', (e) => {
   if (!world) return
   const r = cv.getBoundingClientRect()
-  const x = Math.floor((e.clientX - r.left) / TILE), y = Math.floor((e.clientY - r.top) / TILE)
+  // canvas is CSS-scaled: convert screen px → canvas px before tile math
+  const sx = (e.clientX - r.left) * (cv.width / r.width)
+  const sy = (e.clientY - r.top) * (cv.height / r.height)
+  const x = Math.floor(sx / TILE), y = Math.floor(sy / TILE)
+  if (x < 0 || x >= W || y < 0 || y >= H) return
   const me = world.players[myId]; if (!me) return
   const near = (a, b) => Math.max(Math.abs(a.x - x), Math.abs(a.y - y)) <= 0 &&
                           Math.max(Math.abs(me.x - a.x), Math.abs(me.y - a.y)) <= 1
