@@ -10,6 +10,7 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Interval</title>
 <style>
   :root {
@@ -24,7 +25,7 @@
     min-height: 100vh; padding: 16px;
   }
   #frame { display: flex; gap: 0; border: 3px solid var(--stone-dk); width: min(96vw, 1180px); }
-  #view { flex: 1 1 auto; min-width: 0; background: #253a17; }
+  #view { flex: 1 1 auto; min-width: 0; align-self: flex-start; }
   canvas { display: block; background: #253a17; image-rendering: pixelated; cursor: crosshair;
            width: 100%; height: auto; }
   /* the classic stone bevel: light top-left, dark bottom-right */
@@ -58,7 +59,7 @@
 </head>
 <body>
 <div id="frame">
-  <div id="view"><canvas id="world" width="560" height="320"></canvas></div>
+  <div id="view"><canvas id="world" width="560" height="400"></canvas></div>
   <div id="panel" class="stone">
     <h2 id="whoami">connecting…</h2>
     <div id="hpbar"><div id="hpfill"></div><div id="hptext"></div></div>
@@ -73,7 +74,7 @@
   </div>
 </div>
 <script>
-const TILE = 40, VIEW_W = 14, VIEW_H = 8
+const TILE = 40, VIEW_W = 14, VIEW_H = 10
 let W = 14, H = 8            // world dims: set from genesis on first state
 let cam = { x: 0, y: 0 }      // top-left tile of the viewport
 const DAY = 2400              // ticks per day: a full day every 24 minutes
@@ -287,9 +288,13 @@ function poly(pts, fill, stroke) {
   cx.closePath(); cx.fillStyle = fill; cx.fill()
   if (stroke) { cx.strokeStyle = stroke; cx.lineWidth = 1; cx.stroke() }
 }
+function tileHash(x, y, k) { // integer avalanche: adjacent tiles decorrelate
+  let h = (x * 374761393 + y * 668265263 + (k ?? 0) * 2246822519) | 0
+  h = Math.imul(h ^ (h >>> 13), 1274126177)
+  return ((h ^ (h >>> 16)) >>> 0)
+}
 function tileShade(x, y) {
-  const h = (x * 7 + y * 13) % 4
-  return ['#3d5a23', '#436327', '#365020', '#40592a'][h]
+  return ['#3d5a23', '#436327', '#365020', '#40592a', '#3a5726'][tileHash(x, y, 0) % 5]
 }
 
 // pre-render the ground lazily once world dims are known: it never changes
@@ -298,7 +303,7 @@ let groundReady = false
 function buildGround() {
   ground.width = W * TILE; ground.height = H * TILE
   const g = ground.getContext('2d')
-  const h2 = (x, y, k) => ((x * 73 + y * 149 + k * 31) % 97) / 97
+  const h2 = (x, y, k) => (tileHash(x, y, k) % 1024) / 1024
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     g.fillStyle = tileShade(x, y); g.fillRect(px(x), py(y), TILE, TILE)
     g.strokeStyle = 'rgba(0,0,0,.12)'; g.strokeRect(px(x) + .5, py(y) + .5, TILE - 1, TILE - 1)
@@ -437,7 +442,7 @@ function drawScene(now) {
   for (const [id, n] of Object.entries(s.nodes)) {
     const X = px(n.x), Y = py(n.y), dep = n.depletedUntil > s.tick
     if (n.type === 'tree') {
-      const v = (n.x * 7 + n.y * 13) % 3   // three tree builds
+      const v = tileHash(n.x, n.y, 9) % 3   // three tree builds
       const g1 = ['#2f6b1e', '#2a6329', '#356f18'][v]
       const g2 = ['#3a7d26', '#347634', '#428321'][v]
       const spread = [14, 11, 16][v], top = [2, 6, 0][v]
@@ -449,7 +454,7 @@ function drawScene(now) {
       } else poly([[X+14,Y+20],[X+26,Y+20],[X+22,Y+26],[X+18,Y+26]], '#4a3319')
     }
     if (n.type === 'rock') {
-      const v = (n.x * 5 + n.y * 11) % 3
+      const v = tileHash(n.x, n.y, 8) % 3
       const c = dep ? '#3a3a3a' : ['#7a7a72', '#83786a', '#6f7478'][v]
       poly([[X+8,Y+30],[X+14,Y+12],[X+26,Y+9],[X+34,Y+24],[X+28,Y+33]], c, '#2c2c2c')
       if (!dep) { cx.fillStyle = 'rgba(255,255,255,.14)'; cx.fillRect(X+16, Y+13, 6, 3) }
