@@ -101,6 +101,7 @@
   <div id="equip" style="font-size:12px;padding:4px 6px;background:var(--stone-dk);cursor:pointer"></div>
   <div id="trade" style="display:none;font-size:12px;padding:6px;background:var(--stone-dk)"></div>
   <div id="offers" style="font-size:12px"></div>
+  <div id="vault" style="display:none;font-size:12px;padding:6px;background:var(--stone-dk)"></div>
     <h2>Skills</h2><div id="skills"></div>
     <h2>Inventory</h2><div id="inv"></div>
     <div id="feed" class="stone"></div>
@@ -254,7 +255,7 @@ function onState(s, worldId) {
   }
   else if (me && intent?.kind === 'cookall') {
     const i = me.inventory.findIndex(sl => sl && sl.item === 'raw-fish')
-    const fire = Object.values(s.nodes).find(n => n.type === 'campfire'
+    const fire = Object.values(s.nodes).find(n => (n.type === 'campfire' || n.type === 'fire')
       && Math.abs(me.x - n.x) + Math.abs(me.y - n.y) === 1)
     if (i === -1) { intent = null; feed("You've cooked everything you had.") }
     else if (!fire) { intent = null }
@@ -312,12 +313,26 @@ function onState(s, worldId) {
     const GAIN = { 'logs': 'You get some logs.', 'ore': 'You manage to mine some ore.',
                    'raw-fish': 'You catch a fish!', 'cooked-fish': 'Nicely cooked.',
                    'burnt-fish': 'You accidentally burn the fish.' }
-    const cnt = inv => inv.reduce((m, s) => (s && (m[s.item] = (m[s.item] || 0) + 1), m), {})
+    const cnt = inv => inv.reduce((m, sl) => (sl && (m[sl.item] = (m[sl.item] || 0) + 1), m), {})
     const a = cnt(old.inventory), b = cnt(me.inventory)
-    for (const item in b) if ((b[item] || 0) > (a[item] || 0) && GAIN[item]) feed(GAIN[item])
-    if (old.trade && !me.trade && JSON.stringify(old.inventory) !== JSON.stringify(me.inventory)) {
-      feed('The trade settles. Pleasure doing business.')
+
+    // trade settlement beats the generic gain messages, on BOTH sides
+    let tradeItem = null
+    if (old.trade && !me.trade && (b[old.trade.wantItem] || 0) > (a[old.trade.wantItem] || 0)) {
+      tradeItem = old.trade.wantItem   // I offered; they accepted
+      feed('Trade complete \u2014 you received ' + tradeItem.replace('-', ' ') + '. Pleasure doing business.')
     }
+    for (const [pid2, pOld] of Object.entries(prev.players)) {
+      if (pid2 === myId || !pOld.trade || pOld.trade.to !== myId) continue
+      if (s.players[pid2]?.trade) continue // still open: not settled
+      const gi = pOld.inventory[pOld.trade.giveSlot]?.item
+      if (gi && (b[gi] || 0) > (a[gi] || 0)) {
+        tradeItem = gi                  // I accepted; the goods arrived
+        feed('Trade complete \u2014 you received ' + gi.replace('-', ' ') + '.')
+      }
+    }
+    for (const item in b) if ((b[item] || 0) > (a[item] || 0) && GAIN[item] && item !== tradeItem) feed(GAIN[item])
+    if (me.skills.firemaking > old.skills.firemaking) feed('The fire catches. It will burn for a minute.')
     // your foe fell → its loot is lying there
     if (old.action?.type === 'attack') {
       const mob = s.mobs[old.action.mobId], mobOld = prev.mobs[old.action.mobId]
@@ -362,7 +377,12 @@ function buildGround() {
   const h2 = (x, y, k) => (tileHash(x, y, k) % 1024) / 1024
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     g.fillStyle = tileShade(x, y); g.fillRect(px(x), py(y), TILE, TILE)
-    g.strokeStyle = 'rgba(0,0,0,.12)'; g.strokeRect(px(x) + .5, py(y) + .5, TILE - 1, TILE - 1)
+    // soft depth instead of hard grid: a whisper of shade at two edges
+    g.fillStyle = 'rgba(0,0,0,.055)'
+    g.fillRect(px(x), py(y) + TILE - 2, TILE, 2)
+    g.fillRect(px(x) + TILE - 2, py(y), 2, TILE)
+    g.fillStyle = 'rgba(255,255,255,.03)'
+    g.fillRect(px(x), py(y), TILE, 1.5)
     // grass tufts
     if (h2(x, y, 1) < 0.35) {
       const tx = px(x) + 6 + h2(x, y, 2) * 26, ty = py(y) + 6 + h2(x, y, 3) * 26
@@ -495,49 +515,17 @@ function drawScene(now) {
   cx.translate(-cam.x * TILE, -cam.y * TILE)
   cx.drawImage(ground, 0, 0)
 
-  for (const [id, n] of Object.entries(s.nodes)) {
-    const X = px(n.x), Y = py(n.y), dep = n.depletedUntil > s.tick
-    if (n.type === 'tree') {
-      const v = tileHash(n.x, n.y, 9) % 3   // three tree builds
-      const g1 = ['#2f6b1e', '#2a6329', '#356f18'][v]
-      const g2 = ['#3a7d26', '#347634', '#428321'][v]
-      const spread = [14, 11, 16][v], top = [2, 6, 0][v]
-      poly([[X+18,Y+22],[X+22,Y+22],[X+22,Y+34],[X+18,Y+34]], '#5c4023')
-      if (!dep) {
-        const sway = Math.sin(now / 900 + n.x) * 1.2
-        poly([[X+20+sway,Y+top],[X+20+spread,Y+24],[X+20-spread,Y+24]], g1, '#1e4712')
-        poly([[X+20+sway,Y+top+6],[X+20+spread-3,Y+26],[X+20-spread+3,Y+26]], g2)
-      } else poly([[X+14,Y+20],[X+26,Y+20],[X+22,Y+26],[X+18,Y+26]], '#4a3319')
-    }
-    if (n.type === 'rock') {
-      const v = tileHash(n.x, n.y, 8) % 3
-      const c = dep ? '#3a3a3a' : ['#7a7a72', '#83786a', '#6f7478'][v]
-      poly([[X+8,Y+30],[X+14,Y+12],[X+26,Y+9],[X+34,Y+24],[X+28,Y+33]], c, '#2c2c2c')
-      if (!dep) { cx.fillStyle = 'rgba(255,255,255,.14)'; cx.fillRect(X+16, Y+13, 6, 3) }
-    }
-    if (n.type === 'fishing-spot') {
-      cx.fillStyle = dep ? '#2a4a5a' : '#2e6b8a'
-      cx.fillRect(X+4, Y+4, TILE-8, TILE-8)
-      cx.fillStyle = 'rgba(255,255,255,.5)'
-      const d1 = (now / 90) % (TILE - 18), d2 = (now / 130 + 14) % (TILE - 18)
-      cx.fillRect(X + 6 + d1, Y + 13, 8, 1.6)
-      cx.fillRect(X + 6 + d2, Y + 24, 8, 1.6)
-    }
-    if (n.type === 'anvil') {
-      poly([[X+11,Y+31],[X+29,Y+31],[X+27,Y+27],[X+13,Y+27]], '#3a342c')
-      poly([[X+13,Y+27],[X+27,Y+27],[X+26,Y+22],[X+14,Y+22]], '#55504a')
-      poly([[X+10,Y+22],[X+30,Y+22],[X+30,Y+17],[X+16,Y+17],[X+10,Y+19]], '#66625c', '#2c2a26')
-    }
-    if (n.type === 'campfire') {
-      poly([[X+10,Y+32],[X+30,Y+32],[X+26,Y+28],[X+14,Y+28]], '#4a3319')
-      const f1 = Math.sin(now / 90) * 2.4, f2 = Math.sin(now / 70 + 2) * 1.8
-      poly([[X+20+f1,Y+8],[X+27,Y+28],[X+13,Y+28]], '#e67e22', '#a04000')
-      poly([[X+20+f2,Y+13],[X+24,Y+28],[X+16,Y+28]], '#f4d03f')
-      if (Math.floor(now / 300) % 3 === 0) { cx.fillStyle = 'rgba(200,200,200,.35)'; cx.fillRect(X + 19 + f2, Y - 2, 2.4, 2.4) }
-    }
+  // painter's algorithm: everything sorts by its tile row (then a layer
+  // priority within the row), so a citizen north of a tree stands BEHIND
+  // its canopy. Depth is what makes a flat world read as a place.
+  const layer = []  // { z, draw }
+  const Z = (y, prio) => y * 10 + prio
+  const shadow = (X, Y, rx) => {
+    cx.fillStyle = 'rgba(0,0,0,.25)'
+    cx.beginPath(); cx.ellipse(X + 20, Y + 33, rx, rx * 0.34, 0, 0, 7); cx.fill()
   }
 
-  // gold frame on your active target
+  // gold frame on your active target: on the ground, under everything
   const meP = s.players[myId]
   if (meP?.action) {
     const tgt = s.nodes[meP.action.nodeId] ?? s.mobs[meP.action.mobId]
@@ -547,47 +535,152 @@ function drawScene(now) {
     }
   }
 
-  // ground items: piles at the tile's lower-left, clear of standing feet,
-  // with a glint so the eye finds them even in clutter
+  for (const [id, n] of Object.entries(s.nodes)) {
+    const X = px(n.x), Y = py(n.y), dep = n.depletedUntil > s.tick
+    if (n.type === 'fishing-spot') {
+      // ponds paint flat on the ground, below every standing thing
+      layer.push({ z: Z(n.y, 0), draw: () => {
+        const grad = cx.createLinearGradient(X, Y, X, Y + TILE)
+        grad.addColorStop(0, dep ? '#26404e' : '#2a5f7d')
+        grad.addColorStop(1, dep ? '#1d3340' : '#1f4a63')
+        cx.fillStyle = grad
+        cx.beginPath()
+        cx.moveTo(X + 8, Y + 3); cx.lineTo(X + TILE - 6, Y + 5)
+        cx.lineTo(X + TILE - 3, Y + 16); cx.lineTo(X + TILE - 7, Y + TILE - 4)
+        cx.lineTo(X + 9, Y + TILE - 3); cx.lineTo(X + 3, Y + 22); cx.closePath()
+        cx.fill()
+        cx.strokeStyle = 'rgba(20,30,15,.5)'; cx.lineWidth = 2; cx.stroke()
+        cx.fillStyle = 'rgba(255,255,255,.45)'
+        const d1 = (now / 90) % (TILE - 20), d2 = (now / 130 + 14) % (TILE - 20)
+        cx.fillRect(X + 8 + d1, Y + 13, 8, 1.4)
+        cx.fillRect(X + 8 + d2, Y + 25, 8, 1.4)
+        if (!dep && (now + n.x * 977) % 5200 < 500) { // a fish breaks the surface
+          const age = ((now + n.x * 977) % 5200) / 500
+          cx.strokeStyle = 'rgba(255,255,255,' + (0.5 * (1 - age)) + ')'
+          cx.lineWidth = 1.2
+          cx.beginPath(); cx.ellipse(X + 20, Y + 20, 3 + age * 8, (3 + age * 8) * 0.4, 0, 0, 7); cx.stroke()
+        }
+      }})
+      continue
+    }
+    layer.push({ z: Z(n.y, 2), draw: () => {
+      if (n.type === 'tree') {
+        const v = tileHash(n.x, n.y, 9) % 3
+        const dk = ['#26571a', '#225122', '#2b5a14'][v]
+        const g1 = ['#2f6b1e', '#2a6329', '#356f18'][v]
+        const hi = ['#4a8f2e', '#448a44', '#529630'][v]
+        const spread = [14, 11, 16][v], top = [2, 6, 0][v]
+        if (!dep) shadow(X, Y, spread * 0.8)
+        cx.fillStyle = '#4a3319'; cx.fillRect(X + 17.5, Y + 22, 5, 12)
+        cx.fillStyle = '#5c4023'; cx.fillRect(X + 19.5, Y + 22, 3, 12)
+        if (!dep) {
+          const sway = Math.sin(now / 900 + n.x) * 1.2
+          poly([[X+20+sway,Y+top],[X+20+spread,Y+24],[X+20-spread,Y+24]], dk, '#1e4712')
+          poly([[X+20+sway,Y+top+4],[X+20+spread-3,Y+25],[X+20-spread+3,Y+25]], g1)
+          poly([[X+20+sway-1,Y+top+5],[X+20+sway-spread*0.45,Y+21],[X+20+sway-2,Y+21]], hi) // sun side
+        } else {
+          shadow(X, Y, 7)
+          poly([[X+14,Y+20],[X+26,Y+20],[X+22,Y+26],[X+18,Y+26]], '#4a3319')
+        }
+      }
+      if (n.type === 'rock') {
+        const v = tileHash(n.x, n.y, 8) % 3
+        const c = dep ? '#3a3a3a' : ['#7a7a72', '#83786a', '#6f7478'][v]
+        const cd = dep ? '#2e2e2e' : ['#5c5c55', '#645a4e', '#53575c'][v]
+        shadow(X, Y, 12)
+        poly([[X+8,Y+30],[X+14,Y+12],[X+26,Y+9],[X+34,Y+24],[X+28,Y+33]], c, '#2c2c2c')
+        poly([[X+8,Y+30],[X+28,Y+33],[X+34,Y+24],[X+26,Y+27]], cd) // underside
+        if (!dep) { cx.fillStyle = 'rgba(255,255,255,.2)'; cx.fillRect(X+16, Y+13, 6, 3) }
+      }
+      if (n.type === 'campfire' || n.type === 'fire') {
+        const dying = n.type === 'fire' && n.expiresAt - s.tick < 20
+        cx.globalAlpha = dying ? 0.55 + Math.sin(now / 200) * 0.2 : 1
+        shadow(X, Y, 10)
+        poly([[X+10,Y+32],[X+30,Y+32],[X+26,Y+28],[X+14,Y+28]], '#4a3319')
+        const f1 = Math.sin(now / 90 + n.x) * 2.4, f2 = Math.sin(now / 70 + n.y) * 1.8
+        poly([[X+20+f1,Y+8],[X+27,Y+28],[X+13,Y+28]], '#e67e22', '#a04000')
+        poly([[X+20+f2,Y+13],[X+24,Y+28],[X+16,Y+28]], '#f4d03f')
+        // embers drift upward
+        for (let i = 0; i < 3; i++) {
+          const t2 = ((now / (900 + i * 260)) + i * 0.37 + n.x) % 1
+          cx.fillStyle = 'rgba(255,' + (140 + i * 30) + ',40,' + (0.8 * (1 - t2)) + ')'
+          cx.fillRect(X + 18 + Math.sin(t2 * 9 + i) * 5, Y + 22 - t2 * 26, 1.8, 1.8)
+        }
+        cx.globalAlpha = 1
+      }
+      if (n.type === 'bank') {
+        shadow(X, Y, 15)
+        poly([[X+6,Y+34],[X+34,Y+34],[X+34,Y+14],[X+6,Y+14]], '#3d3529', '#1c1710')
+        poly([[X+6,Y+14],[X+34,Y+14],[X+34,Y+34],[X+30,Y+30],[X+30,Y+18],[X+10,Y+18],[X+10,Y+30],[X+6,Y+34]], '#493f30')
+        poly([[X+4,Y+14],[X+36,Y+14],[X+32,Y+8],[X+8,Y+8]], '#55483a', '#1c1710')
+        cx.fillStyle = '#ffcc33'; cx.fillRect(X+17, Y+22, 6, 12)
+        cx.fillStyle = '#8a6d1f'; cx.fillRect(X+21, Y+27, 1.6, 3)
+        cx.fillStyle = '#d9c9a3'; cx.font = 'bold 7px Verdana'; cx.textAlign = 'center'
+        cx.fillText('BANK', X+20, Y+13)
+      }
+      if (n.type === 'anvil') {
+        shadow(X, Y, 11)
+        poly([[X+11,Y+31],[X+29,Y+31],[X+27,Y+27],[X+13,Y+27]], '#3a342c')
+        poly([[X+13,Y+27],[X+27,Y+27],[X+26,Y+22],[X+14,Y+22]], '#55504a')
+        poly([[X+10,Y+22],[X+30,Y+22],[X+30,Y+17],[X+16,Y+17],[X+10,Y+19]], '#66625c', '#2c2a26')
+        cx.fillStyle = 'rgba(255,255,255,.14)'; cx.fillRect(X+12, Y+18, 10, 1.6)
+      }
+    }})
+  }
+
+  // ground items: bottom of their row's stack
   for (const [gid, g2] of Object.entries(s.ground ?? {})) {
-    const X = px(g2.x), Y = py(g2.y)
-    const fading = g2.expiresAt - s.tick < 16
-    cx.globalAlpha = fading ? 0.45 + Math.sin(now / 180) * 0.2 : 1
-    if (g2.item === 'logs') {
-      cx.fillStyle = '#3a2a14'; cx.fillRect(X + 3, Y + 32, 15, 4)
-      cx.fillStyle = '#6e4e2b'; cx.fillRect(X + 4, Y + 28, 13, 3.4)
-      cx.fillStyle = '#8a6238'; cx.fillRect(X + 5.5, Y + 29, 2, 1.6)
-    } else if (g2.item === 'ore') {
-      poly([[X+4,Y+36],[X+7,Y+28],[X+14,Y+29],[X+15,Y+36]], '#8a8a80', '#2c2c2c')
-    } else if (g2.item === 'bones') {
-      cx.fillStyle = '#efe9d8'; cx.fillRect(X + 4, Y + 31, 12, 2.6)
-      cx.fillStyle = '#fffdf2'; cx.fillRect(X + 3, Y + 29, 3.4, 7); cx.fillRect(X + 14, Y + 29, 3.4, 7)
-    } else if (g2.item?.startsWith('bronze-')) {
-      cx.fillStyle = '#c9862a'; cx.fillRect(X + 5, Y + 30, 11, 3)
-      cx.fillStyle = '#8a5c1a'; cx.fillRect(X + 5, Y + 33, 11, 1.4)
-    } else { // fish variants
-      cx.fillStyle = g2.item === 'burnt-fish' ? '#3a3a3a' : g2.item === 'cooked-fish' ? '#b06a2a' : '#7aa8c9'
-      cx.beginPath(); cx.ellipse(X + 10, Y + 32, 7, 3.4, 0.2, 0, 7); cx.fill()
-    }
-    // the glint: a white spark that blinks every ~1.6s
-    if ((now + g2.x * 337) % 1600 < 260) {
-      cx.fillStyle = 'rgba(255,255,220,.95)'
-      cx.fillRect(X + 8, Y + 26, 2.2, 2.2)
-      cx.fillRect(X + 8.6, Y + 24.6, 1, 5)
-      cx.fillRect(X + 6.6, Y + 26.6, 5, 1)
-    }
-    cx.globalAlpha = 1
+    layer.push({ z: Z(g2.y, 1), draw: () => {
+      const X = px(g2.x), Y = py(g2.y)
+      const fading = g2.expiresAt - s.tick < 16
+      cx.globalAlpha = fading ? 0.45 + Math.sin(now / 180) * 0.2 : 1
+      if (g2.item === 'logs') {
+        cx.fillStyle = '#3a2a14'; cx.fillRect(X + 3, Y + 32, 15, 4)
+        cx.fillStyle = '#6e4e2b'; cx.fillRect(X + 4, Y + 28, 13, 3.4)
+        cx.fillStyle = '#8a6238'; cx.fillRect(X + 5.5, Y + 29, 2, 1.6)
+      } else if (g2.item === 'ore') {
+        poly([[X+4,Y+36],[X+7,Y+28],[X+14,Y+29],[X+15,Y+36]], '#8a8a80', '#2c2c2c')
+      } else if (g2.item === 'bones') {
+        cx.fillStyle = '#efe9d8'; cx.fillRect(X + 4, Y + 31, 12, 2.6)
+        cx.fillStyle = '#fffdf2'; cx.fillRect(X + 3, Y + 29, 3.4, 7); cx.fillRect(X + 14, Y + 29, 3.4, 7)
+      } else if (g2.item?.startsWith('bronze-')) {
+        cx.fillStyle = '#c9862a'; cx.fillRect(X + 5, Y + 30, 11, 3)
+        cx.fillStyle = '#8a5c1a'; cx.fillRect(X + 5, Y + 33, 11, 1.4)
+      } else {
+        cx.fillStyle = g2.item === 'burnt-fish' ? '#3a3a3a' : g2.item === 'cooked-fish' ? '#b06a2a' : '#7aa8c9'
+        cx.beginPath(); cx.ellipse(X + 10, Y + 32, 7, 3.4, 0.2, 0, 7); cx.fill()
+      }
+      if ((now + g2.x * 337) % 1600 < 260) {
+        cx.fillStyle = 'rgba(255,255,220,.95)'
+        cx.fillRect(X + 8, Y + 26, 2.2, 2.2)
+        cx.fillRect(X + 8.6, Y + 24.6, 1, 5)
+        cx.fillRect(X + 6.6, Y + 26.6, 5, 1)
+      }
+      cx.globalAlpha = 1
+    }})
   }
 
   for (const [id, m] of Object.entries(s.mobs)) {
     if (m.hp <= 0) continue
-    const X = px(m.x), Y = py(m.y)
-    const engaged = meP?.action?.mobId === id
-    const hop = engaged ? Math.abs(Math.sin(now / 160)) * 2 : Math.sin(now / 700 + m.x) * 0.7
-    poly([[X+20,Y+10-hop],[X+28,Y+20-hop],[X+24,Y+34],[X+16,Y+34],[X+12,Y+20-hop]], '#4e7d2a', '#2c4a15')
-    cx.fillStyle = '#1c1710'
-    cx.fillRect(X + 16, Y + 15 - hop, 2, 2); cx.fillRect(X + 22, Y + 15 - hop, 2, 2)
-    cx.fillStyle = '#c0392b'; cx.fillRect(X + 13, Y + 4, 14 * (m.hp / 5), 3)
+    layer.push({ z: Z(m.y, 3), draw: () => {
+      const X = px(m.x), Y = py(m.y)
+      const engaged = meP?.action?.mobId === id
+      const hop = engaged ? Math.abs(Math.sin(now / 160)) * 2 : Math.sin(now / 700 + m.x) * 0.7
+      shadow(X, Y, 9)
+      // the goblin: two-tone body, ears, club
+      poly([[X+20,Y+11-hop],[X+28,Y+20-hop],[X+24,Y+34],[X+16,Y+34],[X+12,Y+20-hop]], '#4e7d2a', '#2c4a15')
+      poly([[X+20,Y+13-hop],[X+25,Y+21-hop],[X+22,Y+33],[X+18,Y+33],[X+15,Y+21-hop]], '#5c8f35')
+      poly([[X+12,Y+15-hop],[X+9,Y+9-hop],[X+15,Y+13-hop]], '#4e7d2a') // ears
+      poly([[X+28,Y+15-hop],[X+31,Y+9-hop],[X+25,Y+13-hop]], '#4e7d2a')
+      cx.fillStyle = '#c9302c'
+      cx.fillRect(X + 15.5, Y + 15 - hop, 2.4, 2.4); cx.fillRect(X + 22, Y + 15 - hop, 2.4, 2.4)
+      cx.save(); cx.translate(X + 28, Y + 24 - hop); cx.rotate(engaged ? Math.sin(now / 160) * 0.5 : 0.4)
+      cx.fillStyle = '#5c4023'; cx.fillRect(-1.2, -8, 2.4, 10)
+      cx.fillStyle = '#6e5433'; cx.beginPath(); cx.arc(0, -9, 3, 0, 7); cx.fill()
+      cx.restore()
+      cx.fillStyle = '#4a1008'; cx.fillRect(X + 13, Y + 4, 14, 3)
+      cx.fillStyle = '#c0392b'; cx.fillRect(X + 13, Y + 4, 14 * (m.hp / 5), 3)
+    }})
   }
 
   for (const [pid, p] of Object.entries(s.players)) {
@@ -608,13 +701,16 @@ function drawScene(now) {
     const wep = p.equipment?.weapon?.item
     const bronzeTool = (workNode?.type === 'tree' && wep === 'bronze-hatchet')
                     || (workNode?.type === 'rock' && wep === 'bronze-pickaxe')
-    drawCitizen(px(ix), py(iy), {
+    layer.push({ z: Z(iy, 4), draw: () => drawCitizen(px(ix), py(iy), {
       now, pid, face: facing[pid] ?? 1, anim, tool, mine: pid === myId,
       sword: wep === 'bronze-sword', bronzeTool,
       name: p.name ?? pid.slice(0, 6), hp: p.hp, maxHp: XP_TO_LVL(p.skills.hitpoints),
       hitAt: hitFlash[pid],
-    })
+    })})
   }
+
+  layer.sort((a, b) => a.z - b.z)
+  for (const item of layer) item.draw()
 
   // speech bubbles: gold text over heads, RS-style, ~4s
   for (const [pid, b] of Object.entries(bubbles)) {
@@ -682,7 +778,7 @@ function drawScene(now) {
     // campfires hold back the night
     L.globalCompositeOperation = 'destination-out'
     for (const n of Object.values(s.nodes)) {
-      if (n.type !== 'campfire') continue
+      if (n.type !== 'campfire' && n.type !== 'fire') continue
       const fx = px(n.x - cam.x) + 20, fy = py(n.y - cam.y) + 24
       if (fx < -120 || fx > cv.width + 120 || fy < -120 || fy > cv.height + 120) continue
       const r = 96 + Math.sin(now / 140 + n.x) * 5
@@ -693,7 +789,7 @@ function drawScene(now) {
     cx.drawImage(lightCv, 0, 0)
     // warm halo on top of the cut
     for (const n of Object.values(s.nodes)) {
-      if (n.type !== 'campfire') continue
+      if (n.type !== 'campfire' && n.type !== 'fire') continue
       const fx = px(n.x - cam.x) + 20, fy = py(n.y - cam.y) + 24
       const grad2 = cx.createRadialGradient(fx, fy, 4, fx, fy, 60)
       grad2.addColorStop(0, 'rgba(230,126,34,' + (darkness * 0.3) + ')')
@@ -758,6 +854,20 @@ function panel(s) {
   }
   document.getElementById('offers').innerHTML = offers.join('')
 
+  // the vault: visible while standing at a bank
+  const vaultEl = document.getElementById('vault')
+  const atBank = Object.values(s.nodes).some(n => n.type === 'bank'
+    && Math.abs(me.x - n.x) + Math.abs(me.y - n.y) === 1)
+  const vaulted = Object.entries(me.bank ?? {})
+  if (atBank) {
+    vaultEl.style.display = 'block'
+    vaultEl.innerHTML = '<b style="color:var(--gold)">Your vault</b> <span style="color:var(--dim)">(tap inventory to deposit)</span><br>'
+      + (vaulted.length
+        ? vaulted.map(([item, q]) => '<button data-wd="' + item + '" style="margin:3px 3px 0 0">'
+            + (ICONS[item] ?? '') + ' ' + item.replace('-', ' ') + ' \u00d7' + q + '</button>').join('')
+        : '<span style="color:var(--dim)">empty \u2014 your fortune starts here</span>')
+  } else vaultEl.style.display = 'none'
+
   const wep = me.equipment?.weapon
   document.getElementById('equip').innerHTML = wep
     ? 'Weapon: ' + (ICONS[wep.item] ?? '') + ' ' + wep.item.replace('-', ' ') + ' <span style="color:var(--dim)">(tap to sheathe)</span>'
@@ -803,6 +913,11 @@ function enterWorld() {
 document.getElementById('gatebtn').addEventListener('click', enterWorld)
 document.getElementById('gatename').addEventListener('keydown', (e) => { if (e.key === 'Enter') enterWorld() })
 
+document.getElementById('vault').addEventListener('click', (e) => {
+  const item = e.target.dataset.wd
+  if (item) { send({ do: 'withdraw', item }); feed('You withdraw the ' + item.replace('-', ' ') + '.') }
+})
+
 document.getElementById('offers').addEventListener('click', (e) => {
   const acc = e.target.dataset.accept
   if (acc) { send({ do: 'accept_trade', from: acc }); feed('You accept the offer.') }
@@ -820,7 +935,12 @@ document.getElementById('inv').addEventListener('click', (e) => {
   const i = e.target.dataset.i; if (i === undefined || !world) return
   const meNow = world.players[myId]
   const it = meNow?.inventory[i]
-  if (it && EQUIPPABLE.has(it.item)) { send({ do: 'wield', slot: +i }); feed('You wield the ' + it.item.replace('-', ' ') + '.') }
+  if (!it) return
+  const nearBank = Object.values(world.nodes).some(n => n.type === 'bank'
+    && Math.abs(meNow.x - n.x) + Math.abs(meNow.y - n.y) === 1)
+  if (nearBank) { send({ do: 'deposit', slot: +i }); feed('You deposit the ' + it.item.replace('-', ' ') + '.'); return }
+  if (it.item === 'logs') { send({ do: 'light', slot: +i }); feed('You attempt to light a fire\u2026'); return }
+  if (EQUIPPABLE.has(it.item)) { send({ do: 'wield', slot: +i }); feed('You wield the ' + it.item.replace('-', ' ') + '.') }
   else if (it?.item === 'cooked-fish') {
     const foe = meNow.action?.type === 'attack' ? meNow.action.mobId : null
     send({ do: 'eat', slot: +i })
@@ -862,18 +982,22 @@ cv.addEventListener('click', (e) => {
   for (const [id, n] of Object.entries(world.nodes))
     if (n.x === x && n.y === y) {
       if (me.action?.nodeId === id) return                     // already working it: silent
-      if (n.type !== 'campfire' && n.depletedUntil > world.tick) {
+      if (n.type !== 'campfire' && n.type !== 'fire' && n.type !== 'bank' && n.type !== 'anvil' && n.depletedUntil > world.tick) {
         feed({ 'tree': 'The tree is felled. It will regrow.',
                'rock': 'The rock is mined out. Give it a moment.',
                'fishing-spot': "The fish aren't biting here yet." }[n.type] ?? 'Nothing left here.')
         return
       }
       if (n.type === 'anvil') {
-      poly([[X+11,Y+31],[X+29,Y+31],[X+27,Y+27],[X+13,Y+27]], '#3a342c')
-      poly([[X+13,Y+27],[X+27,Y+27],[X+26,Y+22],[X+14,Y+22]], '#55504a')
-      poly([[X+10,Y+22],[X+30,Y+22],[X+30,Y+17],[X+16,Y+17],[X+10,Y+19]], '#66625c', '#2c2a26')
-    }
-    if (n.type === 'campfire') {
+        if (!adj(n)) { intent = { kind: 'anvilgo', id }; feed('You head to the anvil.'); return }
+        smithBest(me); return
+      }
+      if (n.type === 'bank') {
+        if (!adj(n)) { intent = { kind: 'walk', x: n.x, y: n.y + 1 }; feed('You head to the bank.') }
+        else feed('The bank stands ready \u2014 tap items to deposit, tap the vault to withdraw.')
+        return
+      }
+      if (n.type === 'campfire' || n.type === 'fire') {
         if (!adj(n)) { intent = { kind: 'gatherfire', id, msg: 'You warm your hands by the fire.' }; return }
         const i = me.inventory.findIndex(s => s && s.item === 'raw-fish')
         if (i !== -1) { intent = { kind: 'cookall' }; feed('You start cooking your catch\u2026') }
