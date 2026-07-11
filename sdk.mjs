@@ -48,6 +48,13 @@ export class IntervalClient {
   cook(slot) { return this.#send({ type: 'cook', slot }) }
   attack(mobId) { return this.#send({ type: 'attack', mobId }) }
   eat(slot) { return this.#send({ type: 'eat', slot }) }
+  drop(slot) { return this.#send({ type: 'drop', slot }) }
+  pickup(groundId) { return this.#send({ type: 'pickup', groundId }) }
+  smith(recipe) { return this.#send({ type: 'smith', recipe }) }
+  wield(slot) { return this.#send({ type: 'wield', slot }) }
+  unwield() { return this.#send({ type: 'unwield' }) }
+  chat(text) { return this.node.publishChat(this.identity, text) }
+  onChat(cb) { this.node.onChat = cb }
 
   // ---- the heartbeat ----
   onTick(cb) { this.node.onTick = cb }
