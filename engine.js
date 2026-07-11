@@ -135,7 +135,14 @@ function importIdentity(obj) {
 }
 
 function loadOrCreateIdentity(fs, file) {
-  if (fs.existsSync(file)) return importIdentity(JSON.parse(fs.readFileSync(file)));
+  if (fs.existsSync(file)) {
+    try {
+      const id = importIdentity(JSON.parse(fs.readFileSync(file)));
+      if (id.privateKey.length === 32) return id; // raw ed25519 secret
+      // pre-noble key format (pkcs8): unusable — preserve and regenerate
+      fs.renameSync(file, file + '.old-format');
+    } catch { /* corrupt file: fall through and regenerate */ }
+  }
   const id = generateIdentity();
   fs.writeFileSync(file, JSON.stringify(exportIdentity(id)));
   return id;
