@@ -57,8 +57,24 @@
   #status { font-size: 10px; color: #8a7a5c; }
   #gate {
     position: fixed; inset: 0; z-index: 10;
-    background: radial-gradient(ellipse at center, #241d12 0%, #16120c 70%);
+    background: radial-gradient(ellipse at center, rgba(22,18,12,.55) 0%, rgba(12,10,6,.92) 78%);
+    backdrop-filter: blur(2.5px) saturate(.8);
     display: flex; align-items: center; justify-content: center;
+  }
+  #gatebox { position: relative; box-shadow: 0 0 60px rgba(0,0,0,.8), 0 0 24px rgba(230,126,34,.06); }
+  .torch {
+    position: absolute; top: -14px; width: 10px; height: 22px;
+    background: radial-gradient(ellipse at 50% 85%, #f4d03f 0%, #e67e22 45%, transparent 72%);
+    filter: drop-shadow(0 0 8px rgba(230,126,34,.6));
+    animation: flick .6s infinite alternate ease-in-out;
+  }
+  .torch.l { left: 16px; } .torch.r { right: 16px; animation-delay: .27s; }
+  @keyframes flick {
+    from { transform: scaleY(1) skewX(-3deg); opacity: .85; }
+    to { transform: scaleY(1.22) skewX(4deg); opacity: 1; }
+  }
+  #gatebox h1 {
+    text-shadow: 0 0 14px rgba(255,204,51,.35), 0 2px 0 #1c1710;
   }
   #gatebox { width: min(92vw, 380px); padding: 26px 28px; text-align: center; }
   #gatebox h1 { color: var(--gold); font-size: 30px; letter-spacing: 4px; margin-bottom: 2px; }
@@ -85,6 +101,7 @@
 <body>
 <div id="gate">
   <div id="gatebox" class="stone">
+    <div class="torch l"></div><div class="torch r"></div>
     <h1>INTERVAL</h1>
     <div class="sub">a world that runs on rules, not servers</div>
     <div id="gateinfo">waking the world&hellip;</div>
@@ -140,6 +157,8 @@ if (!uid) {
 const ws = new WebSocket('ws://' + location.host)
 ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', uid }))
 let entered = false, loginName = ''
+let lastCancelAt = 0
+const BUILD = 'b31'  // stamp: if your screen says an older build, hard-refresh
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
@@ -322,6 +341,11 @@ function onState(s, worldId) {
       tradeItem = old.trade.wantItem   // I offered; they accepted
       feed('Trade complete \u2014 you received ' + tradeItem.replace('-', ' ') + '. Pleasure doing business.')
     }
+    if (old.trade && !me.trade && tradeItem === null
+        && performance.now() - lastCancelAt > 3000) {
+      feed('Your offer is gone \u2014 declined, or the goods moved.')
+    }
+    if (old.trade && !me.trade) document.getElementById('trade').style.display = 'none'
     for (const [pid2, pOld] of Object.entries(prev.players)) {
       if (pid2 === myId || !pOld.trade || pOld.trade.to !== myId) continue
       if (s.players[pid2]?.trade) continue // still open: not settled
@@ -474,10 +498,20 @@ function drawCitizen(X, Y, o) {
     cx.fillStyle = '#5c4023'; cx.fillRect(-3, 8, 6, 2)
   }
   cx.restore()
-  if (o.sword && o.anim !== 'fight') { // sheathed at the hip
+  if (o.wepItem && o.anim !== 'fight' && !(o.anim === 'gather' && o.bronzeTool)) {
+    // whatever you wield rides at the hip, for all to see
     cx.save(); cx.translate(X + (F > 0 ? 13 : 27), Y + 24); cx.rotate(F * 0.7)
-    cx.fillStyle = '#c9862a'; cx.fillRect(-0.8, 0, 1.6, 8)
-    cx.fillStyle = '#5c4023'; cx.fillRect(-2.2, -1, 4.4, 1.6)
+    if (o.wepItem === 'bronze-sword') {
+      cx.fillStyle = '#c9862a'; cx.fillRect(-0.8, 0, 1.6, 8)
+      cx.fillStyle = '#5c4023'; cx.fillRect(-2.2, -1, 4.4, 1.6)
+    } else if (o.wepItem === 'bronze-pickaxe') {
+      cx.fillStyle = '#5c4023'; cx.fillRect(-0.8, -1, 1.6, 9)
+      cx.strokeStyle = '#c9862a'; cx.lineWidth = 2
+      cx.beginPath(); cx.arc(0, 0, 3.4, 3.4, 6.1); cx.stroke()
+    } else if (o.wepItem === 'bronze-hatchet') {
+      cx.fillStyle = '#5c4023'; cx.fillRect(-0.8, -1, 1.6, 9)
+      cx.fillStyle = '#c9862a'; cx.fillRect(F > 0 ? 0.5 : -4.5, -1, 4, 3.4)
+    }
     cx.restore()
   }
   // head: skin, hair cap, eye toward facing
@@ -703,7 +737,7 @@ function drawScene(now) {
                     || (workNode?.type === 'rock' && wep === 'bronze-pickaxe')
     layer.push({ z: Z(iy, 4), draw: () => drawCitizen(px(ix), py(iy), {
       now, pid, face: facing[pid] ?? 1, anim, tool, mine: pid === myId,
-      sword: wep === 'bronze-sword', bronzeTool,
+      sword: wep === 'bronze-sword', wepItem: wep, bronzeTool,
       name: p.name ?? pid.slice(0, 6), hp: p.hp, maxHp: XP_TO_LVL(p.skills.hitpoints),
       hitAt: hitFlash[pid],
     })})
@@ -806,7 +840,7 @@ function drawScene(now) {
   const phase = cyc < 0.06 ? 'dawn' : cyc < 0.44 ? 'day' : cyc < 0.56 ? 'dusk'
               : cyc < 0.94 ? 'night' : 'dawn'
   cx.fillStyle = 'rgba(217,201,163,.75)'; cx.font = '10px Verdana'; cx.textAlign = 'left'
-  cx.fillText('world ' + curWorldId + '  ·  tick ' + s.tick + '  ·  ' + phase, 6, cv.height - 6)
+  cx.fillText('world ' + curWorldId + '  \u00b7  tick ' + s.tick + '  \u00b7  ' + phase + '  \u00b7  ' + BUILD, 6, cv.height - 6)
 }
 requestAnimationFrame(function frame(now) { drawScene(now); requestAnimationFrame(frame) })
 
@@ -921,7 +955,7 @@ document.getElementById('vault').addEventListener('click', (e) => {
 document.getElementById('offers').addEventListener('click', (e) => {
   const acc = e.target.dataset.accept
   if (acc) { send({ do: 'accept_trade', from: acc }); feed('You accept the offer.') }
-  else if (e.target.dataset.cancel) { send({ do: 'cancel_trade' }); feed('You withdraw your offer.') }
+  else if (e.target.dataset.cancel) { lastCancelAt = performance.now(); send({ do: 'cancel_trade' }); feed('You withdraw your offer.') }
 })
 
 document.getElementById('say').addEventListener('keydown', (e) => {

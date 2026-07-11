@@ -1,4 +1,4 @@
-# Interval — Protocol Specification v0.16 ("The Constitution")
+# Interval — Protocol Specification v0.18 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -63,12 +63,15 @@ The genesis object is
 | `name`      | string or null  | Claimed display name (see §5a)         |
 | `trade`     | Offer or null   | Open trade offer (see §5c)             |
 | `equipment` | {weapon}        | Wielded item or null (see §5d)         |
+| `bank`      | map item→qty    | Vaulted goods (see §6g)                |
 
 ### 3.2 Resource nodes
 
 A node is `{type, x, y, depletedUntil}`. Types: `tree`, `rock`,
-`fishing-spot` (gatherable); `campfire` (enables cooking, §6a); and
-`anvil` (enables smithing, §6d). A node with `depletedUntil > tick` yields nothing and
+`fishing-spot` (gatherable); `campfire` (permanent; enables cooking,
+§6a); `fire` (player-made via firemaking §6f, carries `expiresAt` and
+vanishes at the start of that tick; enables cooking like a campfire);
+`anvil` (enables smithing, §6d); and `bank` (enables banking, §6g). A node with `depletedUntil > tick` yields nothing and
 cannot be targeted.
 
 Gather yield table: `tree` → `logs` (woodcutting, 25 XP), `rock` →
@@ -94,9 +97,9 @@ to all and takeable by anyone; at the start of each tick, items with
 
 ## 4. Skills and XP
 
-v0.16 skills: `woodcutting`, `mining`, `fishing` (gathering);
-`cooking`, `smithing` (processing); `attack`, `defence`, `hitpoints`
-(combat). Gathering
+v0.18 skills: `woodcutting`, `mining`, `fishing` (gathering);
+`cooking`, `smithing`, `firemaking` (processing); `attack`, `defence`,
+`hitpoints` (combat). Gathering
 creates items, processing consumes them, combat consumes everything.
 Players start with `hitpoints` at 1,154 XP (level 10); all other skills
 at 0. Max HP equals the hitpoints level.
@@ -147,6 +150,8 @@ v0.1 input types:
 - `wield` → `{slot}`; slot must hold an equippable item. Swaps it with
   the current weapon (which returns to that slot).
 - `unwield` → no params; weapon returns to the first free slot.
+- `light` → `{slot}`; slot must hold `logs`; see §6f.
+- `deposit` → `{slot}` and `withdraw` → `{item}`; see §6g.
 - `drop` → `{slot}`; slot must hold an item. The item leaves the
   inventory and becomes a **ground item** on the player's tile,
   expiring 100 ticks later (§3.4).
@@ -269,8 +274,8 @@ respawns are processed:
 ## 6c. Death (provisional — the most fork-worthy rule in this document)
 
 If a player's HP reaches 0: they respawn at the spawn point at full HP
-with their action cleared and their **entire inventory destroyed**.
-Skills, XP, and name survive. Destroyed items leave the world — death
+with their action cleared and their **entire inventory and equipment
+destroyed**. Skills, XP, name, and **bank** survive. Destroyed items leave the world — death
 is the deepest sink. This severity is explicitly provisional; softer
 death rules are an expected and legitimate fork.
 
@@ -293,6 +298,26 @@ and awards 30 smithing XP per ore consumed.
 destroyed on death along with the inventory (§6c) — the sink spares
 nothing. Tool bonuses apply only when the wielded tool matches the node
 type; the sword bonus applies only in combat.
+
+## 6f. Firemaking (the logs sink)
+
+`light {slot}` is valid iff the slot holds `logs` and the player's own
+tile carries no node. It resolves in the same tick on the beacon:
+`T = 64 + 2*level(firemaking)`, capped at 240. On success the logs are
+consumed, 40 firemaking XP is awarded, and a `fire` node appears on the
+player's tile with `expiresAt = tick + 100` — light that cooks, made by
+hand, gone in a minute. On failure the logs survive for another try.
+The maker stands on their fire until they step off; the tile is
+impassable to entry like any node.
+
+## 6g. The bank
+
+`player.bank` is a map of item → quantity: goods vaulted outside the
+world's dangers. `deposit {slot}` and `withdraw {item}` are valid only
+orthogonally adjacent to a `bank` node (withdraw also needs a free
+inventory slot). One item per interval — patience is the fee.
+**The bank survives death** (§6c): what you carry can burn; what you
+vault endures. This is the world's memory, and the foundation of wealth.
 
 ## 6e. Mob drops lie where they fall
 

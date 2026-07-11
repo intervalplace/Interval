@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.16';
+const SPEC_VERSION = '0.18';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -39,6 +39,8 @@ const RECIPES = {
 const EQUIPPABLE = new Set(Object.keys(RECIPES));
 const TOOL_FOR = { tree: 'bronze-hatchet', rock: 'bronze-pickaxe' };
 const XP_SMITH_PER_ORE = 30;
+const XP_FIREMAKING = 40;
+const FIRE_TICKS = 100;
 const spawnOf = (g) => ({ x: Math.floor(g.worldW / 2), y: Math.floor(g.worldH / 2) });
 
 // ---------- XP table: spec constants (Appendix A). Index = level. ----------
@@ -168,9 +170,10 @@ function addPlayer(state, playerId, x, y) {
   state.players[playerId] = {
     x, y,
     skills: { woodcutting: 0, mining: 0, fishing: 0, cooking: 0, smithing: 0,
-              attack: 0, defence: 0, hitpoints: HP_START_XP },
+              firemaking: 0, attack: 0, defence: 0, hitpoints: HP_START_XP },
     hp: 10,
     equipment: { weapon: null },
+    bank: {},
     inventory: Array(INV_SLOTS).fill(null),
     action: null,
     name: null,
@@ -221,7 +224,7 @@ function validInput(state, input) {
     case 'cook': {
       const slot = p.inventory[input.slot];
       if (!Number.isInteger(input.slot) || !slot || slot.item !== 'raw-fish') return false;
-      return Object.values(state.nodes).some(n => n.type === 'campfire' && adjacent(p, n));
+      return Object.values(state.nodes).some(n => (n.type === 'campfire' || n.type === 'fire') && adjacent(p, n));
     }
     case 'stop':
       return true;
@@ -264,6 +267,20 @@ function validInput(state, input) {
     }
     case 'unwield':
       return p.equipment.weapon !== null && firstFreeSlot(p.inventory) !== -1;
+    case 'light': {
+      const sl = p.inventory[input.slot];
+      if (!Number.isInteger(input.slot) || !sl || sl.item !== 'logs') return false;
+      return !Object.values(state.nodes).some(n => n.x === p.x && n.y === p.y);
+    }
+    case 'deposit': {
+      if (!Number.isInteger(input.slot) || !p.inventory[input.slot]) return false;
+      return Object.values(state.nodes).some(n => n.type === 'bank' && adjacent(p, n));
+    }
+    case 'withdraw': {
+      if (typeof input.item !== 'string' || !(p.bank[input.item] > 0)) return false;
+      if (firstFreeSlot(p.inventory) === -1) return false;
+      return Object.values(state.nodes).some(n => n.type === 'bank' && adjacent(p, n));
+    }
     case 'drop': {
       return Number.isInteger(input.slot) && !!p.inventory[input.slot];
     }
@@ -290,6 +307,10 @@ function nextState(state, inputs, beacon) {
   // mob respawns (spec §3.3): processed at tick start
   for (const m of Object.values(s.mobs)) {
     if (m.hp <= 0 && m.respawnAt <= s.tick) m.hp = MOB_STATS[m.type].maxHp;
+  }
+  // player-made fires burn out (spec §6f)
+  for (const [nid, n2] of Object.entries(s.nodes)) {
+    if (n2.expiresAt && n2.expiresAt <= s.tick) delete s.nodes[nid];
   }
   // ground decay (spec §3.4): the ground forgets
   for (const [gid, g2] of Object.entries(s.ground)) {
@@ -364,6 +385,33 @@ function nextState(state, inputs, beacon) {
         p.inventory[slot] = p.equipment.weapon;
         p.equipment.weapon = null;
       }
+    } else if (inp.type === 'light') {
+      const sl = p.inventory[inp.slot];
+      const clear = !Object.values(s.nodes).some(n => n.x === p.x && n.y === p.y);
+      if (sl && sl.item === 'logs' && clear) {
+        const lvl = levelForXp(p.skills.firemaking);
+        if (roll(beacon, pid, 'light') < Math.min(64 + 2 * lvl, 240)) {
+          p.inventory[inp.slot] = null;
+          p.skills.firemaking += XP_FIREMAKING;
+          s.nodes['f' + s.tick + '-' + pid.slice(0, 8)] =
+            { type: 'fire', x: p.x, y: p.y, depletedUntil: 0, expiresAt: s.tick + FIRE_TICKS };
+        }
+      }
+    } else if (inp.type === 'deposit') {
+      const sl = p.inventory[inp.slot];
+      const nearBank = Object.values(s.nodes).some(n => n.type === 'bank' && adjacent(p, n));
+      if (sl && nearBank) {
+        p.bank[sl.item] = (p.bank[sl.item] ?? 0) + 1;
+        p.inventory[inp.slot] = null;
+      }
+    } else if (inp.type === 'withdraw') {
+      const slot = firstFreeSlot(p.inventory);
+      const nearBank = Object.values(s.nodes).some(n => n.type === 'bank' && adjacent(p, n));
+      if (p.bank[inp.item] > 0 && slot !== -1 && nearBank) {
+        p.bank[inp.item]--;
+        if (p.bank[inp.item] === 0) delete p.bank[inp.item];
+        p.inventory[slot] = { item: inp.item, qty: 1 };
+      }
     } else if (inp.type === 'drop') {
       const it = p.inventory[inp.slot];
       if (it) {
@@ -388,7 +436,7 @@ function nextState(state, inputs, beacon) {
     } else if (inp.type === 'cook') {
       // re-check against new state; instant, same-tick resolution (§6a)
       const slot = p.inventory[inp.slot];
-      const nearFire = Object.values(s.nodes).some(n => n.type === 'campfire' && adjacent(p, n));
+      const nearFire = Object.values(s.nodes).some(n => (n.type === 'campfire' || n.type === 'fire') && adjacent(p, n));
       if (slot && slot.item === 'raw-fish' && nearFire) {
         const lvl = levelForXp(p.skills.cooking);
         const threshold = Math.min(64 + 2 * lvl, 240);
