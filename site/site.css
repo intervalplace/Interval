@@ -92,3 +92,8 @@ pre, code {
 }
 pre { padding: 10px 12px; overflow-x: auto; }
 .card, .stone { box-shadow: 0 2px 14px rgba(0,0,0,.35); }
+
+
+/* the hero stands centered: a title, a heartbeat, a caption */
+main.stone > h1, main.stone > .tagline, main.stone > .ticklabel { text-align: center; }
+main.stone > .tick { margin-left: auto; margin-right: auto; width: fit-content; }
