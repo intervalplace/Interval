@@ -1,4 +1,4 @@
-// Interval terminal window v0.5 — Layer 3: the first of many windows.
+// Interval terminal window v0.5: Layer 3: the first of many windows.
 // Renders the world as ASCII tiles from an IntervalClient. Built ONLY on
 // the SDK: it imports nothing from the node or engine. Any other window
 // (web, pixel-art, spreadsheet) sits at exactly this layer.
