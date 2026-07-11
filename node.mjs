@@ -46,6 +46,7 @@ export class IntervalNode {
     this.ticklogProto = `/interval/${this.genesis.specVersion}/${ns}/ticklog/1.0.0`
     this.tickLog = new Map()            // tick -> inputs applied (recent history)
     this.checkpointFile = opts.checkpointFile || null
+    this.listen = opts.listen || null
     // resume from disk if a checkpoint exists (spec §9a: persistence)
     if (this.checkpointFile && fs.existsSync(this.checkpointFile)) {
       const cp = JSON.parse(fs.readFileSync(this.checkpointFile))
@@ -56,7 +57,7 @@ export class IntervalNode {
 
   async start() {
     this.p2p = await createLibp2p({
-      addresses: { listen: ['/ip4/127.0.0.1/tcp/0'] },
+      addresses: { listen: [this.listen ?? '/ip4/127.0.0.1/tcp/0'] },
       transports: [tcp()],
       connectionEncrypters: [noise()],
       streamMuxers: [yamux()],
@@ -93,8 +94,11 @@ export class IntervalNode {
 
   // Late join (spec §9a): fetch checkpoints from >=2 peers, verify the
   // state hashes agree, adopt. One peer is never enough.
-  async syncFromPeers(addrs) {
-    if (addrs.length < 2) throw new Error('need >=2 peers to corroborate a checkpoint')
+  async syncFromPeers(addrs, opts = {}) {
+    // spec §9a wants >=2 corroborating peers. A world's FIRST joiner has
+    // only the founder to ask: allowSingle accepts that trust explicitly,
+    // and hash gossip still judges every tick afterward.
+    if (addrs.length < 2 && !opts.allowSingle) throw new Error('need >=2 peers to corroborate a checkpoint')
     const cps = []
     for (const addr of addrs) {
       const stream = await this.p2p.dialProtocol(addr, this.checkpointProto)
