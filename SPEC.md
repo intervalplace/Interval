@@ -1,4 +1,4 @@
-# Interval — Protocol Specification v0.13 ("The Constitution")
+# Interval — Protocol Specification v0.14 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -49,7 +49,8 @@ containing:
 `playerId` is the hex-encoded public key of the player's keypair.
 The **state hash** is SHA-256 of the canonical JSON encoding.
 
-The genesis object is `{specVersion, rulesHash, genesisSeed, anchorMs}`.
+The genesis object is
+`{specVersion, rulesHash, genesisSeed, anchorMs, worldW, worldH}`.
 
 ### 3.1 Player
 
@@ -113,9 +114,11 @@ Players submit **inputs**, each signed by their key:
 v0.1 input types:
 
 - `move` → `{dx, dy}` where dx,dy ∈ {-1,0,1}; moves 1 tile per tick.
-  The world is a bounded grid of **14 × 8 tiles** (x ∈ [0,13],
-  y ∈ [0,7]); a move whose destination lies outside is invalid. The
-  world has edges because we say it does. Resource nodes (all types,
+  The world is a bounded grid of **genesis-defined size**: the genesis
+  object carries `worldW` and `worldH` (defaults 14 × 8), and a move
+  whose destination lies outside is invalid. The world has edges
+  because its founding says so — and how much world there is, is a
+  founding decision like everything else. Resource nodes (all types,
   including campfires) are **impassable**: a move onto a tile occupied
   by a node is invalid. You fish beside the water, not in it.
 - `gather` → `{nodeId}`; must be adjacent (Chebyshev distance ≤ 1).
@@ -168,7 +171,8 @@ A player need not exist in genesis to join a world.
 
 - `spawn` is valid iff `playerId` is not already in `players`. It is the
   ONLY input type valid for an unknown playerId.
-- On success the player is created at the **spawn point (7, 4)** with
+- On success the player is created at the **spawn point** — the center
+  tile `(floor(worldW/2), floor(worldH/2))` — with
   empty inventory, no name, no action, level-1 skills.
 - Spawning is permanent: there is no despawn in v0.6. Identities are
   free, but each playerId spawns at most once, ever.

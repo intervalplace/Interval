@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.13';
+const SPEC_VERSION = '0.14';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -31,8 +31,7 @@ const MOB_STATS = {
             drops: [{ item: 'bones' }, { item: 'ore', chance: 64 }] },
 };
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
-const SPAWN = { x: 7, y: 4 };
-const WORLD = { w: 14, h: 8 };
+const spawnOf = (g) => ({ x: Math.floor(g.worldW / 2), y: Math.floor(g.worldH / 2) });
 
 // ---------- XP table: spec constants (Appendix A). Index = level. ----------
 const XP_TABLE = [0,0,83,174,276,388,512,650,801,969,1154,1358,1584,1833,2107,2411,2746,3115,3523,3973,4470,5018,5624,6291,7028,7842,8740,9730,10824,12031,13363,14833,16456,18247,20224,22406,24815,27473,30408,33648,37224,41171,45529,50339,55649,61512,67983,75127,83014,91721,101333,111945,123660,136594,150872,166636,184040,203254,224466,247886,273742,302288,333804,368599,407015,449428,496254,547953,605032,668051,737627,814445,899257,992895,1096278,1210421,1336443,1475581,1629200,1798808,1986068,2192818,2421087,2673114,2951373,3258594,3597792,3972294,4385776,4842295,5346332,5902831,6517253,7195629,7944614,8771558,9684577,10692629,11805606,13034431];
@@ -113,8 +112,8 @@ function roll(beacon, playerId, tag) {
 // ---------- genesis & world (spec §9) ----------
 // Two peers are in the same world iff their genesis objects match.
 
-function makeGenesis(genesisSeed, rulesHash, anchorMs) {
-  return { specVersion: SPEC_VERSION, rulesHash, genesisSeed, anchorMs };
+function makeGenesis(genesisSeed, rulesHash, anchorMs, worldW = 14, worldH = 8) {
+  return { specVersion: SPEC_VERSION, rulesHash, genesisSeed, anchorMs, worldW, worldH };
 }
 
 // ---------- identity persistence: your key IS your character ----------
@@ -194,7 +193,7 @@ function validInput(state, input) {
       const { dx, dy } = input;
       if (![ -1, 0, 1 ].includes(dx) || ![ -1, 0, 1 ].includes(dy)) return false;
       const nx = p.x + dx, ny = p.y + dy;
-      if (nx < 0 || nx >= WORLD.w || ny < 0 || ny >= WORLD.h) return false;
+      if (nx < 0 || nx >= state.genesis.worldW || ny < 0 || ny >= state.genesis.worldH) return false;
       // nodes are impassable (§5): you fish beside the water, not in it
       return !Object.values(state.nodes).some(n => n.x === nx && n.y === ny);
     }
@@ -266,7 +265,7 @@ function nextState(state, inputs, beacon) {
   for (const pid of order) {
     const inp = seen.get(pid);
     if (inp === 'DUP' || !validInput(state, inp)) continue;
-    if (inp.type === 'spawn') { addPlayer(s, pid, SPAWN.x, SPAWN.y); continue; }
+    if (inp.type === 'spawn') { const sp = spawnOf(s.genesis); addPlayer(s, pid, sp.x, sp.y); continue; }
     const p = s.players[pid];
     if (inp.type === 'move') {
       p.x += inp.dx;
@@ -364,7 +363,8 @@ function nextState(state, inputs, beacon) {
           p.hp -= 1 + (roll(beacon, pid, 'mobdmg') % stats.maxHit);
           if (p.hp <= 0) {
             // death (spec §6c): respawn, full hp, inventory destroyed
-            p.x = SPAWN.x; p.y = SPAWN.y;
+            const sp = spawnOf(s.genesis);
+            p.x = sp.x; p.y = sp.y;
             p.hp = levelForXp(p.skills.hitpoints);
             p.inventory = Array(INV_SLOTS).fill(null);
             p.action = null;
@@ -408,5 +408,5 @@ module.exports = {
   canonical, stateHash, sha256, beaconValue, roll,
   generateIdentity, signInput, verifyInputSig,
   exportIdentity, importIdentity, loadOrCreateIdentity,
-  WORLD, makeGenesis, newWorld, sameWorld, addPlayer, addNode, addMob, nextState, MOB_STATS,
+  spawnOf, makeGenesis, newWorld, sameWorld, addPlayer, addNode, addMob, nextState, MOB_STATS,
 };

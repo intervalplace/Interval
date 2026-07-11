@@ -62,14 +62,16 @@
   </div>
 </div>
 <script>
-const TILE = 40, W = 14, H = 8
+const TILE = 40, VIEW_W = 14, VIEW_H = 8
+let W = 14, H = 8            // world dims: set from genesis on first state
+let cam = { x: 0, y: 0 }      // top-left tile of the viewport
 const cv = document.getElementById('world'), cx = cv.getContext('2d')
 const ICONS = { 'logs': '🪵', 'ore': '🪨', 'raw-fish': '🐟', 'cooked-fish': '🍖', 'burnt-fish': '💀', 'bones': '🦴' }
-const XP_TO_LVL = xp => { // mirror of the constitution's table, display only
-  let pts = 0, lvl = 1
-  for (let l = 2; l <= 99; l++) { pts += Math.floor((l-1) + 300 * Math.pow(2, (l-1)/7)); if (xp >= Math.floor(pts/4)) lvl = l; else break }
-  return lvl
-}
+const XP_TABLE = (() => { const t = [0, 0]; let pts = 0
+  for (let l = 2; l <= 99; l++) { pts += Math.floor((l-1) + 300 * Math.pow(2, (l-1)/7)); t[l] = Math.floor(pts/4) }
+  return t })()
+const XP_TO_LVL = xp => { let l = 1; while (l < 99 && xp >= XP_TABLE[l+1]) l++; return l }
+const SKILL_OF_NODE = { 'tree': 'woodcutting', 'rock': 'mining', 'fishing-spot': 'fishing' }
 
 let myId = null, myName = '', world = null, intent = null, feedLines = []
 let lastFeed = { text: '', at: 0 }
@@ -83,16 +85,48 @@ const feed = t => { const now = performance.now()
   el.innerHTML = feedLines.map(x => '<div>' + x + '</div>').join(''); el.scrollTop = 9e9 }
 
 const blockedAt = (s, x, y) => Object.values(s.nodes).some(n => n.x === x && n.y === y)
-function stepToward(s, me, goal) {
-  const dx = Math.sign(goal.x - me.x), dy = Math.sign(goal.y - me.y)
-  // nodes block: try the diagonal, then each axis — first legal step wins
-  for (const [mx, my] of [[dx, dy], [dx, 0], [0, dy]]) {
-    if (!mx && !my) continue
-    const nx = me.x + mx, ny = me.y + my
-    if (nx < 0 || nx >= W || ny < 0 || ny >= H || blockedAt(s, nx, ny)) continue
-    facing[myId] = mx !== 0 ? mx : (facing[myId] ?? 1) // optimistic turn
-    return send({ do: 'move', dx: mx, dy: my })
+const DIRS8 = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]
+
+// BFS over the whole grid: returns the first step of a shortest path to
+// any goal tile, or null if unreachable. 112 tiles — pathfinding is cheap.
+function nextStep(s, me, goals) {
+  const key = (x, y) => x + ',' + y
+  if (goals.has(key(me.x, me.y))) return 'arrived'
+  const prev = new Map([[key(me.x, me.y), null]])
+  const q = [[me.x, me.y]]
+  while (q.length) {
+    const [cx2, cy2] = q.shift()
+    for (const [mx, my] of DIRS8) {
+      const nx = cx2 + mx, ny = cy2 + my
+      const k = key(nx, ny)
+      if (nx < 0 || nx >= W || ny < 0 || ny >= H || prev.has(k) || blockedAt(s, nx, ny)) continue
+      prev.set(k, key(cx2, cy2))
+      if (goals.has(k)) { // walk back to the first step
+        let cur = k, par = prev.get(k)
+        const start = key(me.x, me.y)
+        while (par !== start) { cur = par; par = prev.get(cur) }
+        const [fx, fy] = cur.split(',').map(Number)
+        return { dx: fx - me.x, dy: fy - me.y }
+      }
+      q.push([nx, ny])
+    }
   }
+  return null
+}
+
+function stepToward(s, me, goal, reach) {
+  const goals = new Set()
+  if (reach) { // any free tile adjacent to the target
+    for (let gx = goal.x - 1; gx <= goal.x + 1; gx++)
+      for (let gy = goal.y - 1; gy <= goal.y + 1; gy++)
+        if (gx >= 0 && gx < W && gy >= 0 && gy < H && !blockedAt(s, gx, gy))
+          goals.add(gx + ',' + gy)
+  } else goals.add(goal.x + ',' + goal.y)
+  const step = nextStep(s, me, goals)
+  if (step === null) { feed("You can't reach that."); intent = null; return }
+  if (step === 'arrived') return
+  facing[myId] = step.dx !== 0 ? step.dx : (facing[myId] ?? 1)
+  send({ do: 'move', dx: step.dx, dy: step.dy })
 }
 
 ws.onmessage = (ev) => {
@@ -104,8 +138,13 @@ ws.onmessage = (ev) => {
 let prev = null
 let curState = null, prevState = null, stateAt = 0, curWorldId = ''
 const hitFlash = {}   // pid -> ms timestamp of last damage taken
+let celebrate = null  // { text, at } — level-up banner + sparks
+let xpDrops = []      // { amt, x, y, at } — floating +xp for gathering/cooking
 function onState(s, worldId) {
   world = s
+  if (s.genesis && (W !== s.genesis.worldW || !groundReady)) {
+    W = s.genesis.worldW; H = s.genesis.worldH; buildGround()
+  }
   prevState = curState; curState = s; stateAt = performance.now(); curWorldId = worldId
   if (prevState) for (const pid in s.players) {
     const o = prevState.players[pid]
@@ -114,6 +153,14 @@ function onState(s, worldId) {
   const me = s.players[myId]
   if (!me) { send({ do: 'spawn' }) }
   else if (myName && !me.name) { send({ do: 'name', name: myName }) }
+  else if (me && intent?.kind === 'cookall') {
+    const i = me.inventory.findIndex(sl => sl && sl.item === 'raw-fish')
+    const fire = Object.values(s.nodes).find(n => n.type === 'campfire'
+      && Math.max(Math.abs(me.x - n.x), Math.abs(me.y - n.y)) <= 1)
+    if (i === -1) { intent = null; feed("You've cooked everything you had.") }
+    else if (!fire) { intent = null }
+    else send({ do: 'cook', slot: i })
+  }
   else if (me && intent && !me.action) {
     const goal = intent.kind === 'walk' ? intent
       : (s.nodes[intent.id] ?? s.mobs[intent.id])
@@ -124,7 +171,7 @@ function onState(s, worldId) {
       else { send({ do: 'attack', mobId: intent.id }); feed('You attack the goblin!') }
       intent = null
     } else {
-      stepToward(s, me, goal)
+      stepToward(s, me, goal, intent.kind !== 'walk')
       if (intent?.kind === 'walk' && me.x === goal.x && me.y === goal.y) intent = null
     }
   }
@@ -133,7 +180,14 @@ function onState(s, worldId) {
     const old = prev.players[myId]
     for (const k in me.skills) if (me.skills[k] > old.skills[k]) {
       const l1 = XP_TO_LVL(old.skills[k]), l2 = XP_TO_LVL(me.skills[k])
-      if (l2 > l1) feed('Level up! ' + k + ' is now ' + l2 + '.')
+      if (!['attack', 'defence', 'hitpoints'].includes(k)) {
+        xpDrops.push({ amt: me.skills[k] - old.skills[k], x: me.x, y: me.y, at: performance.now() })
+        if (xpDrops.length > 12) xpDrops.shift()
+      }
+      if (l2 > l1) {
+        feed('\u2728 LEVEL UP! Your ' + k + ' is now level ' + l2 + '. \u2728')
+        celebrate = { text: k.toUpperCase() + ' LEVEL ' + l2, at: performance.now() }
+      }
     }
     if (me.hp < old.hp) feed('You take ' + (old.hp - me.hp) + ' damage.')
     if (me.hp > old.hp) feed('You eat the fish. It heals ' + (me.hp - old.hp) + '.')
@@ -170,14 +224,18 @@ function tileShade(x, y) {
   return ['#3d5a23', '#436327', '#365020', '#40592a'][h]
 }
 
-// pre-render the ground once: it never changes
+// pre-render the ground lazily once world dims are known: it never changes
 const ground = document.createElement('canvas')
-ground.width = cv.width; ground.height = cv.height
-{ const g = ground.getContext('2d')
+let groundReady = false
+function buildGround() {
+  ground.width = W * TILE; ground.height = H * TILE
+  const g = ground.getContext('2d')
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     g.fillStyle = tileShade(x, y); g.fillRect(px(x), py(y), TILE, TILE)
     g.strokeStyle = 'rgba(0,0,0,.12)'; g.strokeRect(px(x) + .5, py(y) + .5, TILE - 1, TILE - 1)
-  } }
+  }
+  groundReady = true
+}
 
 const facing = {}  // pid -> -1 left / 1 right
 
@@ -253,10 +311,21 @@ function drawCitizen(X, Y, o) {
 }
 
 function drawScene(now) {
-  const s = curState; if (!s) return
-  cx.clearRect(0, 0, cv.width, cv.height)
-  cx.drawImage(ground, 0, 0)
+  const s = curState; if (!s || !groundReady) return
   const t = Math.min(1, (now - stateAt) / 600)
+
+  // camera follows you, clamped to world edges, smooth between ticks
+  const meCam = s.players[myId], oCam = prevState?.players[myId]
+  if (meCam) {
+    const fx = oCam ? lerp(oCam.x, meCam.x, t) : meCam.x
+    const fy = oCam ? lerp(oCam.y, meCam.y, t) : meCam.y
+    cam.x = Math.max(0, Math.min(W - VIEW_W, fx - VIEW_W / 2 + 0.5))
+    cam.y = Math.max(0, Math.min(H - VIEW_H, fy - VIEW_H / 2 + 0.5))
+  }
+  cx.clearRect(0, 0, cv.width, cv.height)
+  cx.save()
+  cx.translate(-cam.x * TILE, -cam.y * TILE)
+  cx.drawImage(ground, 0, 0)
 
   for (const [id, n] of Object.entries(s.nodes)) {
     const X = px(n.x), Y = py(n.y), dep = n.depletedUntil > s.tick
@@ -332,6 +401,42 @@ function drawScene(now) {
     })
   }
 
+  // floating xp drops (world coords, so drawn before restore)
+  xpDrops = xpDrops.filter(d => now - d.at < 1100)
+  for (const d of xpDrops) {
+    const age = (now - d.at) / 1100
+    cx.globalAlpha = 1 - age
+    cx.fillStyle = '#ffcc33'; cx.font = 'bold 11px Verdana'; cx.textAlign = 'center'
+    cx.fillText('+' + d.amt + ' xp', px(d.x) + 20, py(d.y) - 6 - age * 16)
+    cx.globalAlpha = 1
+  }
+
+  cx.restore()
+
+  // level-up: fireworks over your head + a banner, ~2.4s
+  if (celebrate && now - celebrate.at < 2400) {
+    const age = (now - celebrate.at) / 2400
+    const meC = s.players[myId]
+    if (meC) {
+      const bx = px(meC.x - cam.x) + 20, by = py(meC.y - cam.y) + 6
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI * 2 + i
+        const d = age * 26 + (i % 3) * 4
+        cx.fillStyle = ['#ffcc33', '#ff6b35', '#fff'][i % 3]
+        cx.globalAlpha = 1 - age
+        cx.fillRect(bx + Math.cos(a) * d, by + Math.sin(a) * d - age * 14, 2.4, 2.4)
+      }
+      cx.globalAlpha = 1
+    }
+    const bw = 220, bh = 34, bx2 = (cv.width - bw) / 2, by2 = 18
+    cx.globalAlpha = age < 0.85 ? 1 : (1 - age) / 0.15
+    cx.fillStyle = '#494034'; cx.fillRect(bx2, by2, bw, bh)
+    cx.strokeStyle = '#ffcc33'; cx.lineWidth = 2; cx.strokeRect(bx2, by2, bw, bh)
+    cx.fillStyle = '#ffcc33'; cx.font = 'bold 14px Verdana'; cx.textAlign = 'center'
+    cx.fillText('\u2728 ' + celebrate.text + ' \u2728', cv.width / 2, by2 + 22)
+    cx.globalAlpha = 1
+  } else if (celebrate && now - celebrate.at >= 2400) celebrate = null
+
   cx.fillStyle = 'rgba(217,201,163,.75)'; cx.font = '10px Verdana'; cx.textAlign = 'left'
   cx.fillText('world ' + curWorldId + '  ·  tick ' + s.tick, 6, cv.height - 6)
 }
@@ -343,8 +448,20 @@ function panel(s) {
   const maxHp = XP_TO_LVL(me.skills.hitpoints)
   document.getElementById('hpfill').style.width = (100 * me.hp / maxHp) + '%'
   document.getElementById('hptext').textContent = 'HP ' + me.hp + ' / ' + maxHp
+  const trainingNode = me.action?.nodeId ? s.nodes[me.action.nodeId] : null
+  const training = me.action?.type === 'attack' ? 'attack'
+    : trainingNode ? SKILL_OF_NODE[trainingNode.type] : null
   document.getElementById('skills').innerHTML = Object.entries(me.skills)
-    .map(([k, xp]) => '<div>' + k.slice(0, 7) + ' <b>' + XP_TO_LVL(xp) + '</b></div>').join('')
+    .map(([k, xp]) => {
+      const lvl = XP_TO_LVL(xp)
+      const pct = lvl >= 99 ? 100
+        : Math.floor(100 * (xp - XP_TABLE[lvl]) / (XP_TABLE[lvl + 1] - XP_TABLE[lvl]))
+      const hot = k === training
+      return '<div' + (hot ? ' style="outline:1px solid var(--gold)"' : '') + '>'
+        + k.slice(0, 7) + ' <b>' + lvl + '</b>'
+        + '<div style="height:3px;background:#1c1710;margin-top:3px">'
+        + '<div style="height:3px;width:' + pct + '%;background:' + (hot ? '#ffcc33' : '#8a7a4a') + '"></div></div></div>'
+    }).join('')
   document.getElementById('inv').innerHTML = me.inventory.slice(0, 28)
     .map((it, i) => '<div class="slot" data-i="' + i + '" title="' + (it ? it.item : '') + '">' + (it ? (ICONS[it.item] ?? '?') : '') + '</div>').join('')
   document.getElementById('status').textContent =
@@ -353,9 +470,15 @@ function panel(s) {
 
 document.getElementById('inv').addEventListener('click', (e) => {
   const i = e.target.dataset.i; if (i === undefined || !world) return
-  const it = world.players[myId]?.inventory[i]
-  if (it?.item === 'cooked-fish') { send({ do: 'eat', slot: +i }); feed('You eat the fish.') }
-  if (it?.item === 'raw-fish') { send({ do: 'cook', slot: +i }); feed('You attempt to cook…') }
+  const meNow = world.players[myId]
+  const it = meNow?.inventory[i]
+  if (it?.item === 'cooked-fish') {
+    const foe = meNow.action?.type === 'attack' ? meNow.action.mobId : null
+    send({ do: 'eat', slot: +i })
+    if (foe) { intent = { kind: 'attack', id: foe }; feed('You wolf it down and raise your sword again.') }
+    else feed('You eat the fish.')
+  }
+  if (it?.item === 'raw-fish') { send({ do: 'cook', slot: +i }); feed('You attempt to cook\u2026') }
 })
 
 cv.addEventListener('click', (e) => {
@@ -363,7 +486,7 @@ cv.addEventListener('click', (e) => {
   const r = cv.getBoundingClientRect()
   const sx = (e.clientX - r.left) * (cv.width / r.width)
   const sy = (e.clientY - r.top) * (cv.height / r.height)
-  const x = Math.floor(sx / TILE), y = Math.floor(sy / TILE)
+  const x = Math.floor(sx / TILE + cam.x), y = Math.floor(sy / TILE + cam.y)
   if (x < 0 || x >= W || y < 0 || y >= H) return
   const me = world.players[myId]; if (!me) return
   const adj = (o) => Math.max(Math.abs(me.x - o.x), Math.abs(me.y - o.y)) <= 1
@@ -388,7 +511,7 @@ cv.addEventListener('click', (e) => {
       if (n.type === 'campfire') {
         if (!adj(n)) { intent = { kind: 'walk', x: n.x, y: n.y - 1 }; return }
         const i = me.inventory.findIndex(s => s && s.item === 'raw-fish')
-        if (i !== -1) { send({ do: 'cook', slot: i }); feed('You cook the fish on the fire\u2026') }
+        if (i !== -1) { intent = { kind: 'cookall' }; feed('You start cooking your catch\u2026') }
         else feed('You have nothing to cook.')
         return
       }
