@@ -23,16 +23,23 @@
     display: flex; justify-content: center; align-items: flex-start;
     min-height: 100vh; padding: 16px;
   }
-  #frame { display: flex; gap: 0; border: 3px solid var(--stone-dk); flex-wrap: wrap; max-width: 1100px; }
+  #frame { display: flex; gap: 0; border: 3px solid var(--stone-dk); width: min(96vw, 1180px); }
+  #view { flex: 1 1 auto; min-width: 0; background: #253a17; }
   canvas { display: block; background: #253a17; image-rendering: pixelated; cursor: crosshair;
-           width: min(100%, 840px); height: auto; }
+           width: 100%; height: auto; }
   /* the classic stone bevel: light top-left, dark bottom-right */
   .stone {
     background: var(--stone);
     border-top: 2px solid var(--stone-lt); border-left: 2px solid var(--stone-lt);
     border-bottom: 2px solid var(--stone-dk); border-right: 2px solid var(--stone-dk);
   }
-  #panel { width: 210px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+  #panel { width: 232px; flex: 0 0 232px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+  @media (max-width: 900px) {
+    #frame { flex-direction: column; }
+    #panel { width: 100%; flex: 1 1 auto; }
+    #skills { grid-template-columns: repeat(4, 1fr); }
+    #inv { grid-template-columns: repeat(7, 1fr); }
+  }
   #panel h2 { font-size: 11px; letter-spacing: 1px; color: var(--parch); text-transform: uppercase; }
   #hpbar { height: 14px; background: var(--hpbg); position: relative; }
   #hpfill { height: 100%; background: var(--hp); width: 100%; transition: width .3s; }
@@ -51,7 +58,7 @@
 </head>
 <body>
 <div id="frame">
-  <canvas id="world" width="560" height="320"></canvas>
+  <div id="view"><canvas id="world" width="560" height="320"></canvas></div>
   <div id="panel" class="stone">
     <h2 id="whoami">connecting…</h2>
     <div id="hpbar"><div id="hpfill"></div><div id="hptext"></div></div>
@@ -85,7 +92,12 @@ const SKILL_OF_NODE = { 'tree': 'woodcutting', 'rock': 'mining', 'fishing-spot':
 let myId = null, myName = '', world = null, intent = null, feedLines = []
 let lastFeed = { text: '', at: 0 }
 let uid = localStorage.getItem('interval-uid')
-if (!uid) { uid = crypto.randomUUID(); localStorage.setItem('interval-uid', uid) }
+if (!uid) {
+  // crypto.randomUUID requires HTTPS/localhost; plain http needs a fallback
+  uid = (crypto.randomUUID ? crypto.randomUUID()
+        : Array.from({ length: 32 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join(''))
+  localStorage.setItem('interval-uid', uid)
+}
 const ws = new WebSocket('ws://' + location.host)
 ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', uid }))
 let askedName = false
