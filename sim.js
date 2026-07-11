@@ -1,4 +1,4 @@
-// Interval v0.2 — determinism + identity proof.
+// Interval v0.2: determinism + identity proof.
 // Two peers independently replay the same *signed* inputs and must agree
 // on every state hash. Plus: forged signatures, replayed inputs, and
 // wrong-world genesis are all rejected.
@@ -27,7 +27,7 @@ function buildWorld() {
   return w;
 }
 
-// Pre-sign the full input log once — both peers replay the SAME signed log,
+// Pre-sign the full input log once: both peers replay the SAME signed log,
 // exactly as they would receive it from the network.
 function buildInputLog() {
   const log = [];
@@ -68,7 +68,7 @@ const a = peer1.state.players[alice.playerId];
 const b = peer1.state.players[bob.playerId];
 const count = inv => inv.filter(Boolean).length;
 
-console.log(`Interval spec v${E.SPEC_VERSION} — ${TICKS} ticks`);
+console.log(`Interval spec v${E.SPEC_VERSION}: ${TICKS} ticks`);
 console.log(`Rules hash: ${RULES_HASH.slice(0, 16)}…`);
 console.log(`Peers agree on all ${TICKS} state hashes: ${agree ? 'YES ✓' : 'NO ✗'}`);
 console.log(`alice (${alice.playerId.slice(0, 8)}…) woodcutting lvl ${E.levelForXp(a.skills.woodcutting)}, ${count(a.inventory)} logs`);
