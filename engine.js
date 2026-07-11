@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.9';
+const SPEC_VERSION = '0.12';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -298,6 +298,7 @@ function nextState(state, inputs, beacon) {
       if (slot && slot.item === 'cooked-fish') {
         p.inventory[inp.slot] = null;
         p.hp = Math.min(p.hp + HEAL_FISH, levelForXp(p.skills.hitpoints));
+        p.action = null; // §5: you stop what you're doing to eat
       }
     } else if (inp.type === 'cook') {
       // re-check against new state; instant, same-tick resolution (§6a)

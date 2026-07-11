@@ -85,8 +85,15 @@ ws.onmessage = (ev) => {
 }
 
 let prev = null
+let curState = null, prevState = null, stateAt = 0, curWorldId = ''
+const hitFlash = {}   // pid -> ms timestamp of last damage taken
 function onState(s, worldId) {
   world = s
+  prevState = curState; curState = s; stateAt = performance.now(); curWorldId = worldId
+  if (prevState) for (const pid in s.players) {
+    const o = prevState.players[pid]
+    if (o && s.players[pid].hp < o.hp) hitFlash[pid] = performance.now()
+  }
   const me = s.players[myId]
   if (!me) { send({ do: 'spawn' }) }
   else if (myName && !me.name) { send({ do: 'name', name: myName }) }
@@ -102,37 +109,128 @@ function onState(s, worldId) {
       if (l2 > l1) feed('Level up! ' + k + ' is now ' + l2 + '.')
     }
     if (me.hp < old.hp) feed('You take ' + (old.hp - me.hp) + ' damage.')
+    if (me.hp > old.hp) feed('You eat the fish. It heals ' + (me.hp - old.hp) + '.')
+    // announce what landed in the inventory this tick
+    const GAIN = { 'logs': 'You get some logs.', 'ore': 'You manage to mine some ore.',
+                   'raw-fish': 'You catch a fish!', 'cooked-fish': 'Nicely cooked.',
+                   'burnt-fish': 'You accidentally burn the fish.', 'bones': 'The goblin drops bones.' }
+    const cnt = inv => inv.reduce((m, s) => (s && (m[s.item] = (m[s.item] || 0) + 1), m), {})
+    const a = cnt(old.inventory), b = cnt(me.inventory)
+    for (const item in b) if ((b[item] || 0) > (a[item] || 0) && GAIN[item]) feed(GAIN[item])
+    // your working node just went dark → tell the player why they stopped
+    if (old.action?.type === 'gather' && !me.action) {
+      const n = s.nodes[old.action.nodeId]
+      if (n && n.depletedUntil > s.tick) feed({ 'tree': 'The tree falls.', 'rock': 'The rock crumbles.',
+        'fishing-spot': 'The fish stop biting — for now.' }[n.type] ?? 'Exhausted.')
+    }
     if (old.hp <= 2 && me.hp > old.hp && me.x === 7 && me.y === 4 && old.x !== 7) feed('Oh dear, you are dead. Your items are gone.')
   }
   prev = s
-  draw(s, worldId); panel(s)
+  panel(s)
 }
 
-// ---- low-poly draw helpers ----
+// ---- low-poly animated renderer ----
 const px = (x) => x * TILE, py = (y) => y * TILE
+const lerp = (a, b, t) => a + (b - a) * t
 function poly(pts, fill, stroke) {
   cx.beginPath(); cx.moveTo(pts[0][0], pts[0][1])
   for (const p of pts.slice(1)) cx.lineTo(p[0], p[1])
   cx.closePath(); cx.fillStyle = fill; cx.fill()
   if (stroke) { cx.strokeStyle = stroke; cx.lineWidth = 1; cx.stroke() }
 }
-function tileShade(x, y) { // deterministic per-tile variation: the chunky ground
+function tileShade(x, y) {
   const h = (x * 7 + y * 13) % 4
   return ['#3d5a23', '#436327', '#365020', '#40592a'][h]
 }
-function draw(s, worldId) {
+
+// pre-render the ground once: it never changes
+const ground = document.createElement('canvas')
+ground.width = cv.width; ground.height = cv.height
+{ const g = ground.getContext('2d')
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    cx.fillStyle = tileShade(x, y)
-    cx.fillRect(px(x), py(y), TILE, TILE)
-    cx.strokeStyle = 'rgba(0,0,0,.12)'; cx.strokeRect(px(x) + .5, py(y) + .5, TILE - 1, TILE - 1)
+    g.fillStyle = tileShade(x, y); g.fillRect(px(x), py(y), TILE, TILE)
+    g.strokeStyle = 'rgba(0,0,0,.12)'; g.strokeRect(px(x) + .5, py(y) + .5, TILE - 1, TILE - 1)
+  } }
+
+const facing = {}  // pid -> -1 left / 1 right
+
+// the little citizen: shadow, legs, tunic, arms, tool, head. ~26px tall.
+function drawCitizen(X, Y, o) {
+  const now = o.now
+  const bob = o.anim === 'idle' ? Math.sin(now / 600) * 0.8 : 0
+  const step = o.anim === 'walk' ? Math.sin(now / 110) : 0
+  const swing = (o.anim === 'gather' || o.anim === 'fight')
+    ? Math.sin(now / (o.anim === 'fight' ? 130 : 200)) : 0
+  const lunge = o.anim === 'fight' ? Math.max(0, Math.sin(now / 130)) * 3 * o.face : 0
+  X += lunge; Y += bob
+  const F = o.face
+
+  // shadow
+  cx.fillStyle = 'rgba(0,0,0,.28)'
+  cx.beginPath(); cx.ellipse(X + 20, Y + 35, 8, 2.6, 0, 0, 7); cx.fill()
+
+  const flash = o.hitAt && now - o.hitAt < 220
+  const tunic = flash ? '#ffffff' : (o.mine ? '#c9a227' : '#3a6ea5')
+  const tunicDk = flash ? '#dddddd' : (o.mine ? '#9a7c1c' : '#2c547e')
+  const skin = flash ? '#ffffff' : '#e8c98f'
+
+  // legs (alternate while walking)
+  cx.fillStyle = '#4a3a26'
+  cx.fillRect(X + 16 + step * 1.5, Y + 28, 3.4, 7 - Math.abs(step))
+  cx.fillRect(X + 21 - step * 1.5, Y + 28, 3.4, 7 - Math.abs(step))
+  // tunic (trapezoid, slight lean while working)
+  const lean = swing * 1.5 * F
+  poly([[X+14+lean, Y+16], [X+26+lean, Y+16], [X+27, Y+29], [X+13, Y+29]], tunic, tunicDk)
+  cx.fillStyle = tunicDk; cx.fillRect(X + 13, Y + 22, 14, 1.6) // belt
+  // rear arm
+  cx.fillStyle = skin
+  cx.fillRect(X + (F > 0 ? 12 : 25), Y + 17, 3, 8 + swing * 2)
+  // tool arm + tool
+  const ax = X + (F > 0 ? 25 : 12), ay = Y + 17
+  cx.save()
+  cx.translate(ax + 1.5, ay + 1)
+  cx.rotate(F * (o.anim === 'gather' ? -0.6 + swing * 0.9 : o.anim === 'fight' ? -0.3 + swing * 1.1 : 0.15))
+  cx.fillStyle = skin; cx.fillRect(-1.5, 0, 3, 9)
+  if (o.anim === 'gather') { // hatchet/pick
+    cx.fillStyle = '#5c4023'; cx.fillRect(-1, 8, 2, 9)
+    cx.fillStyle = '#8a8a82'; cx.fillRect(F > 0 ? 1 : -6, 14, 5, 4)
+  } else if (o.anim === 'fight') { // sword
+    cx.fillStyle = '#b8b8b0'; cx.fillRect(-1, 8, 2, 12)
+    cx.fillStyle = '#5c4023'; cx.fillRect(-3, 8, 6, 2)
   }
+  cx.restore()
+  // head: skin, hair cap, eye toward facing
+  cx.fillStyle = skin; cx.fillRect(X + 15.5, Y + 7, 9, 9)
+  cx.fillStyle = o.mine ? '#6b4a1e' : '#2b2b2b'
+  cx.fillRect(X + 15, Y + 5.5, 10, 3.4)
+  cx.fillRect(X + (F > 0 ? 15 : 23), Y + 7, 2, 5) // sideburn on trailing side
+  cx.fillStyle = '#1c1710'
+  cx.fillRect(X + (F > 0 ? 21.5 : 17), Y + 10, 1.6, 1.6)
+
+  // name + hp (hp shown when hurt or fighting)
+  cx.fillStyle = '#ffcc33'; cx.font = 'bold 10px Verdana'; cx.textAlign = 'center'
+  cx.fillText(o.name, X + 20, Y + 2)
+  if (o.hp < o.maxHp || o.anim === 'fight') {
+    cx.fillStyle = '#4a1008'; cx.fillRect(X + 12, Y + 3, 16, 2.4)
+    cx.fillStyle = '#c0392b'; cx.fillRect(X + 12, Y + 3, 16 * (o.hp / o.maxHp), 2.4)
+  }
+}
+
+function drawScene(now) {
+  const s = curState; if (!s) return
+  cx.clearRect(0, 0, cv.width, cv.height)
+  cx.drawImage(ground, 0, 0)
+  const t = Math.min(1, (now - stateAt) / 600)
+
   for (const [id, n] of Object.entries(s.nodes)) {
     const X = px(n.x), Y = py(n.y), dep = n.depletedUntil > s.tick
     if (n.type === 'tree') {
       poly([[X+18,Y+22],[X+22,Y+22],[X+22,Y+34],[X+18,Y+34]], '#5c4023')
-      if (!dep) { poly([[X+20,Y+2],[X+34,Y+24],[X+6,Y+24]], '#2f6b1e', '#1e4712')
-                  poly([[X+20,Y+8],[X+31,Y+26],[X+9,Y+26]], '#3a7d26') }
-      else poly([[X+14,Y+20],[X+26,Y+20],[X+22,Y+26],[X+18,Y+26]], '#4a3319')
+      if (!dep) {
+        const sway = Math.sin(now / 900 + n.x) * 1.2
+        poly([[X+20+sway,Y+2],[X+34,Y+24],[X+6,Y+24]], '#2f6b1e', '#1e4712')
+        poly([[X+20+sway,Y+8],[X+31,Y+26],[X+9,Y+26]], '#3a7d26')
+      } else poly([[X+14,Y+20],[X+26,Y+20],[X+22,Y+26],[X+18,Y+26]], '#4a3319')
     }
     if (n.type === 'rock') {
       const c = dep ? '#3a3a3a' : '#7a7a72'
@@ -142,30 +240,63 @@ function draw(s, worldId) {
       cx.fillStyle = dep ? '#2a4a5a' : '#2e6b8a'
       cx.fillRect(X+4, Y+4, TILE-8, TILE-8)
       cx.fillStyle = 'rgba(255,255,255,.5)'
-      cx.fillRect(X+8, Y+14, 10, 2); cx.fillRect(X+20, Y+24, 10, 2)
+      const d1 = (now / 90) % (TILE - 18), d2 = (now / 130 + 14) % (TILE - 18)
+      cx.fillRect(X + 6 + d1, Y + 13, 8, 1.6)
+      cx.fillRect(X + 6 + d2, Y + 24, 8, 1.6)
     }
     if (n.type === 'campfire') {
       poly([[X+10,Y+32],[X+30,Y+32],[X+26,Y+28],[X+14,Y+28]], '#4a3319')
-      poly([[X+20,Y+8],[X+27,Y+28],[X+13,Y+28]], '#e67e22', '#a04000')
-      poly([[X+20,Y+14],[X+24,Y+28],[X+16,Y+28]], '#f4d03f')
+      const f1 = Math.sin(now / 90) * 2.4, f2 = Math.sin(now / 70 + 2) * 1.8
+      poly([[X+20+f1,Y+8],[X+27,Y+28],[X+13,Y+28]], '#e67e22', '#a04000')
+      poly([[X+20+f2,Y+13],[X+24,Y+28],[X+16,Y+28]], '#f4d03f')
+      if (Math.floor(now / 300) % 3 === 0) { cx.fillStyle = 'rgba(200,200,200,.35)'; cx.fillRect(X + 19 + f2, Y - 2, 2.4, 2.4) }
     }
   }
+
+  // gold frame on your active target
+  const meP = s.players[myId]
+  if (meP?.action) {
+    const tgt = s.nodes[meP.action.nodeId] ?? s.mobs[meP.action.mobId]
+    if (tgt) {
+      cx.strokeStyle = 'rgba(255,204,51,' + (0.65 + Math.sin(now / 250) * 0.3) + ')'
+      cx.lineWidth = 2; cx.strokeRect(px(tgt.x) + 2, py(tgt.y) + 2, TILE - 4, TILE - 4)
+    }
+  }
+
   for (const [id, m] of Object.entries(s.mobs)) {
     if (m.hp <= 0) continue
     const X = px(m.x), Y = py(m.y)
-    poly([[X+20,Y+10],[X+28,Y+20],[X+24,Y+34],[X+16,Y+34],[X+12,Y+20]], '#4e7d2a', '#2c4a15')
-    cx.fillStyle = '#c0392b'; cx.fillRect(X+13, Y+4, 14 * (m.hp / 5), 3)
+    const engaged = meP?.action?.mobId === id
+    const hop = engaged ? Math.abs(Math.sin(now / 160)) * 2 : Math.sin(now / 700 + m.x) * 0.7
+    poly([[X+20,Y+10-hop],[X+28,Y+20-hop],[X+24,Y+34],[X+16,Y+34],[X+12,Y+20-hop]], '#4e7d2a', '#2c4a15')
+    cx.fillStyle = '#1c1710'
+    cx.fillRect(X + 16, Y + 15 - hop, 2, 2); cx.fillRect(X + 22, Y + 15 - hop, 2, 2)
+    cx.fillStyle = '#c0392b'; cx.fillRect(X + 13, Y + 4, 14 * (m.hp / 5), 3)
   }
+
   for (const [pid, p] of Object.entries(s.players)) {
-    const X = px(p.x), Y = py(p.y), mine = pid === myId
-    poly([[X+20,Y+6],[X+27,Y+16],[X+25,Y+34],[X+15,Y+34],[X+13,Y+16]], mine ? '#c9a227' : '#3a6ea5', '#1c1710')
-    cx.fillStyle = '#e8c98f'; cx.fillRect(X+16, Y+6, 8, 7)
-    cx.fillStyle = '#ffcc33'; cx.font = 'bold 10px Verdana'; cx.textAlign = 'center'
-    cx.fillText(p.name ?? pid.slice(0, 6), X + 20, Y + 2)
+    const o = prevState?.players[pid]
+    const ix = o ? lerp(o.x, p.x, t) : p.x
+    const iy = o ? lerp(o.y, p.y, t) : p.y
+    if (o && p.x !== o.x) facing[pid] = Math.sign(p.x - o.x)
+    else if (p.action) {
+      const tgt = s.nodes[p.action.nodeId] ?? s.mobs[p.action.mobId]
+      if (tgt && tgt.x !== p.x) facing[pid] = Math.sign(tgt.x - p.x)
+    }
+    const moving = o && (p.x !== o.x || p.y !== o.y) && t < 1
+    const anim = moving ? 'walk' : p.action?.type === 'gather' ? 'gather'
+               : p.action?.type === 'attack' ? 'fight' : 'idle'
+    drawCitizen(px(ix), py(iy), {
+      now, face: facing[pid] ?? 1, anim, mine: pid === myId,
+      name: p.name ?? pid.slice(0, 6), hp: p.hp, maxHp: XP_TO_LVL(p.skills.hitpoints),
+      hitAt: hitFlash[pid],
+    })
   }
+
   cx.fillStyle = 'rgba(217,201,163,.75)'; cx.font = '10px Verdana'; cx.textAlign = 'left'
-  cx.fillText('world ' + worldId + '  ·  tick ' + s.tick, 6, 314)
+  cx.fillText('world ' + curWorldId + '  ·  tick ' + s.tick, 6, cv.height - 6)
 }
+requestAnimationFrame(function frame(now) { drawScene(now); requestAnimationFrame(frame) })
 
 function panel(s) {
   const me = s.players[myId]; if (!me) return

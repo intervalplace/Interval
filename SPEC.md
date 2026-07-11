@@ -1,4 +1,4 @@
-# Interval — Protocol Specification v0.11 ("The Constitution")
+# Interval — Protocol Specification v0.12 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -127,7 +127,10 @@ v0.1 input types:
 - `attack` → `{mobId}`; mob must exist, be alive, and be adjacent.
   Sets an ongoing attack action (§6b).
 - `eat` → `{slot}`; slot must hold `cooked-fish`. Consumes it, heals
-  3 HP (capped at max HP). Resolves in the same tick.
+  3 HP (capped at max HP), and **clears the player's current action** —
+  you stop what you are doing to eat. Re-engaging costs a future input,
+  so eating mid-fight trades a swing for the heal. Resolves in the
+  same tick.
 
 Rules:
 
