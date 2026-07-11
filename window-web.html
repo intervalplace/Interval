@@ -1,0 +1,217 @@
+<!doctype html>
+<!-- Interval reference window v0.9 — layer 3.
+     Aesthetic brief: early RuneScape / early-internet low-poly. Chunky
+     oblique tiles, polygon trees, stone-bevel UI chrome, gold-on-brown
+     text, a 4x7 inventory grid. This is ONE window among many possible:
+     the protocol has no authoritative aesthetic; every client is a reskin.
+     Click ground to walk · click tree/rock/water to gather · click a
+     goblin to fight · click fire (with raw fish) to cook · click cooked
+     fish in inventory to eat. -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Interval</title>
+<style>
+  :root {
+    --stone: #494034; --stone-dk: #2e2820; --stone-lt: #6b5f4a;
+    --gold: #ffcc33; --parch: #d9c9a3; --hp: #c0392b; --hpbg: #4a1008;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: #1c1710; color: var(--gold);
+    font: 13px/1.4 Verdana, Geneva, sans-serif;
+    display: flex; justify-content: center; align-items: flex-start;
+    min-height: 100vh; padding: 16px;
+  }
+  #frame { display: flex; gap: 0; border: 3px solid var(--stone-dk); }
+  canvas { display: block; background: #253a17; image-rendering: pixelated; cursor: crosshair; }
+  /* the classic stone bevel: light top-left, dark bottom-right */
+  .stone {
+    background: var(--stone);
+    border-top: 2px solid var(--stone-lt); border-left: 2px solid var(--stone-lt);
+    border-bottom: 2px solid var(--stone-dk); border-right: 2px solid var(--stone-dk);
+  }
+  #panel { width: 210px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+  #panel h2 { font-size: 11px; letter-spacing: 1px; color: var(--parch); text-transform: uppercase; }
+  #hpbar { height: 14px; background: var(--hpbg); position: relative; }
+  #hpfill { height: 100%; background: var(--hp); width: 100%; transition: width .3s; }
+  #hptext { position: absolute; inset: 0; text-align: center; font-size: 10px; color: #fff; line-height: 14px; }
+  #skills { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; font-size: 11px; }
+  #skills div { padding: 3px 5px; background: var(--stone-dk); }
+  #skills b { color: var(--parch); font-weight: normal; float: right; }
+  #inv { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+  .slot { aspect-ratio: 1; background: var(--stone-dk); display: flex; align-items: center;
+          justify-content: center; font-size: 17px; cursor: pointer; user-select: none; }
+  .slot:hover { outline: 1px solid var(--gold); }
+  #feed { height: 84px; overflow-y: auto; font-size: 10px; color: var(--parch); padding: 4px 6px; }
+  #feed div { margin-bottom: 1px; }
+  #status { font-size: 10px; color: #8a7a5c; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="world" width="560" height="320"></canvas>
+  <div id="panel" class="stone">
+    <h2 id="whoami">connecting…</h2>
+    <div id="hpbar"><div id="hpfill"></div><div id="hptext"></div></div>
+    <h2>Skills</h2><div id="skills"></div>
+    <h2>Inventory</h2><div id="inv"></div>
+    <div id="feed" class="stone"></div>
+    <div id="status"></div>
+  </div>
+</div>
+<script>
+const TILE = 40, W = 14, H = 8
+const cv = document.getElementById('world'), cx = cv.getContext('2d')
+const ICONS = { 'logs': '🪵', 'ore': '🪨', 'raw-fish': '🐟', 'cooked-fish': '🍖', 'burnt-fish': '💀', 'bones': '🦴' }
+const XP_TO_LVL = xp => { // mirror of the constitution's table, display only
+  let pts = 0, lvl = 1
+  for (let l = 2; l <= 99; l++) { pts += Math.floor((l-1) + 300 * Math.pow(2, (l-1)/7)); if (xp >= Math.floor(pts/4)) lvl = l; else break }
+  return lvl
+}
+
+let myId = null, myName = '', world = null, target = null, feedLines = []
+const ws = new WebSocket('ws://' + location.host)
+const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
+const feed = t => { feedLines.push(t); if (feedLines.length > 40) feedLines.shift()
+  const el = document.getElementById('feed')
+  el.innerHTML = feedLines.map(x => '<div>' + x + '</div>').join(''); el.scrollTop = 9e9 }
+
+ws.onmessage = (ev) => {
+  const m = JSON.parse(ev.data)
+  if (m.type === 'hello') { myId = m.playerId; myName = m.name; feed('The interval begins.') }
+  if (m.type === 'state') { onState(m.state, m.worldId) }
+}
+
+let prev = null
+function onState(s, worldId) {
+  world = s
+  const me = s.players[myId]
+  if (!me) { send({ do: 'spawn' }) }
+  else if (myName && !me.name) { send({ do: 'name', name: myName }) }
+  else if (me && target && !me.action) {
+    const dx = Math.sign(target.x - me.x), dy = Math.sign(target.y - me.y)
+    if (dx || dy) send({ do: 'move', dx, dy }); else target = null
+  }
+  // event feed from state diffs
+  if (prev && me && prev.players[myId]) {
+    const old = prev.players[myId]
+    for (const k in me.skills) if (me.skills[k] > old.skills[k]) {
+      const l1 = XP_TO_LVL(old.skills[k]), l2 = XP_TO_LVL(me.skills[k])
+      if (l2 > l1) feed('Level up! ' + k + ' is now ' + l2 + '.')
+    }
+    if (me.hp < old.hp) feed('You take ' + (old.hp - me.hp) + ' damage.')
+    if (old.hp <= 2 && me.hp > old.hp && me.x === 7 && me.y === 4 && old.x !== 7) feed('Oh dear, you are dead. Your items are gone.')
+  }
+  prev = s
+  draw(s, worldId); panel(s)
+}
+
+// ---- low-poly draw helpers ----
+const px = (x) => x * TILE, py = (y) => y * TILE
+function poly(pts, fill, stroke) {
+  cx.beginPath(); cx.moveTo(pts[0][0], pts[0][1])
+  for (const p of pts.slice(1)) cx.lineTo(p[0], p[1])
+  cx.closePath(); cx.fillStyle = fill; cx.fill()
+  if (stroke) { cx.strokeStyle = stroke; cx.lineWidth = 1; cx.stroke() }
+}
+function tileShade(x, y) { // deterministic per-tile variation: the chunky ground
+  const h = (x * 7 + y * 13) % 4
+  return ['#3d5a23', '#436327', '#365020', '#40592a'][h]
+}
+function draw(s, worldId) {
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    cx.fillStyle = tileShade(x, y)
+    cx.fillRect(px(x), py(y), TILE, TILE)
+    cx.strokeStyle = 'rgba(0,0,0,.12)'; cx.strokeRect(px(x) + .5, py(y) + .5, TILE - 1, TILE - 1)
+  }
+  for (const [id, n] of Object.entries(s.nodes)) {
+    const X = px(n.x), Y = py(n.y), dep = n.depletedUntil > s.tick
+    if (n.type === 'tree') {
+      poly([[X+18,Y+22],[X+22,Y+22],[X+22,Y+34],[X+18,Y+34]], '#5c4023')
+      if (!dep) { poly([[X+20,Y+2],[X+34,Y+24],[X+6,Y+24]], '#2f6b1e', '#1e4712')
+                  poly([[X+20,Y+8],[X+31,Y+26],[X+9,Y+26]], '#3a7d26') }
+      else poly([[X+14,Y+20],[X+26,Y+20],[X+22,Y+26],[X+18,Y+26]], '#4a3319')
+    }
+    if (n.type === 'rock') {
+      const c = dep ? '#3a3a3a' : '#7a7a72'
+      poly([[X+8,Y+30],[X+14,Y+12],[X+26,Y+9],[X+34,Y+24],[X+28,Y+33]], c, '#2c2c2c')
+    }
+    if (n.type === 'fishing-spot') {
+      cx.fillStyle = dep ? '#2a4a5a' : '#2e6b8a'
+      cx.fillRect(X+4, Y+4, TILE-8, TILE-8)
+      cx.fillStyle = 'rgba(255,255,255,.5)'
+      cx.fillRect(X+8, Y+14, 10, 2); cx.fillRect(X+20, Y+24, 10, 2)
+    }
+    if (n.type === 'campfire') {
+      poly([[X+10,Y+32],[X+30,Y+32],[X+26,Y+28],[X+14,Y+28]], '#4a3319')
+      poly([[X+20,Y+8],[X+27,Y+28],[X+13,Y+28]], '#e67e22', '#a04000')
+      poly([[X+20,Y+14],[X+24,Y+28],[X+16,Y+28]], '#f4d03f')
+    }
+  }
+  for (const [id, m] of Object.entries(s.mobs)) {
+    if (m.hp <= 0) continue
+    const X = px(m.x), Y = py(m.y)
+    poly([[X+20,Y+10],[X+28,Y+20],[X+24,Y+34],[X+16,Y+34],[X+12,Y+20]], '#4e7d2a', '#2c4a15')
+    cx.fillStyle = '#c0392b'; cx.fillRect(X+13, Y+4, 14 * (m.hp / 5), 3)
+  }
+  for (const [pid, p] of Object.entries(s.players)) {
+    const X = px(p.x), Y = py(p.y), mine = pid === myId
+    poly([[X+20,Y+6],[X+27,Y+16],[X+25,Y+34],[X+15,Y+34],[X+13,Y+16]], mine ? '#c9a227' : '#3a6ea5', '#1c1710')
+    cx.fillStyle = '#e8c98f'; cx.fillRect(X+16, Y+6, 8, 7)
+    cx.fillStyle = '#ffcc33'; cx.font = 'bold 10px Verdana'; cx.textAlign = 'center'
+    cx.fillText(p.name ?? pid.slice(0, 6), X + 20, Y + 2)
+  }
+  cx.fillStyle = 'rgba(217,201,163,.75)'; cx.font = '10px Verdana'; cx.textAlign = 'left'
+  cx.fillText('world ' + worldId + '  ·  tick ' + s.tick, 6, 314)
+}
+
+function panel(s) {
+  const me = s.players[myId]; if (!me) return
+  document.getElementById('whoami').textContent = me.name ?? '(unnamed)'
+  const maxHp = XP_TO_LVL(me.skills.hitpoints)
+  document.getElementById('hpfill').style.width = (100 * me.hp / maxHp) + '%'
+  document.getElementById('hptext').textContent = 'HP ' + me.hp + ' / ' + maxHp
+  document.getElementById('skills').innerHTML = Object.entries(me.skills)
+    .map(([k, xp]) => '<div>' + k.slice(0, 7) + ' <b>' + XP_TO_LVL(xp) + '</b></div>').join('')
+  document.getElementById('inv').innerHTML = me.inventory.slice(0, 28)
+    .map((it, i) => '<div class="slot" data-i="' + i + '" title="' + (it ? it.item : '') + '">' + (it ? (ICONS[it.item] ?? '?') : '') + '</div>').join('')
+  document.getElementById('status').textContent =
+    me.action ? 'busy: ' + me.action.type : 'idle — click the world'
+}
+
+document.getElementById('inv').addEventListener('click', (e) => {
+  const i = e.target.dataset.i; if (i === undefined || !world) return
+  const it = world.players[myId]?.inventory[i]
+  if (it?.item === 'cooked-fish') { send({ do: 'eat', slot: +i }); feed('You eat the fish.') }
+  if (it?.item === 'raw-fish') { send({ do: 'cook', slot: +i }); feed('You attempt to cook…') }
+})
+
+cv.addEventListener('click', (e) => {
+  if (!world) return
+  const r = cv.getBoundingClientRect()
+  const x = Math.floor((e.clientX - r.left) / TILE), y = Math.floor((e.clientY - r.top) / TILE)
+  const me = world.players[myId]; if (!me) return
+  const near = (a, b) => Math.max(Math.abs(a.x - x), Math.abs(a.y - y)) <= 0 &&
+                          Math.max(Math.abs(me.x - a.x), Math.abs(me.y - a.y)) <= 1
+  for (const [id, m] of Object.entries(world.mobs))
+    if (m.hp > 0 && m.x === x && m.y === y) {
+      if (Math.max(Math.abs(me.x-m.x), Math.abs(me.y-m.y)) <= 1) { send({ do: 'attack', mobId: id }); feed('You attack the goblin!') }
+      else { target = { x: m.x - 1, y: m.y }; }
+      return
+    }
+  for (const [id, n] of Object.entries(world.nodes))
+    if (n.x === x && n.y === y) {
+      if (Math.max(Math.abs(me.x-n.x), Math.abs(me.y-n.y)) <= 1) {
+        if (n.type === 'campfire') {
+          const i = me.inventory.findIndex(s => s && s.item === 'raw-fish')
+          if (i !== -1) { send({ do: 'cook', slot: i }); feed('You cook on the fire…') }
+        } else { send({ do: 'gather', nodeId: id }); feed('You begin gathering.') }
+      } else target = { x: n.x - 1, y: n.y }
+      return
+    }
+  target = { x, y }; send({ do: 'stop' })
+})
+</script>
+</body>
+</html>
