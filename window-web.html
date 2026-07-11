@@ -231,7 +231,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b35'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b36'  // stamp: if your screen says an older build, hard-refresh
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
@@ -315,6 +315,7 @@ let curState = null, prevState = null, stateAt = 0, curWorldId = ''
 const hitFlash = {}   // pid -> ms timestamp of last damage taken
 let celebrate = null  // { text, at }: level-up banner + sparks
 const bubbles = {}    // pid -> { text, at } speech bubbles
+const mobFacing = {}  // mobId -> -1 left / 1 right
 let xpDrops = []      // { amt, x, y, at }: floating +xp for gathering/cooking
 function updateGate(s, worldId) {
   const me = s.players[myId]
@@ -781,6 +782,11 @@ function drawScene(now) {
     const mo = prevState?.mobs?.[id]
     const mix = mo ? lerp(mo.x, m.x, t) : m.x
     const miy = mo ? lerp(mo.y, m.y, t) : m.y
+    // the goblin squares off: face whoever is hitting it, else face travel
+    const attacker = Object.values(s.players).find(p2 => p2.action?.mobId === id)
+    if (attacker) mobFacing[id] = attacker.x !== m.x ? Math.sign(attacker.x - m.x) : -1
+    else if (mo && m.x !== mo.x) mobFacing[id] = Math.sign(m.x - mo.x)
+    const MF = mobFacing[id] ?? 1
     layer.push({ z: Z(miy, 3), draw: () => {
       const X = px(mix), Y = py(miy)
       const engaged = meP?.action?.mobId === id
@@ -792,8 +798,9 @@ function drawScene(now) {
       poly([[X+12,Y+15-hop],[X+9,Y+9-hop],[X+15,Y+13-hop]], '#4e7d2a') // ears
       poly([[X+28,Y+15-hop],[X+31,Y+9-hop],[X+25,Y+13-hop]], '#4e7d2a')
       cx.fillStyle = '#c9302c'
-      cx.fillRect(X + 15.5, Y + 15 - hop, 2.4, 2.4); cx.fillRect(X + 22, Y + 15 - hop, 2.4, 2.4)
-      cx.save(); cx.translate(X + 28, Y + 24 - hop); cx.rotate(engaged ? Math.sin(now / 160) * 0.5 : 0.4)
+      cx.fillRect(X + 15.5 + MF * 1.2, Y + 15 - hop, 2.4, 2.4); cx.fillRect(X + 22 + MF * 1.2, Y + 15 - hop, 2.4, 2.4)
+      cx.save(); cx.translate(X + (MF > 0 ? 28 : 12), Y + 24 - hop)
+      cx.rotate(MF * (engaged ? Math.sin(now / 160) * 0.5 : 0.4))
       cx.fillStyle = '#5c4023'; cx.fillRect(-1.2, -8, 2.4, 10)
       cx.fillStyle = '#6e5433'; cx.beginPath(); cx.arc(0, -9, 3, 0, 7); cx.fill()
       cx.restore()
@@ -806,11 +813,11 @@ function drawScene(now) {
     const o = prevState?.players[pid]
     const ix = o ? lerp(o.x, p.x, t) : p.x
     const iy = o ? lerp(o.y, p.y, t) : p.y
-    if (o && p.x !== o.x) facing[pid] = Math.sign(p.x - o.x)
-    else if (p.action) {
+    if (p.action) {
+      // you face what you fight (and what you work)
       const tgt = s.nodes[p.action.nodeId] ?? s.mobs[p.action.mobId]
-      if (tgt && tgt.x !== p.x) facing[pid] = Math.sign(tgt.x - p.x)
-    }
+      if (tgt) facing[pid] = tgt.x !== p.x ? Math.sign(tgt.x - p.x) : 1
+    } else if (o && p.x !== o.x) facing[pid] = Math.sign(p.x - o.x)
     const moving = o && (p.x !== o.x || p.y !== o.y) && t < 1
     const anim = moving ? 'walk' : p.action?.type === 'gather' ? 'gather'
                : p.action?.type === 'attack' ? 'fight' : 'idle'
