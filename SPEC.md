@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.19 ("The Constitution")
+# Interval: Protocol Specification v0.20 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -94,6 +94,17 @@ World state includes `ground`: a map of groundId →
 `{item, x, y, expiresAt}`. Dropped items lie where they fell, visible
 to all and takeable by anyone; at the start of each tick, items with
 `expiresAt <= tick` vanish. The ground forgets in about a minute.
+
+**Wandering (v0.20).** At the start of each tick, after respawn
+processing, every living mob that no living player's action targets
+takes a wander roll in lexicographic mobId order:
+`roll(beacon, mobId, "wander") < 48` (about one step every five
+ticks). On success, `roll(beacon, mobId, "dir") % 4` picks north,
+east, south, or west. The step is taken only if the destination is in
+bounds, free of nodes, and within Chebyshev distance 2 of the mob's
+**home** (its genesis position, stored as `hx, hy`). A mob under
+attack stands and fights. Mobs respawn at home. The goblins pace
+because the beacon says so; every node watches them pace identically.
 
 ## 4. Skills and XP
 

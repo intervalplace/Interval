@@ -7,14 +7,14 @@
 // v0.6: spawning (§5b) and adjacent atomic trade (§5c).
 
 'use strict';
-// Universal crypto: @noble libraries are pure, audited, deterministic JS —
+// Universal crypto: @noble libraries are pure, audited, deterministic JS,
 // the same engine bytes run in Node, browsers, and anywhere else.
 const { sha256: nobleSha256, sha512 } = require('@noble/hashes/sha2.js');
 const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.19';
+const SPEC_VERSION = '0.20';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -141,7 +141,7 @@ function loadOrCreateIdentity(fs, file) {
     try {
       const id = importIdentity(JSON.parse(fs.readFileSync(file)));
       if (id.privateKey.length === 32) return id; // raw ed25519 secret
-      // pre-noble key format (pkcs8): unusable — preserve and regenerate
+      // pre-noble key format (pkcs8): unusable: preserve and regenerate
       fs.renameSync(file, file + '.old-format');
     } catch { /* corrupt file: fall through and regenerate */ }
   }
@@ -182,7 +182,7 @@ function addPlayer(state, playerId, x, y) {
 }
 
 function addMob(state, mobId, type, x, y) {
-  state.mobs[mobId] = { type, x, y, hp: MOB_STATS[type].maxHp, respawnAt: 0 };
+  state.mobs[mobId] = { type, x, y, hx: x, hy: y, hp: MOB_STATS[type].maxHp, respawnAt: 0 };
 }
 
 function addNode(state, nodeId, type, x, y) {
@@ -306,7 +306,24 @@ function nextState(state, inputs, beacon) {
 
   // mob respawns (spec §3.3): processed at tick start
   for (const m of Object.values(s.mobs)) {
-    if (m.hp <= 0 && m.respawnAt <= s.tick) m.hp = MOB_STATS[m.type].maxHp;
+    if (m.hp <= 0 && m.respawnAt <= s.tick) {
+      m.hp = MOB_STATS[m.type].maxHp;
+      m.x = m.hx; m.y = m.hy; // the dead come back where they belong
+    }
+  }
+  // wandering (spec §3.3): the beacon paces the goblins, identically everywhere
+  const pinned = new Set();
+  for (const p of Object.values(s.players)) if (p.action?.mobId) pinned.add(p.action.mobId);
+  for (const mid of Object.keys(s.mobs).sort()) {
+    const m = s.mobs[mid];
+    if (m.hp <= 0 || pinned.has(mid)) continue;
+    if (roll(beacon, mid, 'wander') >= 48) continue;
+    const [dx, dy] = [[0, -1], [1, 0], [0, 1], [-1, 0]][roll(beacon, mid, 'dir') % 4];
+    const nx = m.x + dx, ny = m.y + dy;
+    if (nx < 0 || nx >= s.genesis.worldW || ny < 0 || ny >= s.genesis.worldH) continue;
+    if (Math.max(Math.abs(nx - m.hx), Math.abs(ny - m.hy)) > 2) continue;
+    if (Object.values(s.nodes).some(n => n.x === nx && n.y === ny)) continue;
+    m.x = nx; m.y = ny;
   }
   // player-made fires burn out (spec §6f)
   for (const [nid, n2] of Object.entries(s.nodes)) {
@@ -395,7 +412,7 @@ function nextState(state, inputs, beacon) {
           p.skills.firemaking += XP_FIREMAKING;
           s.nodes['f' + s.tick + '-' + pid.slice(0, 8)] =
             { type: 'fire', x: p.x, y: p.y, depletedUntil: 0, expiresAt: s.tick + FIRE_TICKS };
-          // step aside (§6f): west, east, south, north — first free tile
+          // step aside (§6f): west, east, south, north: first free tile
           for (const [mx, my] of [[-1, 0], [1, 0], [0, 1], [0, -1]]) {
             const nx = p.x + mx, ny = p.y + my;
             if (nx < 0 || nx >= s.genesis.worldW || ny < 0 || ny >= s.genesis.worldH) continue;

@@ -230,7 +230,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b33'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b34'  // stamp: if your screen says an older build, hard-refresh
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
@@ -777,8 +777,11 @@ function drawScene(now) {
 
   for (const [id, m] of Object.entries(s.mobs)) {
     if (m.hp <= 0) continue
-    layer.push({ z: Z(m.y, 3), draw: () => {
-      const X = px(m.x), Y = py(m.y)
+    const mo = prevState?.mobs?.[id]
+    const mix = mo ? lerp(mo.x, m.x, t) : m.x
+    const miy = mo ? lerp(mo.y, m.y, t) : m.y
+    layer.push({ z: Z(miy, 3), draw: () => {
+      const X = px(mix), Y = py(miy)
       const engaged = meP?.action?.mobId === id
       const hop = engaged ? Math.abs(Math.sin(now / 160)) * 2 : Math.sin(now / 700 + m.x) * 0.7
       shadow(X, Y, 9)
