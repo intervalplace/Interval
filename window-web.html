@@ -126,6 +126,7 @@
     <h2>Skills</h2><div id="skills"></div>
     <h2>Inventory</h2><div id="inv"></div>
     <div id="feed" class="stone"></div>
+    <div id="sndtoggle" style="font-size:10px;color:var(--dim);cursor:pointer;user-select:none"></div>
     <input id="say" maxlength="80" placeholder="say something…" autocomplete="off"
       style="background:var(--stone-dk);border:1px solid var(--stone-lt);color:var(--gold);
              font:12px Verdana;padding:5px 7px;outline:none">
@@ -161,8 +162,75 @@ if (!uid) {
 const ws = new WebSocket('ws://' + location.host)
 ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', uid }))
 let entered = false, loginName = ''
+
+// ---- sound: the world's voice, synthesized from nothing ----
+// The AudioContext wakes on the gate click (browsers require a gesture) —
+// entering the world is what makes it audible. No asset files: every
+// sound is rules, like everything else here.
+let AC = null
+let soundOn = localStorage.getItem('interval-sound') !== 'off'
+function wakeAudio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)() } catch {} } }
+function tone(freq, dur, opts = {}) {
+  if (!AC || !soundOn) return
+  const t0 = AC.currentTime + (opts.at ?? 0)
+  const o = AC.createOscillator(), g = AC.createGain()
+  o.type = opts.type ?? 'triangle'
+  o.frequency.setValueAtTime(freq, t0)
+  if (opts.glide) o.frequency.exponentialRampToValueAtTime(opts.glide, t0 + dur)
+  g.gain.setValueAtTime(0, t0)
+  g.gain.linearRampToValueAtTime(opts.vol ?? 0.08, t0 + 0.008)
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
+  o.connect(g); g.connect(AC.destination)
+  o.start(t0); o.stop(t0 + dur + 0.02)
+}
+function thud(dur = 0.09, vol = 0.14, at = 0, hi = false) { // filtered noise burst
+  if (!AC || !soundOn) return
+  const t0 = AC.currentTime + at
+  const n = AC.createBufferSource()
+  const buf = AC.createBuffer(1, AC.sampleRate * dur, AC.sampleRate)
+  const d = buf.getChannelData(0)
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length)
+  n.buffer = buf
+  const f = AC.createBiquadFilter()
+  f.type = hi ? 'highpass' : 'lowpass'; f.frequency.value = hi ? 2400 : 420
+  const g = AC.createGain(); g.gain.value = vol
+  n.connect(f); f.connect(g); g.connect(AC.destination); n.start(t0)
+}
+const SFX = {
+  logs:   () => { thud(0.08, 0.16); tone(190, 0.09, { type: 'square', vol: 0.045, glide: 120 }) },
+  ore:    () => { thud(0.06, 0.13, 0, true); tone(900, 0.06, { type: 'square', vol: 0.035, glide: 500 }) },
+  'raw-fish': () => { tone(300, 0.16, { type: 'sine', vol: 0.07, glide: 90 }); thud(0.12, 0.05, 0.02, true) },
+  'cooked-fish': () => { tone(520, 0.1, { vol: 0.05 }); tone(660, 0.12, { vol: 0.05, at: 0.09 }) },
+  'burnt-fish': () => { thud(0.3, 0.06, 0, true); tone(140, 0.25, { type: 'sawtooth', vol: 0.02, glide: 60 }) },
+  bones:  () => { tone(240, 0.05, { type: 'square', vol: 0.05 }); tone(180, 0.05, { type: 'square', vol: 0.05, at: 0.07 }) },
+  eat:    () => tone(160, 0.14, { type: 'sine', vol: 0.08, glide: 70 }),
+  hit:    () => { thud(0.1, 0.18); tone(110, 0.12, { type: 'sawtooth', vol: 0.04, glide: 55 }) },
+  fire:   () => { thud(0.5, 0.07, 0, true); tone(90, 0.4, { type: 'sawtooth', vol: 0.02, glide: 45 }) },
+  trade:  () => { tone(880, 0.09, { vol: 0.06 }); tone(1320, 0.14, { vol: 0.06, at: 0.09 }) },
+  smith:  () => { tone(1400, 0.05, { type: 'square', vol: 0.05, glide: 900 }); thud(0.05, 0.1, 0, true); tone(1400, 0.05, { type: 'square', vol: 0.04, glide: 900, at: 0.16 }) },
+  levelup: () => { // the little fanfare you'll hum later
+    tone(523, 0.14, { vol: 0.09 }); tone(659, 0.14, { vol: 0.09, at: 0.13 })
+    tone(784, 0.16, { vol: 0.09, at: 0.26 }); tone(1047, 0.34, { vol: 0.1, at: 0.4 })
+    tone(784, 0.3, { vol: 0.04, at: 0.4 })
+  },
+  chat:   () => tone(700, 0.05, { type: 'sine', vol: 0.03 }),
+}
+// ambience: birds by day, crickets by night, always sparse
+setInterval(() => {
+  if (!AC || !soundOn || !entered || !curState) return
+  const cyc = ((curState.tick % 2400) / 2400)
+  const isDay = cyc > 0.03 && cyc < 0.5
+  if (Math.random() < (isDay ? 0.45 : 0.6)) return
+  if (isDay) { // a bird, somewhere
+    const base = 1800 + Math.random() * 1400
+    tone(base, 0.07, { type: 'sine', vol: 0.02, glide: base * 1.3 })
+    tone(base * 1.1, 0.09, { type: 'sine', vol: 0.018, glide: base * 0.8, at: 0.1 + Math.random() * 0.1 })
+  } else { // crickets
+    for (let i = 0; i < 4; i++) tone(4200, 0.03, { type: 'sine', vol: 0.008, at: i * 0.07 })
+  }
+}, 5000)
 let lastCancelAt = 0
-const BUILD = 'b31'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b32'  // stamp: if your screen says an older build, hard-refresh
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
@@ -235,6 +303,7 @@ ws.onmessage = (ev) => {
   }
   if (m.type === 'state') { onState(m.state, m.worldId) }
   if (m.type === 'chat') {
+    if (m.playerId !== myId) SFX.chat()
     bubbles[m.playerId] = { text: m.text, at: performance.now() }
     feed('<span style="color:#fff">' + m.name + ':</span> ' + m.text.replace(/</g, '&lt;'))
   }
@@ -321,6 +390,8 @@ function onState(s, worldId) {
     const old = prev.players[myId]
     for (const k in me.skills) if (me.skills[k] > old.skills[k]) {
       const l1 = XP_TO_LVL(old.skills[k]), l2 = XP_TO_LVL(me.skills[k])
+      if (k === 'smithing' && me.skills[k] > old.skills[k]) SFX.smith()
+      if (k === 'firemaking' && me.skills[k] > old.skills[k]) SFX.fire()
       if (!['attack', 'defence', 'hitpoints'].includes(k)) {
         xpDrops.push({ amt: me.skills[k] - old.skills[k], x: me.x, y: me.y, at: performance.now() })
         if (xpDrops.length > 12) xpDrops.shift()
@@ -328,10 +399,11 @@ function onState(s, worldId) {
       if (l2 > l1) {
         feed('\u2728 LEVEL UP! Your ' + k + ' is now level ' + l2 + '. \u2728')
         celebrate = { text: k.toUpperCase() + ' LEVEL ' + l2, at: performance.now() }
+        SFX.levelup()
       }
     }
-    if (me.hp < old.hp) feed('You take ' + (old.hp - me.hp) + ' damage.')
-    if (me.hp > old.hp) feed('You eat the fish. It heals ' + (me.hp - old.hp) + '.')
+    if (me.hp < old.hp) { feed('You take ' + (old.hp - me.hp) + ' damage.'); SFX.hit() }
+    if (me.hp > old.hp) { feed('You eat the fish. It heals ' + (me.hp - old.hp) + '.'); SFX.eat() }
     // announce what landed in the inventory this tick
     const GAIN = { 'logs': 'You get some logs.', 'ore': 'You manage to mine some ore.',
                    'raw-fish': 'You catch a fish!', 'cooked-fish': 'Nicely cooked.',
@@ -343,6 +415,7 @@ function onState(s, worldId) {
     let tradeItem = null
     if (old.trade && !me.trade && (b[old.trade.wantItem] || 0) > (a[old.trade.wantItem] || 0)) {
       tradeItem = old.trade.wantItem   // I offered; they accepted
+      SFX.trade()
       feed('Trade complete \u2014 you received ' + tradeItem.replace('-', ' ') + '. Pleasure doing business.')
     }
     if (old.trade && !me.trade && tradeItem === null
@@ -356,10 +429,14 @@ function onState(s, worldId) {
       const gi = pOld.inventory[pOld.trade.giveSlot]?.item
       if (gi && (b[gi] || 0) > (a[gi] || 0)) {
         tradeItem = gi                  // I accepted; the goods arrived
+        SFX.trade()
         feed('Trade complete \u2014 you received ' + gi.replace('-', ' ') + '.')
       }
     }
-    for (const item in b) if ((b[item] || 0) > (a[item] || 0) && GAIN[item] && item !== tradeItem) feed(GAIN[item])
+    for (const item in b) if ((b[item] || 0) > (a[item] || 0) && item !== tradeItem) {
+      if (GAIN[item]) feed(GAIN[item])
+      SFX[item]?.()
+    }
     if (me.skills.firemaking > old.skills.firemaking) feed('The fire catches. It will burn for a minute.')
     // your foe fell → its loot is lying there
     if (old.action?.type === 'attack') {
@@ -864,7 +941,7 @@ function panel(s) {
         : Math.floor(100 * (xp - XP_TABLE[lvl]) / (XP_TABLE[lvl + 1] - XP_TABLE[lvl]))
       const hot = k === training
       return '<div' + (hot ? ' style="outline:1px solid var(--gold)"' : '') + '>'
-        + k.slice(0, 7) + ' <b>' + lvl + '</b>'
+        + k + ' <b>' + lvl + '</b>'
         + '<div style="height:3px;background:#1c1710;margin-top:3px">'
         + '<div style="height:3px;width:' + pct + '%;background:' + (hot ? '#ffcc33' : '#8a7a4a') + '"></div></div></div>'
     }).join('')
@@ -942,12 +1019,22 @@ function openTrade(pid) {
 
 function enterWorld() {
   if (!myId) return
+  wakeAudio()
   const nm = document.getElementById('gatename').value.toLowerCase().trim()
   if (/^[a-z0-9-]{1,12}$/.test(nm) && !nm.startsWith('-') && !nm.endsWith('-')) loginName = nm
   entered = true
   document.getElementById('gate').style.display = 'none'
   feed('The interval begins.')
 }
+const sndEl = document.getElementById('sndtoggle')
+const sndLabel = () => sndEl.textContent = 'sound: ' + (soundOn ? 'on' : 'off') + ' (tap to toggle)'
+sndLabel()
+sndEl.addEventListener('click', () => {
+  soundOn = !soundOn
+  localStorage.setItem('interval-sound', soundOn ? 'on' : 'off')
+  wakeAudio(); sndLabel(); if (soundOn) SFX.trade()
+})
+
 document.getElementById('gatebtn').addEventListener('click', enterWorld)
 document.getElementById('gatename').addEventListener('keydown', (e) => { if (e.key === 'Enter') enterWorld() })
 
@@ -1015,7 +1102,10 @@ cv.addEventListener('click', (e) => {
     }
 
   for (const [gid, g2] of Object.entries(world.ground ?? {}))
-    if (g2.x === x && g2.y === y) { intent = { kind: 'pickup', id: gid }; return }
+    if (g2.x === x && g2.y === y) {
+      if (!me.inventory.some(sl => sl === null)) { feed('Your pack is full \u2014 no room to pick that up.'); return }
+      intent = { kind: 'pickup', id: gid }; return
+    }
 
   for (const [id, n] of Object.entries(world.nodes))
     if (n.x === x && n.y === y) {
@@ -1040,6 +1130,10 @@ cv.addEventListener('click', (e) => {
         const i = me.inventory.findIndex(s => s && s.item === 'raw-fish')
         if (i !== -1) { intent = { kind: 'cookall' }; feed('You start cooking your catch\u2026') }
         else feed('You have nothing to cook.')
+        return
+      }
+      if (!me.inventory.some(sl => sl === null)) {
+        feed('Your pack is full \u2014 bank it, drop it, or use it.')
         return
       }
       const msg = { 'tree': 'You swing your axe at the tree.',
