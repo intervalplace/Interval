@@ -1,4 +1,4 @@
-# Interval — Protocol Specification v0.18 ("The Constitution")
+# Interval — Protocol Specification v0.19 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -307,8 +307,10 @@ tile carries no node. It resolves in the same tick on the beacon:
 consumed, 40 firemaking XP is awarded, and a `fire` node appears on the
 player's tile with `expiresAt = tick + 100` — light that cooks, made by
 hand, gone in a minute. On failure the logs survive for another try.
-The maker stands on their fire until they step off; the tile is
-impassable to entry like any node.
+On success the maker **steps aside** to the first free orthogonal tile
+(west, east, south, north, in that order); only if all four are blocked
+do they remain standing amid their own flames. Nobody builds a fire to
+stand in it.
 
 ## 6g. The bank
 

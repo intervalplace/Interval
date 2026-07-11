@@ -63,12 +63,16 @@
   }
   #gatebox { position: relative; box-shadow: 0 0 60px rgba(0,0,0,.8), 0 0 24px rgba(230,126,34,.06); }
   .torch {
-    position: absolute; top: -14px; width: 10px; height: 22px;
+    position: absolute; top: -26px; width: 12px; height: 26px; z-index: 2;
     background: radial-gradient(ellipse at 50% 85%, #f4d03f 0%, #e67e22 45%, transparent 72%);
     filter: drop-shadow(0 0 8px rgba(230,126,34,.6));
     animation: flick .6s infinite alternate ease-in-out;
   }
-  .torch.l { left: 16px; } .torch.r { right: 16px; animation-delay: .27s; }
+  .torch.l { left: 18px; } .torch.r { right: 18px; animation-delay: .27s; }
+  .torch::after { /* the sconce: a little iron bracket on the doorframe */
+    content: ''; position: absolute; left: 3px; top: 24px; width: 6px; height: 8px;
+    background: #2e2820; border: 1px solid #55483a; animation: none;
+  }
   @keyframes flick {
     from { transform: scaleY(1) skewX(-3deg); opacity: .85; }
     to { transform: scaleY(1.22) skewX(4deg); opacity: 1; }

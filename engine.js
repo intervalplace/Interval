@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.18';
+const SPEC_VERSION = '0.19';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -395,6 +395,14 @@ function nextState(state, inputs, beacon) {
           p.skills.firemaking += XP_FIREMAKING;
           s.nodes['f' + s.tick + '-' + pid.slice(0, 8)] =
             { type: 'fire', x: p.x, y: p.y, depletedUntil: 0, expiresAt: s.tick + FIRE_TICKS };
+          // step aside (§6f): west, east, south, north — first free tile
+          for (const [mx, my] of [[-1, 0], [1, 0], [0, 1], [0, -1]]) {
+            const nx = p.x + mx, ny = p.y + my;
+            if (nx < 0 || nx >= s.genesis.worldW || ny < 0 || ny >= s.genesis.worldH) continue;
+            if (Object.values(s.nodes).some(n => n.x === nx && n.y === ny)) continue;
+            p.x = nx; p.y = ny;
+            break;
+          }
         }
       }
     } else if (inp.type === 'deposit') {
