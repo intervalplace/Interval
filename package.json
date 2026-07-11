@@ -18,7 +18,7 @@
     "@chainsafe/libp2p-yamux": "^7.0.4",
     "@libp2p/identify": "^3.0.39",
     "@libp2p/tcp": "^10.1.19",
-    "@multiformats/multiaddr": "^13.0.3",
+    "@multiformats/multiaddr": "^12.5.1",
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
     "libp2p": "^2.10.0",
