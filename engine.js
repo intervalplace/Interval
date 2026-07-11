@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.20';
+const SPEC_VERSION = '0.21';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -41,6 +41,11 @@ const TOOL_FOR = { tree: 'bronze-hatchet', rock: 'bronze-pickaxe' };
 const XP_SMITH_PER_ORE = 30;
 const XP_FIREMAKING = 40;
 const FIRE_TICKS = 100;
+const SLEEP_AFTER = 500;
+function isAwake(p, tick) {
+  return p.action !== null || tick - (p.lastInput ?? 0) <= SLEEP_AFTER;
+}
+
 const spawnOf = (g) => ({ x: Math.floor(g.worldW / 2), y: Math.floor(g.worldH / 2) });
 
 // ---------- XP table: spec constants (Appendix A). Index = level. ----------
@@ -174,6 +179,7 @@ function addPlayer(state, playerId, x, y) {
     hp: 10,
     equipment: { weapon: null },
     bank: {},
+    lastInput: state.tick,
     inventory: Array(INV_SLOTS).fill(null),
     action: null,
     name: null,
@@ -347,6 +353,7 @@ function nextState(state, inputs, beacon) {
     if (inp === 'DUP' || !validInput(state, inp)) continue;
     if (inp.type === 'spawn') { const sp = spawnOf(s.genesis); addPlayer(s, pid, sp.x, sp.y); continue; }
     const p = s.players[pid];
+    if (p) p.lastInput = s.tick; // presence (spec 5e)
     if (inp.type === 'move') {
       p.x += inp.dx;
       p.y += inp.dy;
@@ -568,5 +575,5 @@ module.exports = {
   canonical, stateHash, sha256, beaconValue, roll,
   generateIdentity, signInput, verifyInputSig,
   exportIdentity, importIdentity, loadOrCreateIdentity,
-  spawnOf, makeGenesis, newWorld, sameWorld, addPlayer, addNode, addMob, nextState, MOB_STATS, RECIPES, EQUIPPABLE,
+  SLEEP_AFTER, isAwake, spawnOf, makeGenesis, newWorld, sameWorld, addPlayer, addNode, addMob, nextState, MOB_STATS, RECIPES, EQUIPPABLE,
 };

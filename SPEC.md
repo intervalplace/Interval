@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.20 ("The Constitution")
+# Interval: Protocol Specification v0.21 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -234,6 +234,17 @@ deliberate: trade requires *being there*.
 
 There is no partial trade, no negotiation protocol, and no escrow: the
 swap either happens whole in one tick or not at all.
+
+## 5e. Presence: awake and asleep
+
+Each player carries `lastInput`: the tick of their most recent applied
+input, set at spawn and updated whenever any input of theirs applies.
+A citizen is **awake** iff `tick - lastInput <= 500` or their `action`
+is non-null; otherwise they are **asleep**. Sleep is never stored: it
+is derived, like the time of day. A sleeping citizen stands where they
+stopped, blocks nothing, and can complete no trade (accepting requires
+an input, which would wake them). Any input wakes the sleeper. The
+world never forgets a citizen; it lets them rest.
 
 ## 6. Gathering resolution
 

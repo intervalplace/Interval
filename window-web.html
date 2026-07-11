@@ -231,7 +231,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b36'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b37'  // stamp: if your screen says an older build, hard-refresh
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
@@ -316,12 +316,15 @@ const hitFlash = {}   // pid -> ms timestamp of last damage taken
 let celebrate = null  // { text, at }: level-up banner + sparks
 const bubbles = {}    // pid -> { text, at } speech bubbles
 const mobFacing = {}  // mobId -> -1 left / 1 right
+const SLEEP_AFTER = 500
+const isAwake = (p, tick) => p.action !== null || tick - (p.lastInput ?? 0) <= SLEEP_AFTER
 let xpDrops = []      // { amt, x, y, at }: floating +xp for gathering/cooking
 function updateGate(s, worldId) {
   const me = s.players[myId]
-  const citizens = Object.keys(s.players).length
+  const souls = Object.keys(s.players).length
+  const awakeN = Object.values(s.players).filter(p => isAwake(p, s.tick)).length
   document.getElementById('gateinfo').textContent =
-    'interval ' + s.tick.toLocaleString() + ' \u00b7 ' + citizens + ' citizen' + (citizens === 1 ? '' : 's') + ' \u00b7 world ' + worldId
+    'interval ' + s.tick.toLocaleString() + ' \u00b7 ' + awakeN + ' awake of ' + souls + ' citizen' + (souls === 1 ? '' : 's') + ' \u00b7 world ' + worldId
   const btn = document.getElementById('gatebtn')
   btn.disabled = !myId
   btn.textContent = me
@@ -827,12 +830,25 @@ function drawScene(now) {
     const wep = p.equipment?.weapon?.item
     const bronzeTool = (workNode?.type === 'tree' && wep === 'bronze-hatchet')
                     || (workNode?.type === 'rock' && wep === 'bronze-pickaxe')
-    layer.push({ z: Z(iy, 4), draw: () => drawCitizen(px(ix), py(iy), {
-      now, pid, face: facing[pid] ?? 1, anim, tool, mine: pid === myId,
-      sword: wep === 'bronze-sword', wepItem: wep, bronzeTool,
-      name: p.name ?? pid.slice(0, 6), hp: p.hp, maxHp: XP_TO_LVL(p.skills.hitpoints),
-      hitAt: hitFlash[pid],
-    })})
+    const awake = isAwake(p, s.tick)
+    layer.push({ z: Z(iy, 4), draw: () => {
+      if (!awake) cx.globalAlpha = 0.55
+      drawCitizen(px(ix), py(iy), {
+        now, pid, face: facing[pid] ?? 1, anim, tool, mine: pid === myId,
+        sword: wep === 'bronze-sword', wepItem: wep, bronzeTool,
+        name: p.name ?? pid.slice(0, 6), hp: p.hp, maxHp: XP_TO_LVL(p.skills.hitpoints),
+        hitAt: hitFlash[pid],
+      })
+      if (!awake) { // dreaming: a little z drifts up and away
+        const zt = (now / 1400 + p.x) % 1
+        cx.globalAlpha = 0.8 * (1 - zt)
+        cx.fillStyle = '#d9c9a3'
+        cx.font = 'bold ' + Math.round(8 + zt * 4) + 'px Verdana'
+        cx.textAlign = 'center'
+        cx.fillText('z', px(ix) + 26 + zt * 6, py(iy) + 4 - zt * 10)
+      }
+      cx.globalAlpha = 1
+    }})
   }
 
   layer.sort((a, b) => a.z - b.z)
