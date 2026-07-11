@@ -56,14 +56,14 @@ const client = new IntervalClient({ node, identity: me })
 const step = (me2, goal) => {
   const dx = Math.sign(goal.x - me2.x), dy = Math.sign(goal.y - me2.y)
   const blocked = (x, y) => Object.values(node.state.nodes).some(n => n.x === x && n.y === y)
-  for (const [mx, my] of [[dx, dy], [dx, 0], [0, dy], [dx, -1], [-1, dy]]) {
+  for (const [mx, my] of [[dx, dy], [dx, 0], [0, dy], [0, 1], [0, -1], [1, 0], [-1, 0]]) {
     if (!mx && !my) continue
     const nx = me2.x + mx, ny = me2.y + my
     if (nx < 0 || nx >= info.genesis.worldW || ny < 0 || ny >= info.genesis.worldH || blocked(nx, ny)) continue
     return client.move(mx, my)
   }
 }
-let said = false, banking = false
+let said = false, burning = false, litAnything = false
 const nearest = (s, p, type) => Object.entries(s.nodes)
   .filter(([, n]) => n.type === type && n.depletedUntil <= s.tick)
   .sort(([, a], [, b]) => (Math.abs(a.x - p.x) + Math.abs(a.y - p.y)) - (Math.abs(b.x - p.x) + Math.abs(b.y - p.y)))[0]
@@ -77,19 +77,19 @@ client.onTick((s) => {
 
   if (!CHOP) return  // an idle citizen: present, verifying, sovereign
 
-  // a full pack is wealth in danger: carry it to the vault
-  if (!banking && !p.inventory.some(sl => sl === null)) {
-    banking = true
-    client.chat('to the bank')
+  // chop five, then burn them where you stand: the constitution steps
+  // you aside after each fire, so the bot leaves a trail of light
+  const logs = p.inventory.map((sl, i) => sl?.item === 'logs' ? i : -1).filter(i => i !== -1)
+  if (!burning && logs.length >= 5) {
+    burning = true
+    if (!litAnything) { litAnything = true; client.chat('let there be light') }
   }
-  if (banking) {
-    const slot = p.inventory.findIndex(sl => sl?.item === 'logs')
-    if (slot === -1) { banking = false } // vaulted everything: back to work
+  if (burning) {
+    if (!logs.length) { burning = false } // ashes behind us: back to the trees
     else {
-      const bank = nearest(s, p, 'bank')
-      if (!bank) { banking = false } // a world without banks: chop on
-      else if (Math.abs(p.x - bank[1].x) + Math.abs(p.y - bank[1].y) === 1) return client.deposit(slot)
-      else return step(p, bank[1])
+      const blockedHere = Object.values(s.nodes).some(n => n.x === p.x && n.y === p.y)
+      if (blockedHere) return step(p, { x: p.x + 1, y: p.y + 1 }) // find open ground
+      return client.light(logs[0])
     }
   }
 
@@ -104,6 +104,5 @@ setInterval(() => {
   const p = client.me
   if (!p) return
   const logs = p.inventory.filter(sl => sl?.item === 'logs').length
-  const vault = p.bank?.logs ?? 0
-  console.log(`tick ${node.state.tick} · (${p.x},${p.y}) · wc ${client.level('woodcutting')} · ${logs} carried · ${vault} vaulted · peers ${client.peers} · flags ${node.divergent.size}`)
+  console.log(`tick ${node.state.tick} · (${p.x},${p.y}) · wc ${client.level('woodcutting')} · fm ${client.level('firemaking')} · ${logs} logs · peers ${client.peers} · flags ${node.divergent.size}`)
 }, 6000)
