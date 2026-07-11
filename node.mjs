@@ -40,6 +40,9 @@ export class IntervalNode {
       hashes: `interval/${this.genesis.specVersion}/${ns}/hashes`,
     }
     this.checkpointProto = `/interval/${this.genesis.specVersion}/${ns}/checkpoint/1.0.0`
+    this.chatTopic = `interval/${this.genesis.specVersion}/${ns}/chat/1.0.0`
+    this.onChat = null
+    this._chatLast = new Map()          // playerId -> ms of last accepted message
     this.ticklogProto = `/interval/${this.genesis.specVersion}/${ns}/ticklog/1.0.0`
     this.tickLog = new Map()            // tick -> inputs applied (recent history)
     this.checkpointFile = opts.checkpointFile || null
@@ -65,6 +68,7 @@ export class IntervalNode {
     const ps = this.p2p.services.pubsub
     ps.subscribe(this.topics.inputs)
     ps.subscribe(this.topics.hashes)
+    ps.subscribe(this.chatTopic)
     ps.addEventListener('message', (evt) => this.onMessage(evt))
     // serve recent input history for catch-up (spec §9b)
     await this.p2p.handle(this.ticklogProto, async ({ stream }) => {
@@ -113,10 +117,32 @@ export class IntervalNode {
   async dial(addr) { await this.p2p.dial(addr) }
   peerId() { return this.p2p.peerId.toString() }
 
+  acceptChat(msg) { // spec §9c: signed, short, one per interval per key
+    if (typeof msg.text !== 'string' || msg.text.length === 0 || msg.text.length > 80) return false
+    if (!E.verifyInputSig(msg)) return false
+    const now = Date.now()
+    if (now - (this._chatLast.get(msg.playerId) ?? 0) < E.TICK_MS) return false
+    this._chatLast.set(msg.playerId, now)
+    return true
+  }
+
+  async publishChat(identity, text) {
+    const msg = E.signInput(
+      { type: 'chat', playerId: identity.playerId, tick: this.state.tick, text: String(text).slice(0, 80) },
+      identity.privateKey)
+    if (this.acceptChat(msg) && this.onChat) this.onChat(msg) // local echo
+    await this.p2p.services.pubsub.publish(this.chatTopic, Buffer.from(JSON.stringify(msg)))
+  }
+
   onMessage(evt) {
     const { topic, data } = evt.detail
     let msg
     try { msg = JSON.parse(Buffer.from(data).toString()) } catch { return }
+
+    if (topic === this.chatTopic) {
+      if (this.acceptChat(msg) && this.onChat) this.onChat(msg)
+      return
+    }
 
     if (topic === this.topics.inputs) {
       // Buffer inputs for current/future ticks. Signature validity is
