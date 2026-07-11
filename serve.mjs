@@ -46,6 +46,7 @@ function buildWorld(genesis) {
   place('rock', 12, (id, x, y) => E.addNode(w, id, 'rock', x, y))
   place('fish', 8,  (id, x, y) => E.addNode(w, id, 'fishing-spot', x, y))
   place('fire', 4,  (id, x, y) => E.addNode(w, id, 'campfire', x, y))
+  place('anvil', 2, (id, x, y) => E.addNode(w, id, 'anvil', x, y))
   place('gob', 10,  (id, x, y) => E.addMob(w, id, 'goblin', x, y))
   return w
 }
@@ -112,9 +113,19 @@ wss.on('connection', (ws) => {
     else if (a.do === 'attack') client.attack(String(a.mobId))
     else if (a.do === 'cook') client.cook(a.slot | 0)
     else if (a.do === 'eat') client.eat(a.slot | 0)
+    else if (a.do === 'smith') client.smith(String(a.recipe))
+    else if (a.do === 'wield') client.wield(a.slot | 0)
+    else if (a.do === 'unwield') client.unwield()
+    else if (a.do === 'chat') client.chat(String(a.text))
     else if (a.do === 'name') client.claimName(String(a.name))
     else if (a.do === 'stop') client.stop()
   })
+})
+
+client.onChat((msg) => {
+  const name = node.state.players[msg.playerId]?.name ?? msg.playerId.slice(0, 6)
+  const out = JSON.stringify({ type: 'chat', playerId: msg.playerId, name, text: msg.text })
+  for (const ws of sockets) if (ws.readyState === 1) ws.send(out)
 })
 
 client.onTick((state) => {
