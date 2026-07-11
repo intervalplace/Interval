@@ -1,4 +1,4 @@
-# Interval — Protocol Specification v0.12 ("The Constitution")
+# Interval — Protocol Specification v0.13 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -115,7 +115,9 @@ v0.1 input types:
 - `move` → `{dx, dy}` where dx,dy ∈ {-1,0,1}; moves 1 tile per tick.
   The world is a bounded grid of **14 × 8 tiles** (x ∈ [0,13],
   y ∈ [0,7]); a move whose destination lies outside is invalid. The
-  world has edges because we say it does.
+  world has edges because we say it does. Resource nodes (all types,
+  including campfires) are **impassable**: a move onto a tile occupied
+  by a node is invalid. You fish beside the water, not in it.
 - `gather` → `{nodeId}`; must be adjacent (Chebyshev distance ≤ 1).
 - `stop` → cancels current action.
 - `claim_name` → `{name}`; see §5a.

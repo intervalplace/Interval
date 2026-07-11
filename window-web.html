@@ -71,12 +71,29 @@ const XP_TO_LVL = xp => { // mirror of the constitution's table, display only
   return lvl
 }
 
-let myId = null, myName = '', world = null, target = null, feedLines = []
+let myId = null, myName = '', world = null, intent = null, feedLines = []
+let lastFeed = { text: '', at: 0 }
 const ws = new WebSocket('ws://' + location.host)
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
-const feed = t => { feedLines.push(t); if (feedLines.length > 40) feedLines.shift()
+const feed = t => { const now = performance.now()
+  if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
+  lastFeed = { text: t, at: now }
+  feedLines.push(t); if (feedLines.length > 40) feedLines.shift()
   const el = document.getElementById('feed')
   el.innerHTML = feedLines.map(x => '<div>' + x + '</div>').join(''); el.scrollTop = 9e9 }
+
+const blockedAt = (s, x, y) => Object.values(s.nodes).some(n => n.x === x && n.y === y)
+function stepToward(s, me, goal) {
+  const dx = Math.sign(goal.x - me.x), dy = Math.sign(goal.y - me.y)
+  // nodes block: try the diagonal, then each axis — first legal step wins
+  for (const [mx, my] of [[dx, dy], [dx, 0], [0, dy]]) {
+    if (!mx && !my) continue
+    const nx = me.x + mx, ny = me.y + my
+    if (nx < 0 || nx >= W || ny < 0 || ny >= H || blockedAt(s, nx, ny)) continue
+    facing[myId] = mx !== 0 ? mx : (facing[myId] ?? 1) // optimistic turn
+    return send({ do: 'move', dx: mx, dy: my })
+  }
+}
 
 ws.onmessage = (ev) => {
   const m = JSON.parse(ev.data)
@@ -97,9 +114,19 @@ function onState(s, worldId) {
   const me = s.players[myId]
   if (!me) { send({ do: 'spawn' }) }
   else if (myName && !me.name) { send({ do: 'name', name: myName }) }
-  else if (me && target && !me.action) {
-    const dx = Math.sign(target.x - me.x), dy = Math.sign(target.y - me.y)
-    if (dx || dy) send({ do: 'move', dx, dy }); else target = null
+  else if (me && intent && !me.action) {
+    const goal = intent.kind === 'walk' ? intent
+      : (s.nodes[intent.id] ?? s.mobs[intent.id])
+    if (!goal) { intent = null }
+    else if (intent.kind !== 'walk' && Math.max(Math.abs(me.x - goal.x), Math.abs(me.y - goal.y)) <= 1) {
+      // arrived: engage automatically — clicking once was the whole command
+      if (intent.kind === 'gather') { send({ do: 'gather', nodeId: intent.id }); feed(intent.msg) }
+      else { send({ do: 'attack', mobId: intent.id }); feed('You attack the goblin!') }
+      intent = null
+    } else {
+      stepToward(s, me, goal)
+      if (intent?.kind === 'walk' && me.x === goal.x && me.y === goal.y) intent = null
+    }
   }
   // event feed from state diffs
   if (prev && me && prev.players[myId]) {
@@ -160,7 +187,7 @@ function drawCitizen(X, Y, o) {
   const bob = o.anim === 'idle' ? Math.sin(now / 600) * 0.8 : 0
   const step = o.anim === 'walk' ? Math.sin(now / 110) : 0
   const swing = (o.anim === 'gather' || o.anim === 'fight')
-    ? Math.sin(now / (o.anim === 'fight' ? 130 : 200)) : 0
+    ? Math.sin(now / (o.anim === 'fight' ? 130 : o.tool === 'rod' ? 700 : 200)) : 0
   const lunge = o.anim === 'fight' ? Math.max(0, Math.sin(now / 130)) * 3 * o.face : 0
   X += lunge; Y += bob
   const F = o.face
@@ -191,7 +218,16 @@ function drawCitizen(X, Y, o) {
   cx.translate(ax + 1.5, ay + 1)
   cx.rotate(F * (o.anim === 'gather' ? -0.6 + swing * 0.9 : o.anim === 'fight' ? -0.3 + swing * 1.1 : 0.15))
   cx.fillStyle = skin; cx.fillRect(-1.5, 0, 3, 9)
-  if (o.anim === 'gather') { // hatchet/pick
+  if (o.anim === 'gather' && o.tool === 'rod') { // fishing rod: long, thin, line down
+    cx.rotate(F * -0.5)
+    cx.fillStyle = '#5c4023'; cx.fillRect(-0.8, 6, 1.6, 15)
+    cx.strokeStyle = 'rgba(230,230,230,.8)'; cx.lineWidth = 0.8
+    cx.beginPath(); cx.moveTo(0, 21); cx.lineTo(F * 4, 26 + Math.sin(o.now / 300) * 1.5); cx.stroke()
+  } else if (o.anim === 'gather' && o.tool === 'pick') { // pickaxe
+    cx.fillStyle = '#5c4023'; cx.fillRect(-1, 8, 2, 10)
+    cx.strokeStyle = '#8a8a82'; cx.lineWidth = 3
+    cx.beginPath(); cx.arc(0, 17, 5, F > 0 ? -0.6 : 2.5, F > 0 ? 0.6 : 3.7); cx.stroke()
+  } else if (o.anim === 'gather') { // hatchet
     cx.fillStyle = '#5c4023'; cx.fillRect(-1, 8, 2, 9)
     cx.fillStyle = '#8a8a82'; cx.fillRect(F > 0 ? 1 : -6, 14, 5, 4)
   } else if (o.anim === 'fight') { // sword
@@ -286,8 +322,11 @@ function drawScene(now) {
     const moving = o && (p.x !== o.x || p.y !== o.y) && t < 1
     const anim = moving ? 'walk' : p.action?.type === 'gather' ? 'gather'
                : p.action?.type === 'attack' ? 'fight' : 'idle'
+    const workNode = p.action?.nodeId ? s.nodes[p.action.nodeId] : null
+    const tool = workNode?.type === 'fishing-spot' ? 'rod'
+               : workNode?.type === 'rock' ? 'pick' : 'axe'
     drawCitizen(px(ix), py(iy), {
-      now, face: facing[pid] ?? 1, anim, mine: pid === myId,
+      now, face: facing[pid] ?? 1, anim, tool, mine: pid === myId,
       name: p.name ?? pid.slice(0, 6), hp: p.hp, maxHp: XP_TO_LVL(p.skills.hitpoints),
       hitAt: hitFlash[pid],
     })
@@ -322,31 +361,48 @@ document.getElementById('inv').addEventListener('click', (e) => {
 cv.addEventListener('click', (e) => {
   if (!world) return
   const r = cv.getBoundingClientRect()
-  // canvas is CSS-scaled: convert screen px → canvas px before tile math
   const sx = (e.clientX - r.left) * (cv.width / r.width)
   const sy = (e.clientY - r.top) * (cv.height / r.height)
   const x = Math.floor(sx / TILE), y = Math.floor(sy / TILE)
   if (x < 0 || x >= W || y < 0 || y >= H) return
   const me = world.players[myId]; if (!me) return
-  const near = (a, b) => Math.max(Math.abs(a.x - x), Math.abs(a.y - y)) <= 0 &&
-                          Math.max(Math.abs(me.x - a.x), Math.abs(me.y - a.y)) <= 1
+  const adj = (o) => Math.max(Math.abs(me.x - o.x), Math.abs(me.y - o.y)) <= 1
+
   for (const [id, m] of Object.entries(world.mobs))
     if (m.hp > 0 && m.x === x && m.y === y) {
-      if (Math.max(Math.abs(me.x-m.x), Math.abs(me.y-m.y)) <= 1) { send({ do: 'attack', mobId: id }); feed('You attack the goblin!') }
-      else { target = { x: m.x - 1, y: m.y }; }
+      if (me.action?.mobId === id) return                      // already fighting it: silent
+      if (adj(m)) { send({ do: 'attack', mobId: id }); feed('You attack the goblin!') }
+      else intent = { kind: 'attack', id }                     // walk there, then engage
       return
     }
+
   for (const [id, n] of Object.entries(world.nodes))
     if (n.x === x && n.y === y) {
-      if (Math.max(Math.abs(me.x-n.x), Math.abs(me.y-n.y)) <= 1) {
-        if (n.type === 'campfire') {
-          const i = me.inventory.findIndex(s => s && s.item === 'raw-fish')
-          if (i !== -1) { send({ do: 'cook', slot: i }); feed('You cook on the fire…') }
-        } else { send({ do: 'gather', nodeId: id }); feed('You begin gathering.') }
-      } else target = { x: n.x - 1, y: n.y }
+      if (me.action?.nodeId === id) return                     // already working it: silent
+      if (n.type !== 'campfire' && n.depletedUntil > world.tick) {
+        feed({ 'tree': 'The tree is felled. It will regrow.',
+               'rock': 'The rock is mined out. Give it a moment.',
+               'fishing-spot': "The fish aren't biting here yet." }[n.type] ?? 'Nothing left here.')
+        return
+      }
+      if (n.type === 'campfire') {
+        if (!adj(n)) { intent = { kind: 'walk', x: n.x, y: n.y - 1 }; return }
+        const i = me.inventory.findIndex(s => s && s.item === 'raw-fish')
+        if (i !== -1) { send({ do: 'cook', slot: i }); feed('You cook the fish on the fire\u2026') }
+        else feed('You have nothing to cook.')
+        return
+      }
+      const msg = { 'tree': 'You swing your axe at the tree.',
+                    'rock': 'You take a swing at the rock.',
+                    'fishing-spot': 'You cast your line\u2026' }[n.type] ?? 'You begin gathering.'
+      if (adj(n)) { send({ do: 'gather', nodeId: id }); feed(msg) }
+      else intent = { kind: 'gather', id, msg }                // one click does it all
       return
     }
-  target = { x, y }; send({ do: 'stop' })
+
+  if (blockedAt(world, x, y)) return
+  intent = { kind: 'walk', x, y }
+  if (me.action) send({ do: 'stop' })
 })
 </script>
 </body>

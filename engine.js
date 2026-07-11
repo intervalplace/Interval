@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.12';
+const SPEC_VERSION = '0.13';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -194,7 +194,9 @@ function validInput(state, input) {
       const { dx, dy } = input;
       if (![ -1, 0, 1 ].includes(dx) || ![ -1, 0, 1 ].includes(dy)) return false;
       const nx = p.x + dx, ny = p.y + dy;
-      return nx >= 0 && nx < WORLD.w && ny >= 0 && ny < WORLD.h;
+      if (nx < 0 || nx >= WORLD.w || ny < 0 || ny >= WORLD.h) return false;
+      // nodes are impassable (§5): you fish beside the water, not in it
+      return !Object.values(state.nodes).some(n => n.x === nx && n.y === ny);
     }
     case 'gather': {
       const n = state.nodes[input.nodeId];
