@@ -7,7 +7,7 @@ document.body.insertAdjacentHTML('afterbegin', `
     <a href="/quickstart">New Player Guide</a>
     <a href="/manual">The Manual</a>
     <a href="/hiscores">Hiscores</a>
-    <a href="https://github.com/" id="ghlink">Source</a>
+    <a href="https://github.com/intervalplace/interval" id="ghlink">Source</a>
   </nav>
 </div>`)
 const here = location.pathname.replace(/\/$/, '') || '/'
