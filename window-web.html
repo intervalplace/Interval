@@ -241,7 +241,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b44'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b45'  // stamp: if your screen says an older build, hard-refresh
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
@@ -444,7 +444,7 @@ function onState(s, worldId) {
     }
   }
   // event feed from state diffs
-  if (prev && me && prev.players[myId]) {
+  if (prev && me && prev.players[myId]) try {
     const old = prev.players[myId]
 
     // death: computed FIRST, so nothing below can misread it (and nothing
@@ -525,7 +525,7 @@ function onState(s, worldId) {
       if (n && n.depletedUntil > s.tick) feed({ 'tree': 'The tree falls.', 'rock': 'The rock crumbles.',
         'fishing-spot': 'The fish stop biting: for now.' }[n.type] ?? 'Exhausted.')
     }
-  }
+  } catch (err) { console.error('state diff error (recovered):', err) }
   prev = s
   panel(s)
 }
