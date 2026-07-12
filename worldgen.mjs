@@ -78,6 +78,12 @@ export function buildWorld(genesis) {
   // small waters near the west hamlet, as of old
   for (const [i, [x, y]] of [[0, [10, trailY + 4]], [1, [11, trailY + 4]], [2, [10, trailY + 5]]])
     put('fish-w' + i, 'fishing-spot', x, y)
+  // tilled plots near every settlement (spec 6o)
+  const plotsAt = (tag, px2, py2) => { for (let i = 0; i < 3; i++) put('plot-' + tag + i, 'plot', px2 + i, py2) }
+  plotsAt('west', 4, trailY + 4)
+  plotsAt('east', W - 8, trailY + 4)
+  plotsAt('mil', mb.x - 4, mb.y - 5)
+  plotsAt('anchor', cx + 4, city.y1 + 3)
   put('fire-way1', 'campfire', Math.floor(W / 3), trailY - 1)
   put('fire-way2', 'campfire', Math.floor(2 * W / 3), trailY + 1)
   put('fire-way3', 'campfire', cx - 1, Math.floor((trailY + lakeC.y) / 2))
