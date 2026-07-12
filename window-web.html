@@ -231,7 +231,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b37'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b38'  // stamp: if your screen says an older build, hard-refresh
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
@@ -358,6 +358,9 @@ function onState(s, worldId) {
     else if (!fire) { intent = null }
     else send({ do: 'cook', slot: i })
   }
+  else if (me && intent?.kind === 'attack' && (me.action?.mobId === intent.id || !s.mobs[intent.id] || s.mobs[intent.id].hp <= 0)) {
+    intent = null // the fight began, or the target is gone
+  }
   else if (me && intent && !me.action) {
     const goal = intent.kind === 'walk' ? intent
       : intent.kind === 'pickup' ? s.ground[intent.id]
@@ -368,7 +371,12 @@ function onState(s, worldId) {
              && Math.abs(me.x - goal.x) + Math.abs(me.y - goal.y) === 1) {
       // arrived: engage automatically: clicking once was the whole command
       if (intent.kind === 'gather') { send({ do: 'gather', nodeId: intent.id }); feed(intent.msg); intent = null }
-      else if (intent.kind === 'attack') { send({ do: 'attack', mobId: intent.id }); feed('You attack the goblin!'); intent = null }
+      else if (intent.kind === 'attack') {
+        // the hunt persists: keep the intent until the state confirms the
+        // fight began, so a goblin that steps at the tick boundary is chased
+        send({ do: 'attack', mobId: intent.id })
+        if (!intent.announced) { feed('You attack the goblin!'); intent.announced = true }
+      }
       else if (intent.kind === 'anvilgo') { smithBest(me); intent = null }
       else if (intent.kind === 'meet') { openTrade(intent.id); intent = null }
       else { // at the fire: start cooking if there's anything raw
@@ -474,7 +482,17 @@ function tileHash(x, y, k) { // integer avalanche: adjacent tiles decorrelate
   h = Math.imul(h ^ (h >>> 13), 1274126177)
   return ((h ^ (h >>> 16)) >>> 0)
 }
+const trailYOf = () => Math.floor(H / 2)
+function terrainOf(x, y) {
+  const ty = trailYOf()
+  if (Math.abs(y - ty) <= (tileHash(x, 0, 3) % 2)) return 'trail'   // a road that wavers like a real one
+  if ((x <= 10 || x >= W - 11) && Math.abs(y - ty) <= 4) return 'plaza'
+  return 'meadow'
+}
 function tileShade(x, y) {
+  const t = terrainOf(x, y)
+  if (t === 'trail') return ['#8a7449', '#937d50', '#816c42'][tileHash(x, y, 0) % 3]
+  if (t === 'plaza') return ['#6e5f3e', '#75663f', '#665837'][tileHash(x, y, 0) % 3]
   return ['#3d5a23', '#436327', '#365020', '#40592a', '#3a5726'][tileHash(x, y, 0) % 5]
 }
 
@@ -493,15 +511,15 @@ function buildGround() {
     g.fillRect(px(x) + TILE - 2, py(y), 2, TILE)
     g.fillStyle = 'rgba(255,255,255,.03)'
     g.fillRect(px(x), py(y), TILE, 1.5)
-    // grass tufts
-    if (h2(x, y, 1) < 0.35) {
+    // grass tufts (meadow only; nothing grows on a well-walked road)
+    if (terrainOf(x, y) === 'meadow' && h2(x, y, 1) < 0.35) {
       const tx = px(x) + 6 + h2(x, y, 2) * 26, ty = py(y) + 6 + h2(x, y, 3) * 26
       g.strokeStyle = 'rgba(30,60,15,.55)'; g.lineWidth = 1.2
       g.beginPath(); g.moveTo(tx, ty + 4); g.lineTo(tx - 1.5, ty); g.moveTo(tx + 1, ty + 4); g.lineTo(tx + 2.5, ty + .5)
       g.moveTo(tx + 2, ty + 4); g.lineTo(tx + 1, ty - 1); g.stroke()
     }
     // rare flowers
-    if (h2(x, y, 4) < 0.05) {
+    if (terrainOf(x, y) === 'meadow' && h2(x, y, 4) < 0.05) {
       const fx = px(x) + 8 + h2(x, y, 5) * 24, fy = py(y) + 8 + h2(x, y, 6) * 24
       g.fillStyle = h2(x, y, 7) < 0.5 ? '#e8d44f' : '#d9ecf0'
       g.fillRect(fx - 1.4, fy - 1.4, 2.8, 2.8)

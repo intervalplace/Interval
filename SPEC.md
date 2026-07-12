@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.21 ("The Constitution")
+# Interval: Protocol Specification v0.22 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -34,6 +34,19 @@ happens, happens on one.
   arithmetic, not a server. Inputs for tick N must reach a node before
   it finalizes N; a node that stalls past a boundary must re-sync from
   checkpoints rather than guess.
+
+## 2b. Geography (founding layout)
+
+A founding grows two hamlets joined by a trail. **Westhearth** stands
+at the western end and **Eastmere** at the eastern end; each holds a
+bank, an anvil, and a hearth campfire arranged around the trail row
+(`trailY = floor(worldH / 2)`). Fishing waters pool near each hamlet.
+Trees, rocks, and goblins scatter across the meadows between,
+seed-placed, avoiding the trail and the hamlet grounds. Spawn is the
+center of the trail: every citizen arrives on the road, halfway
+between the two lights. The trail itself is not state; windows may
+paint the road however they like, but the buildings stand where the
+constitution says.
 
 ## 3. World state
 
