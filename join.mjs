@@ -53,15 +53,38 @@ node.startTicking()
 const client = new IntervalClient({ node, identity: me })
 
 // 5. the example executor: spawn, claim name, chop the nearest tree forever
-const step = (me2, goal) => {
-  const dx = Math.sign(goal.x - me2.x), dy = Math.sign(goal.y - me2.y)
-  const blocked = (x, y) => Object.values(node.state.nodes).some(n => n.x === x && n.y === y)
-  for (const [mx, my] of [[dx, dy], [dx, 0], [0, dy], [0, 1], [0, -1], [1, 0], [-1, 0]]) {
-    if (!mx && !my) continue
-    const nx = me2.x + mx, ny = me2.y + my
-    if (nx < 0 || nx >= info.genesis.worldW || ny < 0 || ny >= info.genesis.worldH || blocked(nx, ny)) continue
-    return client.move(mx, my)
+// real pathfinding: breadth-first over the grid, exactly like the web
+// window does it. Greedy stepping oscillates around obstacles; BFS does not.
+const step = (me2, goal, reach = true) => {
+  const W = info.genesis.worldW, H = info.genesis.worldH
+  const s = node.state
+  const blocked = new Set(Object.values(s.nodes).map(n => n.x + ',' + n.y))
+  const goals = new Set()
+  if (reach) {
+    for (const [mx, my] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const gx = goal.x + mx, gy = goal.y + my
+      if (gx >= 0 && gx < W && gy >= 0 && gy < H && !blocked.has(gx + ',' + gy)) goals.add(gx + ',' + gy)
+    }
+  } else goals.add(goal.x + ',' + goal.y)
+  if (goals.has(me2.x + ',' + me2.y)) return
+  const from = new Map([[me2.x + ',' + me2.y, null]])
+  const q = [[me2.x, me2.y]]
+  let found = null
+  while (q.length && !found) {
+    const [cx2, cy2] = q.shift()
+    for (const [mx, my] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = cx2 + mx, ny = cy2 + my, k = nx + ',' + ny
+      if (nx < 0 || nx >= W || ny < 0 || ny >= H || blocked.has(k) || from.has(k)) continue
+      from.set(k, cx2 + ',' + cy2)
+      if (goals.has(k)) { found = k; break }
+      q.push([nx, ny])
+    }
   }
+  if (!found) return // enclosed for now; trees fall and fires die, paths reopen
+  let cur = found, prev = from.get(cur)
+  while (prev !== me2.x + ',' + me2.y && prev !== null) { cur = prev; prev = from.get(cur) }
+  const [tx, ty] = cur.split(',').map(Number)
+  return client.move(Math.sign(tx - me2.x), Math.sign(ty - me2.y))
 }
 let said = false, burning = false, litAnything = false
 const nearest = (s, p, type) => Object.entries(s.nodes)
