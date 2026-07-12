@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.32 ("The Constitution")
+# Interval: Protocol Specification v0.33 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -97,6 +97,16 @@ an inventory item. What gold BUYS is reserved for a future amendment:
 the till is patient.
 
 New inert node type: `store` (with its `keeper`).
+
+## 6n. The quiver (v0.33)
+
+Arrows **stack without limit** in a single slot: fletching and pickup
+merge into any arrows already carried. And an archer whose quiver
+runs dry mid-fight does not lower the bow in confusion: if the target
+stands adjacent, the fight continues bare-handed (or with whatever
+the melee math says of a bow used as a club: nothing good). At range
+with no arrows, the engagement ends; distance unpaid is distance
+lost.
 
 ## 6m. Combat breathes (v0.32)
 

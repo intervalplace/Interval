@@ -405,7 +405,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b65'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b66'  // stamp: if your screen says an older build, hard-refresh
 const send = a => {
   if (ws.readyState !== 1) return
   if (ownKey && a.do === 'chat') { signChat(a.text); return }
@@ -784,6 +784,28 @@ function onState(s, worldId) {
     if (!wasWild && isWild) feed('You cross into the WILDS. Here, citizens may hunt citizens. Your pack spills where you fall.')
     if (wasWild && !isWild) feed('You step back under the law.')
 
+    // loosed arrows fly: one tracer per exchange, timed by the same law
+    for (const [pid2, p2] of Object.entries(s.players)) {
+      const act = p2.action
+      if (!act || (act.type !== 'attack' && act.type !== 'attackp')) continue
+      if (p2.equipment?.weapon?.item !== 'wooden-bow') continue
+      if ((s.tick - (act.since ?? 0)) % 2 !== 0) continue
+      const t2 = act.mobId ? s.mobs[act.mobId] : s.players[act.targetId]
+      if (!t2 || Math.abs(p2.x - t2.x) + Math.abs(p2.y - t2.y) <= 1) continue
+      effects.push({ kind: 'arrowshot', x: p2.x, y: p2.y, tx: t2.x, ty: t2.y, at: performance.now() })
+    }
+
+    // an archer's quiver ran dry mid-fight: close to melee (spec 6n spirit)
+    if (old.action?.type === 'attack' && !me.action
+        && me.equipment?.weapon?.item === 'wooden-bow'
+        && !me.inventory.some(sl => sl?.item === 'arrows')) {
+      const tid = old.action.mobId
+      if (s.mobs[tid]?.hp > 0) {
+        feed('Your quiver is empty. You close to melee!')
+        intent = { kind: 'attack', id: tid }
+      }
+    }
+
     // rites and works leave visible traces
     if (me.skills.prayer > old.skills.prayer) effects.push({ kind: 'bury', x: me.x, y: me.y, at: performance.now() })
     if (me.skills.magic === old.skills.magic + 20) effects.push({ kind: 'invoke', x: me.x, y: me.y, at: performance.now() })
@@ -997,7 +1019,19 @@ function drawCitizen(X, Y, o) {
 
   const look = lookOf(o.pid)
   if (o.anim === 'idle') Y += Math.sin(o.now / 800 + X * 0.1) * 0.7
-  if (o.bow) { // the bow rides the back, string catching the light
+  if (o.shooting) { // the archer's stance: bow forward, string drawn
+    const BF = o.face ?? 1
+    const pull = (Math.sin(o.now / 300) + 1) / 2
+    cx.strokeStyle = '#5c4023'; cx.lineWidth = 2.6
+    cx.beginPath(); cx.arc(X + 20 + BF * 9, Y + 18, 8, BF > 0 ? -1.35 : 1.79, BF > 0 ? 1.35 : 4.49); cx.stroke()
+    cx.strokeStyle = '#d9d3c0'; cx.lineWidth = 0.9
+    const sx1 = X + 20 + BF * 9 + Math.cos(BF > 0 ? -1.35 : 1.79) * 8, sy1 = Y + 18 + Math.sin(-1.35) * 8
+    const sx2 = X + 20 + BF * 9 + Math.cos(BF > 0 ? 1.35 : 4.49) * 8, sy2 = Y + 18 + Math.sin(1.35) * 8
+    const nockX = X + 20 + BF * (9 - 5 * pull)
+    cx.beginPath(); cx.moveTo(sx1, sy1); cx.lineTo(nockX, Y + 18); cx.lineTo(sx2, sy2); cx.stroke()
+    cx.strokeStyle = '#8a5a2a'; cx.lineWidth = 1.6
+    cx.beginPath(); cx.moveTo(nockX, Y + 18); cx.lineTo(X + 20 + BF * 12, Y + 18); cx.stroke()
+  } else if (o.bow) { // the bow rides the back, string catching the light
     const BF = o.face ?? 1
     cx.strokeStyle = '#5c4023'; cx.lineWidth = 2.4
     cx.beginPath(); cx.arc(X + 20 - BF * 7, Y + 19, 8, -1.2, 1.2); cx.stroke()
@@ -1514,6 +1548,10 @@ function drawScene(now) {
         now, pid, face: facing[pid] ?? 1, anim, tool, mine: pid === myId,
       cape: capeOf(p),
       bow: p.equipment?.weapon?.item === 'wooden-bow',
+      shooting: p.equipment?.weapon?.item === 'wooden-bow' && p.action
+        && (p.action.type === 'attack' || p.action.type === 'attackp')
+        && (() => { const t2 = p.action.mobId ? s.mobs[p.action.mobId] : s.players[p.action.targetId]
+          return t2 && Math.abs(p.x - t2.x) + Math.abs(p.y - t2.y) > 1 })(),
       helm: !!p.equipment?.head, plate: !!p.equipment?.body,
         sword: wep === 'bronze-sword', wepItem: wep, bronzeTool,
         name: (p.name ?? pid.slice(0, 6)) + ' (lvl '
@@ -1558,9 +1596,10 @@ function drawScene(now) {
   // rites: brief particle truths
   for (let i = effects.length - 1; i >= 0; i--) {
     const ef = effects[i]
+    const life = ef.kind === 'arrowshot' ? 380 : 800
     const age = now - ef.at
-    if (age > 800) { effects.splice(i, 1); continue }
-    const p2 = age / 800
+    if (age > life) { effects.splice(i, 1); continue }
+    const p2 = age / life
     const EX = px(ef.x) + 20, EY = py(ef.y) + 20
     cx.globalAlpha = 1 - p2
     if (ef.kind === 'bury') {
@@ -1576,6 +1615,18 @@ function drawScene(now) {
       cx.strokeStyle = '#8ce0ff'; cx.lineWidth = 2
       cx.beginPath(); cx.arc(EX, EY, 6 + p2 * 22, 0, 7); cx.stroke()
       cx.beginPath(); cx.arc(EX, EY, 2 + p2 * 14, 0, 7); cx.stroke()
+    } else if (ef.kind === 'arrowshot') {
+      const fx2 = px(ef.x) + 20, fy2 = py(ef.y) + 16
+      const tx2 = px(ef.tx) + 20, ty2 = py(ef.ty) + 16
+      const ax = fx2 + (tx2 - fx2) * p2, ay = fy2 + (ty2 - fy2) * p2
+      const ang = Math.atan2(ty2 - fy2, tx2 - fx2)
+      cx.save(); cx.translate(ax, ay); cx.rotate(ang)
+      cx.strokeStyle = '#8a5a2a'; cx.lineWidth = 1.8
+      cx.beginPath(); cx.moveTo(-6, 0); cx.lineTo(4, 0); cx.stroke()
+      cx.fillStyle = '#c9c2b2'
+      cx.beginPath(); cx.moveTo(6, 0); cx.lineTo(2, -2); cx.lineTo(2, 2); cx.closePath(); cx.fill()
+      cx.fillStyle = '#e8e4d0'; cx.fillRect(-7, -1.4, 2.4, 2.8)
+      cx.restore()
     } else if (ef.kind === 'fletch') {
       cx.fillStyle = '#c9a86a'
       for (let k = 0; k < 4; k++) cx.fillRect(EX - 6 + k * 4, EY + 2 + p2 * 10 + k, 2.4, 1.6)

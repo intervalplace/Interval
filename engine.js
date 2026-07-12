@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.32';
+const SPEC_VERSION = '0.33';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -530,7 +530,10 @@ function nextState(state, inputs, beacon) {
         p.inventory[inp.slot] = { item: 'wooden-bow', qty: 1 };
         p.skills.ranged += 15;
       } else if (sl && inp.make === 'arrows' && sl.item === 'bones') {
-        p.inventory[inp.slot] = { item: 'arrows', qty: 5 };
+        const ex = p.inventory.findIndex((s2, i2) => s2?.item === 'arrows' && i2 !== inp.slot);
+        p.inventory[inp.slot] = null;
+        if (ex !== -1) p.inventory[ex].qty += 5;                    // the quiver (6n)
+        else p.inventory[inp.slot] = { item: 'arrows', qty: 5 };
         p.skills.ranged += 5;
       }
     } else if (inp.type === 'unwield') {
@@ -591,9 +594,14 @@ function nextState(state, inputs, beacon) {
       }
     } else if (inp.type === 'pickup') {
       const g2 = s.ground[inp.groundId];
+      const onTile = g2 && g2.x === p.x && g2.y === p.y;
+      const ex = onTile && g2.item === 'arrows' ? p.inventory.findIndex(s2 => s2?.item === 'arrows') : -1;
       const slot = firstFreeSlot(p.inventory);
-      if (g2 && g2.x === p.x && g2.y === p.y && slot !== -1) {
-        p.inventory[slot] = { item: g2.item, qty: 1 };
+      if (onTile && ex !== -1) {                       // the quiver (6n): arrows pool
+        p.inventory[ex].qty += g2.qty ?? 1;
+        delete s.ground[inp.groundId];
+      } else if (onTile && slot !== -1) {
+        p.inventory[slot] = { item: g2.item, qty: g2.qty ?? 1 }; // the whole stack, not one of it
         delete s.ground[inp.groundId];
       }
     } else if (inp.type === 'eat') {
