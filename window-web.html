@@ -143,11 +143,89 @@ const DAY = 2400              // ticks per day: a full day every 24 minutes
 const lightCv = document.createElement('canvas')
 let vignette = null
 const cv = document.getElementById('world'), cx = cv.getContext('2d')
-const ICONS = { 'logs': '🪵', 'ore': '🪨', 'raw-fish': '🐟', 'cooked-fish': '<span style="filter:sepia(1) saturate(1.6) hue-rotate(-18deg) brightness(.9)">🐟</span>',
-                'burnt-fish': '<span style="filter:brightness(.4) sepia(.8) hue-rotate(-30deg)">🐟</span>',
-                'bones': '🦴', 'bronze-sword': '🗡️', 'bronze-hatchet': '🪓', 'bronze-pickaxe': '⛏️',
-                'wooden-bow': '🏹', 'arrows': '<span style="display:inline-block;transform:rotate(45deg)">➵</span>',
-                'bronze-helm': '🪖', 'bronze-plate': '🛡️', 'magic-stone': '💠', 'sigil': '🌑' }
+// items drawn by the same hand as the world: no emoji speaks this dialect
+const ICON_CV = {}
+function itemSprite(item) {
+  if (ICON_CV[item]) return ICON_CV[item]
+  const c = document.createElement('canvas'); c.width = 32; c.height = 32
+  const g = c.getContext('2d')
+  const pl = (pts, fill, stroke) => { g.beginPath(); g.moveTo(pts[0][0], pts[0][1])
+    for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1])
+    g.closePath(); g.fillStyle = fill; g.fill()
+    if (stroke) { g.strokeStyle = stroke; g.lineWidth = 1.4; g.stroke() } }
+  const fishBody = (belly, back) => {
+    pl([[4,16],[10,10],[20,9],[26,14],[26,18],[20,23],[10,22]], belly, back)
+    pl([[26,14],[31,9],[31,23],[26,18]], back)
+    g.fillStyle = '#10100c'; g.fillRect(9, 14, 2, 2)
+  }
+  switch (item) {
+    case 'logs':
+      pl([[4,20],[26,12],[29,17],[7,25]], '#8a5a2a', '#4a2f14')
+      g.fillStyle = '#c9a86a'; g.beginPath(); g.ellipse(27.4, 14.5, 2.8, 3.6, -0.35, 0, 7); g.fill()
+      g.strokeStyle = '#8a5a2a'; g.lineWidth = 1; g.beginPath(); g.ellipse(27.4, 14.5, 1.3, 1.8, -0.35, 0, 7); g.stroke()
+      g.strokeStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.moveTo(8, 21); g.lineTo(24, 15); g.stroke(); break
+    case 'ore':
+      pl([[5,25],[9,13],[17,9],[26,14],[27,24],[14,28]], '#8a867c', '#4a463e')
+      pl([[12,16],[17,13],[21,17],[15,20]], '#a5a198')
+      g.fillStyle = '#c9862a'; g.fillRect(13, 21, 3, 3); g.fillRect(20, 15, 2.4, 2.4); break
+    case 'raw-fish': fishBody('#7da5c9', '#3a6b96'); break
+    case 'cooked-fish': fishBody('#d9a05e', '#96622a'); break
+    case 'burnt-fish': fishBody('#4a4440', '#2a2624'); break
+    case 'bones':
+      g.strokeStyle = '#e8e4d0'; g.lineWidth = 3.4
+      g.beginPath(); g.moveTo(9, 22); g.lineTo(23, 10); g.stroke()
+      g.fillStyle = '#e8e4d0'
+      for (const [bx, by] of [[7,20],[11,24],[21,8],[25,12]]) { g.beginPath(); g.arc(bx, by, 3.2, 0, 7); g.fill() }
+      break
+    case 'bronze-sword':
+      pl([[16,3],[20,7],[11,20],[8,17]], '#c9c2b2', '#6b6558')
+      g.fillStyle = '#8a5a2a'; g.fillRect(6, 19, 9, 3.4)
+      pl([[8,21],[4,27],[7,29],[12,24]], '#5c4023', '#33220f'); break
+    case 'bronze-hatchet':
+      g.fillStyle = '#5c4023'; g.save(); g.translate(16, 16); g.rotate(0.7); g.fillRect(-1.8, -3, 3.6, 17); g.restore()
+      pl([[16,4],[25,7],[24,15],[14,12]], '#c9862a', '#6b4515'); break
+    case 'bronze-pickaxe':
+      g.fillStyle = '#5c4023'; g.save(); g.translate(16, 17); g.rotate(0.6); g.fillRect(-1.8, -4, 3.6, 17); g.restore()
+      pl([[6,10],[16,4],[26,10],[24,13],[16,8],[8,13]], '#c9862a', '#6b4515'); break
+    case 'wooden-bow':
+      g.strokeStyle = '#8a5a2a'; g.lineWidth = 3
+      g.beginPath(); g.arc(12, 16, 11, -1.25, 1.25); g.stroke()
+      g.strokeStyle = '#d9d3c0'; g.lineWidth = 1
+      g.beginPath(); g.moveTo(12 + Math.cos(-1.25) * 11, 16 + Math.sin(-1.25) * 11)
+      g.lineTo(12 + Math.cos(1.25) * 11, 16 + Math.sin(1.25) * 11); g.stroke(); break
+    case 'arrows':
+      for (const off of [0, 7]) {
+        g.strokeStyle = '#8a5a2a'; g.lineWidth = 1.8
+        g.beginPath(); g.moveTo(6 + off, 26 - off); g.lineTo(20 + off, 12 - off); g.stroke()
+        pl([[20+off,12-off],[25+off,7-off],[23+off,14-off]], '#c9c2b2')
+        g.fillStyle = '#e8e4d0'; g.fillRect(5 + off, 24 - off, 3, 3)
+      }
+      break
+    case 'bronze-helm':
+      pl([[7,20],[7,13],[16,6],[25,13],[25,20]], '#c9862a', '#6b4515')
+      g.fillStyle = 'rgba(255,255,255,.25)'; g.fillRect(9, 9.5, 14, 2)
+      g.fillStyle = '#6b4515'; g.fillRect(7, 20, 18, 2.6); break
+    case 'bronze-plate':
+      pl([[9,6],[23,6],[26,12],[24,26],[8,26],[6,12]], '#c9862a', '#6b4515')
+      g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(15.2, 6, 1.6, 20)
+      g.fillStyle = 'rgba(255,255,255,.2)'; g.fillRect(9, 7.5, 14, 1.6); break
+    case 'magic-stone':
+      pl([[16,3],[26,16],[16,29],[6,16]], '#8ce0ff', '#2a7d9e')
+      pl([[16,3],[16,29],[6,16]], 'rgba(255,255,255,.28)')
+      g.fillStyle = '#e0f6ff'; g.fillRect(14, 12, 3, 3); break
+    case 'sigil':
+      g.fillStyle = '#1c2233'; g.beginPath(); g.arc(16, 16, 11, 0, 7); g.fill()
+      g.strokeStyle = '#8ce0ff'; g.lineWidth = 1.6
+      g.beginPath(); g.arc(16, 16, 7, 0.6, 5.2); g.stroke()
+      g.fillStyle = '#8ce0ff'; g.fillRect(14.6, 8, 2.8, 2.8); break
+    default:
+      g.fillStyle = '#6e5433'; g.fillRect(8, 8, 16, 16)
+  }
+  return ICON_CV[item] = c
+}
+const ICONS = new Proxy({}, { get: (t, item) => typeof item === 'string'
+  ? '<img src="' + itemSprite(item).toDataURL() + '" style="width:24px;height:24px;image-rendering:pixelated;vertical-align:middle">'
+  : undefined, has: () => true })
 const EQUIPPABLE = new Set(['bronze-sword', 'bronze-hatchet', 'bronze-pickaxe', 'bronze-helm', 'bronze-plate', 'wooden-bow'])
 const XP_TABLE = (() => { const t = [0, 0]; let pts = 0
   for (let l = 2; l <= 99; l++) { pts += Math.floor((l-1) + 300 * Math.pow(2, (l-1)/7)); t[l] = Math.floor(pts/4) }
@@ -319,7 +397,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b63'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b64'  // stamp: if your screen says an older build, hard-refresh
 const send = a => {
   if (ws.readyState !== 1) return
   if (ownKey && a.do === 'chat') { signChat(a.text); return }
@@ -596,15 +674,12 @@ function onState(s, worldId) {
     // one step at a time: a move sent last tick lands NEXT tick. Planning
     // from a position that is about to change sent the citizen in great
     // staircase circles, and slipped gathers in one tile off target.
-    if (moveLock) {
-      if ((me.x === moveLock.x && me.y === moveLock.y) || s.tick >= moveLock.until) moveLock = null
-      else { prev = s; panel(s); return }
-    }
-    const goal = intent.kind === 'walk' ? intent
+    if (moveLock && ((me.x === moveLock.x && me.y === moveLock.y) || s.tick >= moveLock.until)) moveLock = null
+    const goal = moveLock ? null : (intent.kind === 'walk' ? intent
       : intent.kind === 'pickup' ? s.ground[intent.id]
       : intent.kind === 'meet' ? s.players[intent.id]
-      : (s.nodes[intent.id] ?? s.mobs[intent.id])
-    if (!goal) { intent = null }
+      : (s.nodes[intent.id] ?? s.mobs[intent.id]))
+    if (!goal) { if (!moveLock) intent = null }
     else if (intent.kind === 'attack'
              && me.equipment?.weapon?.item === 'wooden-bow'
              && me.inventory.some(sl => sl?.item === 'arrows')
@@ -1284,6 +1359,7 @@ function drawScene(now) {
     const stack = s._groundStack?.[g2.x + ',' + g2.y] ?? [gid]
     const sIdx = stack.indexOf(gid)
     layer.push({ z: Z(g2.y, 1), draw: () => {
+      cx.drawImage(itemSprite(g2.item), px(g2.x) + 10, py(g2.y) + 12, 20, 20)
       cx.font = '6.5px Verdana'; cx.textAlign = 'center'
       const ly = py(g2.y) + 38 + sIdx * 7
       cx.fillStyle = 'rgba(0,0,0,.5)'; cx.fillText(g2.item.replace(/-/g, ' '), px(g2.x) + 20.5, ly + 0.5)
@@ -1617,7 +1693,8 @@ let panelSig = ''
 function panel(s) {
   const me = s.players[myId]; if (!me) return
   // walking changes nothing here; rebuilding anyway stole frames
-  const sig = JSON.stringify([me.hp, me.name, me.skills, me.inventory, me.equipment, me.gold, me.x, me.y,
+  const nearStoreSig = Object.values(s.nodes).some(n => n.type === 'store' && Math.abs(me.x - n.x) + Math.abs(me.y - n.y) === 1)
+  const sig = JSON.stringify([me.hp, me.name, me.skills, me.inventory, me.equipment, me.gold, nearStoreSig,
     me.bank, me.trade,
     Object.values(s.players).filter(p => p.trade?.to === myId).map(p => [p.trade, p.name])])
   if (sig === panelSig) return
