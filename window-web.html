@@ -50,7 +50,8 @@
   #skills b { color: var(--parch); font-weight: normal; float: right; }
   #inv { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
   .slot { aspect-ratio: 1; background: var(--stone-dk); display: flex; align-items: center;
-          justify-content: center; font-size: 17px; cursor: pointer; user-select: none; }
+          justify-content: center; font-size: 17px; cursor: pointer; user-select: none;
+          position: relative; overflow: hidden; }
   .slot:hover { outline: 1px solid var(--gold); }
   #feed { height: 84px; overflow-y: auto; font-size: 10px; color: var(--parch); padding: 4px 6px; }
   #feed div { margin-bottom: 1px; }
@@ -231,6 +232,9 @@ const BRIDGE_TO_INPUT = (a) =>
   : a.do === 'fletch' ? { type: 'fletch', slot: a.slot, make: a.make }
   : a.do === 'invoke' ? { type: 'invoke' }
   : a.do === 'cast' ? { type: 'cast', spell: 'anchor' }
+  : a.do === 'cook' ? { type: 'cook', slot: a.slot }
+  : a.do === 'stop' ? { type: 'stop' }
+  : a.do === 'unequip' ? { type: 'unwield', gear: a.gear }
   : null
 
 async function signAndSend(a) {
@@ -308,7 +312,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b56'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b57'  // stamp: if your screen says an older build, hard-refresh
 const send = a => {
   if (ws.readyState !== 1) return
   if (ownKey && BRIDGE_TO_INPUT(a)) { signAndSend(a); return }
@@ -1220,10 +1224,9 @@ function drawScene(now) {
       const X = px(mix), Y = py(miy)
       const engaged = meP?.action?.mobId === id
       cx.font = 'bold 7px Verdana'; cx.textAlign = 'center'
-      cx.fillStyle = 'rgba(0,0,0,.45)'
-      cx.fillText(m.type + ' \u00b7 ' + (MOB_LEVEL[m.type] ?? '?'), X + 20.7, Y - 2.3)
-      cx.fillStyle = '#ffe08a'
-      cx.fillText(m.type + ' \u00b7 ' + (MOB_LEVEL[m.type] ?? '?'), X + 20, Y - 3)
+      const plate = m.type + ' (lvl ' + (MOB_LEVEL[m.type] ?? '?') + ')'
+      cx.fillStyle = 'rgba(0,0,0,.45)'; cx.fillText(plate, X + 20.7, Y - 2.3)
+      cx.fillStyle = '#ffe08a'; cx.fillText(plate, X + 20, Y - 3)
       const hop = engaged ? Math.abs(Math.sin(now / 160)) * 2 : Math.sin(now / 700 + m.x) * 0.7
       shadow(X, Y, 9)
       if (m.type === 'troll') {
@@ -1300,7 +1303,9 @@ function drawScene(now) {
       bow: p.equipment?.weapon?.item === 'wooden-bow',
       helm: !!p.equipment?.head, plate: !!p.equipment?.body,
         sword: wep === 'bronze-sword', wepItem: wep, bronzeTool,
-        name: p.name ?? pid.slice(0, 6), hp: p.hp, maxHp: XP_TO_LVL(p.skills.hitpoints),
+        name: (p.name ?? pid.slice(0, 6)) + ' (lvl '
+        + Math.floor((XP_TO_LVL(p.skills.attack) + XP_TO_LVL(p.skills.defence) + XP_TO_LVL(p.skills.hitpoints)) / 3) + ')',
+      hp: p.hp, maxHp: XP_TO_LVL(p.skills.hitpoints),
         hitAt: hitFlash[pid],
       })
       if (!awake) { // dreaming: a little z drifts up and away
@@ -1497,8 +1502,8 @@ function panel(s) {
   document.getElementById('inv').innerHTML = me.inventory.slice(0, 28)
     .map((it, i) => '<div class="slot" data-i="' + i + '" title="' + (it ? it.item : '') + '">'
       + (it ? (ICONS[it.item] ?? '?')
-        + (it.qty > 1 ? '<div style="position:absolute;top:1px;right:2.4px;font-size:8px;color:#ffe08a">' + it.qty + '</div>' : '')
-        + '<div style="position:absolute;bottom:1px;left:0;right:0;font-size:6.4px;color:#9a8c6a;line-height:1;overflow:hidden;white-space:nowrap;text-align:center">' + it.item.replace(/-/g, ' ') + '</div>'
+        + (it.qty > 1 ? '<div style="position:absolute;bottom:1px;right:2.4px;font-size:8px;color:#ffe08a">' + it.qty + '</div>' : '')
+        + '<div style="position:absolute;top:1.4px;left:2.4px;right:1px;font-size:6.4px;color:#9a8c6a;line-height:1;overflow:hidden;white-space:nowrap;text-align:left">' + it.item.replace(/-/g, ' ') + '</div>'
         : '')
       + '</div>').join('')
   // trade offers: incoming (accept) and outgoing (cancel)
