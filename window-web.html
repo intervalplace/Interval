@@ -241,7 +241,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b47'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b48'  // stamp: if your screen says an older build, hard-refresh
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
@@ -322,6 +322,7 @@ ws.onmessage = (ev) => {
 
 let prev = null
 let curState = null, prevState = null, stateAt = 0, curWorldId = ''
+let statePeriod = 600  // measured broadcast rhythm: states are never exactly on time
 const hitFlash = {}   // pid -> ms timestamp of last damage taken
 let celebrate = null  // { text, at }: level-up banner + sparks
 const bubbles = {}    // pid -> { text, at } speech bubbles
@@ -392,7 +393,13 @@ function onState(s, worldId) {
   if (s.genesis && (W !== s.genesis.worldW || !groundReady)) {
     W = s.genesis.worldW; H = s.genesis.worldH; buildGround()
   }
-  prevState = curState; curState = s; stateAt = performance.now(); curWorldId = worldId
+  prevState = curState; curState = s; curWorldId = worldId
+  const arrivedAt = performance.now()
+  if (stateAt) { // smooth the measured period; jitter here was the walking stutter
+    const dt = arrivedAt - stateAt
+    if (dt > 300 && dt < 1200) statePeriod = statePeriod * 0.85 + dt * 0.15
+  }
+  stateAt = arrivedAt
   if (prevState) for (const pid in s.players) {
     const o = prevState.players[pid]
     if (o && s.players[pid].hp < o.hp) hitFlash[pid] = performance.now()
@@ -562,12 +569,16 @@ function tileHash(x, y, k) { // integer avalanche: adjacent tiles decorrelate
 const trailYOf = () => Math.floor(H / 2)
 function terrainOf(x, y) {
   const ty = trailYOf()
+  const cx2 = Math.floor(W / 2)
+  if (x >= cx2 - 8 && x <= cx2 + 8 && y >= 2 && y <= 10) return 'cobble' // Anchor
+  if (Math.abs(x - cx2) <= (tileHash(0, y, 3) % 2) && y > 10 && y < ty) return 'trail' // the north road
   if (Math.abs(y - ty) <= (tileHash(x, 0, 3) % 2)) return 'trail'   // a road that wavers like a real one
   if ((x <= 10 || x >= W - 11) && Math.abs(y - ty) <= 4) return 'plaza'
   return 'meadow'
 }
 function tileShade(x, y) {
   const t = terrainOf(x, y)
+  if (t === 'cobble') return ['#7a756b', '#827d73', '#726d63'][tileHash(x, y, 0) % 3]
   if (t === 'trail') return ['#8a7449', '#937d50', '#816c42'][tileHash(x, y, 0) % 3]
   if (t === 'plaza') return ['#6e5f3e', '#75663f', '#665837'][tileHash(x, y, 0) % 3]
   return ['#3d5a23', '#436327', '#365020', '#40592a', '#3a5726'][tileHash(x, y, 0) % 5]
@@ -750,7 +761,9 @@ function drawCitizen(X, Y, o) {
 
 function drawScene(now) {
   const s = curState; if (!s || !groundReady) return
-  const t = Math.min(1, (now - stateAt) / 600)
+  // interpolate against the real rhythm, and glide up to 20% past the end
+  // rather than freezing when a broadcast runs late
+  const t = Math.min(1.2, (now - stateAt) / statePeriod)
 
   // camera follows you, clamped to world edges, smooth between ticks
   const meCam = s.players[myId], oCam = prevState?.players[myId]
@@ -886,6 +899,62 @@ function drawScene(now) {
           cx.fillRect(X + 18 + Math.sin(t2 * 9 + i) * 5, Y + 22 - t2 * 26, 1.8, 1.8)
         }
         cx.globalAlpha = 1
+      }
+      if (n.type === 'wall') {
+        const v = tileHash(n.x, n.y, 5) % 3
+        poly([[X+2,Y+34],[X+38,Y+34],[X+38,Y+14],[X+2,Y+14]], ['#6e6a62', '#66625a', '#726e66'][v], '#2c2a26')
+        cx.fillStyle = 'rgba(0,0,0,.14)'
+        cx.fillRect(X + 2, Y + 20, 36, 1.6); cx.fillRect(X + 2, Y + 27, 36, 1.6)
+        cx.fillRect(X + 12 + (v * 5), Y + 14, 1.6, 6); cx.fillRect(X + 22 - (v * 3), Y + 21, 1.6, 6)
+        cx.fillStyle = 'rgba(255,255,255,.06)'; cx.fillRect(X + 2, Y + 14, 36, 2)
+      }
+      if (n.type === 'signpost') {
+        shadow(X, Y, 7)
+        cx.fillStyle = '#4a3a22'; cx.fillRect(X + 18.5, Y + 12, 3.4, 22)
+        cx.fillStyle = '#6e5433'
+        poly([[X+8,Y+14],[X+22,Y+14],[X+25,Y+16.5],[X+22,Y+19],[X+8,Y+19]], '#6e5433', '#2c2216')
+        poly([[X+32,Y+21],[X+18,Y+21],[X+15,Y+23.5],[X+18,Y+26],[X+32,Y+26]], '#5f4a2c', '#2c2216')
+        cx.fillStyle = '#2c2216'; cx.font = 'bold 5px Verdana'; cx.textAlign = 'center'
+        cx.fillText('ANCHOR', X + 15, Y + 17.8)
+        cx.fillText('EASTMERE', X + 24, Y + 24.8)
+      }
+      if (n.type === 'guard' || n.type === 'smith') {
+        shadow(X, Y, 8)
+        const bob = Math.sin(now / 900 + n.x) * 0.6
+        const isSmith = n.type === 'smith'
+        // body
+        cx.fillStyle = isSmith ? '#5a4632' : '#5a6b7d'
+        cx.fillRect(X + 14, Y + 15 + bob, 12, 12)
+        cx.fillStyle = isSmith ? '#3a2f22' : '#48576a'
+        cx.fillRect(X + 14, Y + 22 + bob, 12, 5)
+        // head + helm or soot
+        cx.fillStyle = '#d9b07a'; cx.fillRect(X + 15.5, Y + 7 + bob, 9, 9)
+        if (!isSmith) { cx.fillStyle = '#8a8a92'; cx.fillRect(X + 14.5, Y + 5.5 + bob, 11, 4.5) }
+        else { cx.fillStyle = '#3a2f22'; cx.fillRect(X + 15.5, Y + 6 + bob, 9, 3) }
+        cx.fillStyle = '#2b2b2b'; cx.fillRect(X + 21, Y + 10.5 + bob, 2, 2)
+        // legs
+        cx.fillStyle = '#2e2a24'; cx.fillRect(X + 15.5, Y + 27, 3.4, 6); cx.fillRect(X + 21, Y + 27, 3.4, 6)
+        if (!isSmith) { // the spear
+          cx.fillStyle = '#5c4023'; cx.fillRect(X + 27.5, Y + 4 + bob, 2.2, 26)
+          poly([[X+28.6,Y+bob],[X+26.2,Y+5+bob],[X+31,Y+5+bob]], '#b8b8b0', '#6a6a66')
+        } else { // the hammer, working
+          const swing = Math.sin(now / 500) * 0.7
+          cx.save(); cx.translate(X + 11, Y + 20 + bob); cx.rotate(-0.5 + swing)
+          cx.fillStyle = '#5c4023'; cx.fillRect(-1, -9, 2, 10)
+          cx.fillStyle = '#6a6a66'; cx.fillRect(-3.4, -12, 7, 3.4)
+          cx.restore()
+        }
+      }
+      if (n.type === 'well') {
+        shadow(X, Y, 11)
+        cx.fillStyle = '#6e6a62'
+        cx.beginPath(); cx.ellipse(X + 20, Y + 26, 11, 6, 0, 0, 7); cx.fill()
+        cx.fillStyle = '#1f4a63'
+        cx.beginPath(); cx.ellipse(X + 20, Y + 25, 7.5, 3.8, 0, 0, 7); cx.fill()
+        cx.fillStyle = '#4a3a22'
+        cx.fillRect(X + 10, Y + 8, 2.4, 18); cx.fillRect(X + 27.5, Y + 8, 2.4, 18)
+        poly([[X+7,Y+9],[X+33,Y+9],[X+20,Y+2]], '#6e5433', '#2c2216')
+        cx.fillStyle = '#3a3a3e'; cx.fillRect(X + 19, Y + 10, 1.6, 8)
       }
       if (n.type === 'house') {
         const v = tileHash(n.x, n.y, 5) % 2
@@ -1400,6 +1469,62 @@ cv.addEventListener('click', (e) => {
         if (!adj(n)) { intent = { kind: 'anvilgo', id }; feed('You head to the anvil.'); return }
         smithBest(me); return
       }
+      if (n.type === 'wall') {
+        const v = tileHash(n.x, n.y, 5) % 3
+        poly([[X+2,Y+34],[X+38,Y+34],[X+38,Y+14],[X+2,Y+14]], ['#6e6a62', '#66625a', '#726e66'][v], '#2c2a26')
+        cx.fillStyle = 'rgba(0,0,0,.14)'
+        cx.fillRect(X + 2, Y + 20, 36, 1.6); cx.fillRect(X + 2, Y + 27, 36, 1.6)
+        cx.fillRect(X + 12 + (v * 5), Y + 14, 1.6, 6); cx.fillRect(X + 22 - (v * 3), Y + 21, 1.6, 6)
+        cx.fillStyle = 'rgba(255,255,255,.06)'; cx.fillRect(X + 2, Y + 14, 36, 2)
+      }
+      if (n.type === 'signpost') {
+        shadow(X, Y, 7)
+        cx.fillStyle = '#4a3a22'; cx.fillRect(X + 18.5, Y + 12, 3.4, 22)
+        cx.fillStyle = '#6e5433'
+        poly([[X+8,Y+14],[X+22,Y+14],[X+25,Y+16.5],[X+22,Y+19],[X+8,Y+19]], '#6e5433', '#2c2216')
+        poly([[X+32,Y+21],[X+18,Y+21],[X+15,Y+23.5],[X+18,Y+26],[X+32,Y+26]], '#5f4a2c', '#2c2216')
+        cx.fillStyle = '#2c2216'; cx.font = 'bold 5px Verdana'; cx.textAlign = 'center'
+        cx.fillText('ANCHOR', X + 15, Y + 17.8)
+        cx.fillText('EASTMERE', X + 24, Y + 24.8)
+      }
+      if (n.type === 'guard' || n.type === 'smith') {
+        shadow(X, Y, 8)
+        const bob = Math.sin(now / 900 + n.x) * 0.6
+        const isSmith = n.type === 'smith'
+        // body
+        cx.fillStyle = isSmith ? '#5a4632' : '#5a6b7d'
+        cx.fillRect(X + 14, Y + 15 + bob, 12, 12)
+        cx.fillStyle = isSmith ? '#3a2f22' : '#48576a'
+        cx.fillRect(X + 14, Y + 22 + bob, 12, 5)
+        // head + helm or soot
+        cx.fillStyle = '#d9b07a'; cx.fillRect(X + 15.5, Y + 7 + bob, 9, 9)
+        if (!isSmith) { cx.fillStyle = '#8a8a92'; cx.fillRect(X + 14.5, Y + 5.5 + bob, 11, 4.5) }
+        else { cx.fillStyle = '#3a2f22'; cx.fillRect(X + 15.5, Y + 6 + bob, 9, 3) }
+        cx.fillStyle = '#2b2b2b'; cx.fillRect(X + 21, Y + 10.5 + bob, 2, 2)
+        // legs
+        cx.fillStyle = '#2e2a24'; cx.fillRect(X + 15.5, Y + 27, 3.4, 6); cx.fillRect(X + 21, Y + 27, 3.4, 6)
+        if (!isSmith) { // the spear
+          cx.fillStyle = '#5c4023'; cx.fillRect(X + 27.5, Y + 4 + bob, 2.2, 26)
+          poly([[X+28.6,Y+bob],[X+26.2,Y+5+bob],[X+31,Y+5+bob]], '#b8b8b0', '#6a6a66')
+        } else { // the hammer, working
+          const swing = Math.sin(now / 500) * 0.7
+          cx.save(); cx.translate(X + 11, Y + 20 + bob); cx.rotate(-0.5 + swing)
+          cx.fillStyle = '#5c4023'; cx.fillRect(-1, -9, 2, 10)
+          cx.fillStyle = '#6a6a66'; cx.fillRect(-3.4, -12, 7, 3.4)
+          cx.restore()
+        }
+      }
+      if (n.type === 'well') {
+        shadow(X, Y, 11)
+        cx.fillStyle = '#6e6a62'
+        cx.beginPath(); cx.ellipse(X + 20, Y + 26, 11, 6, 0, 0, 7); cx.fill()
+        cx.fillStyle = '#1f4a63'
+        cx.beginPath(); cx.ellipse(X + 20, Y + 25, 7.5, 3.8, 0, 0, 7); cx.fill()
+        cx.fillStyle = '#4a3a22'
+        cx.fillRect(X + 10, Y + 8, 2.4, 18); cx.fillRect(X + 27.5, Y + 8, 2.4, 18)
+        poly([[X+7,Y+9],[X+33,Y+9],[X+20,Y+2]], '#6e5433', '#2c2216')
+        cx.fillStyle = '#3a3a3e'; cx.fillRect(X + 19, Y + 10, 1.6, 8)
+      }
       if (n.type === 'house') {
         const v = tileHash(n.x, n.y, 5) % 2
         shadow(X, Y, 15)
@@ -1423,6 +1548,11 @@ cv.addEventListener('click', (e) => {
           cx.fill()
         }
       }
+      if (n.type === 'guard') { feed('The guard nods. "The road is watched, citizen."'); return }
+      if (n.type === 'smith') { feed('The smith gestures at the anvil. "Ore and logs. The rest is rhythm."'); return }
+      if (n.type === 'well') { feed('You peer into the well. Somewhere far below, a tick echoes.'); return }
+      if (n.type === 'signpost') { feed('West: Westhearth. East: Eastmere. North: Anchor.'); return }
+      if (n.type === 'wall') { feed('The wall is old, and it is not going anywhere.'); return }
       if (n.type === 'bank') {
         if (!adj(n)) { intent = { kind: 'walk', x: n.x, y: n.y + 1 }; feed('You head to the bank.') }
         else feed('The bank stands ready: tap items to deposit, tap the vault to withdraw.')

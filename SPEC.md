@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.26 ("The Constitution")
+# Interval: Protocol Specification v0.27 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -47,6 +47,21 @@ center of the trail: every citizen arrives on the road, halfway
 between the two lights. The trail itself is not state; windows may
 paint the road however they like, but the buildings stand where the
 constitution says.
+
+## 2d. The city of Anchor
+
+North of the crossroads, at the road's end, stands **Anchor**: the
+walled city, named for the founding moment every genesis carries. Its
+bounds are the rectangle `x in [cx-8, cx+8], y in [2, 10]` where
+`cx = floor(worldW / 2)`. Walls (inert, impassable) trace the
+perimeter, broken by a three-tile gate in the south wall at
+`x in [cx-1, cx+1]`, flanked by guards. **No mob may enter the city
+bounds**: the wander rule refuses any step into them. Inside stand a
+bank, a walled smithy with its anvil and smith, houses, a well, and a
+hearth. Inert citizen-shaped nodes (`guard`, `smith`) are furniture
+with faces: impassable, unattackable, and reassuring.
+
+New inert node types: `wall`, `signpost`, `guard`, `smith`, `well`.
 
 ## 2c. The hedge is law
 

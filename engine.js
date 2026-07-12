@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.26';
+const SPEC_VERSION = '0.27';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -33,6 +33,15 @@ const MOB_STATS = {
             drops: [{ item: 'bones' }, { item: 'bones', chance: 96 }] },
 };
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+// the city of Anchor (spec 2d): mob-forbidden bounds
+function cityRectOf(g) {
+  const cx = Math.floor(g.worldW / 2);
+  return { x0: cx - 8, x1: cx + 8, y0: 2, y1: 10 };
+}
+const inCity = (g, x, y) => {
+  const r = cityRectOf(g);
+  return x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
+};
 const RECIPES = {
   'bronze-sword':   { ore: 2, logs: 1 },
   'bronze-hatchet': { ore: 1, logs: 1 },
@@ -344,6 +353,7 @@ function nextState(state, inputs, beacon) {
     const [dx, dy] = [[0, -1], [1, 0], [0, 1], [-1, 0]][roll(beacon, mid, 'dir') % 4];
     const nx = m.x + dx, ny = m.y + dy;
     if (nx < 1 || nx >= s.genesis.worldW - 1 || ny < 1 || ny >= s.genesis.worldH - 1) continue;
+    if (inCity(s.genesis, nx, ny)) continue; // no mob enters Anchor (spec 2d)
     if (Math.max(Math.abs(nx - m.hx), Math.abs(ny - m.hy)) > 2) continue;
     if (Object.values(s.nodes).some(n => n.x === nx && n.y === ny)) continue;
     m.x = nx; m.y = ny;
@@ -440,6 +450,7 @@ function nextState(state, inputs, beacon) {
           for (const [mx, my] of [[-1, 0], [1, 0], [0, 1], [0, -1]]) {
             const nx = p.x + mx, ny = p.y + my;
             if (nx < 1 || nx >= s.genesis.worldW - 1 || ny < 1 || ny >= s.genesis.worldH - 1) continue;
+    if (inCity(s.genesis, nx, ny)) continue; // no mob enters Anchor (spec 2d)
             if (Object.values(s.nodes).some(n => n.x === nx && n.y === ny)) continue;
             p.x = nx; p.y = ny;
             break;
@@ -598,5 +609,5 @@ module.exports = {
   canonical, stateHash, sha256, beaconValue, roll,
   generateIdentity, signInput, verifyInputSig,
   exportIdentity, importIdentity, loadOrCreateIdentity,
-  SLEEP_AFTER, isAwake, effLevel, spawnOf, makeGenesis, newWorld, sameWorld, addPlayer, addNode, addMob, nextState, MOB_STATS, RECIPES, EQUIPPABLE,
+  SLEEP_AFTER, isAwake, effLevel, cityRectOf, inCity, spawnOf, makeGenesis, newWorld, sameWorld, addPlayer, addNode, addMob, nextState, MOB_STATS, RECIPES, EQUIPPABLE,
 };
