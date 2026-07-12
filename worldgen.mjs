@@ -39,6 +39,7 @@ export function buildWorld(genesis) {
   put('fire-way1', 'campfire', Math.floor(W / 3), trailY - 1)
   put('fire-way2', 'campfire', Math.floor(2 * W / 3), trailY + 1)
 
+  const isEdge = (x, y) => x === 0 || y === 0 || x === W - 1 || y === H - 1
   const onTrail = (x, y) => Math.abs(y - trailY) <= 1
   const inHamlet = (x, y) => (x <= 10 || x >= W - 11) && Math.abs(y - trailY) <= 4
   const nearSpawn = (x, y) => Math.max(Math.abs(x - spawn.x), Math.abs(y - spawn.y)) <= 1
@@ -49,7 +50,7 @@ export function buildWorld(genesis) {
       const h = E.sha256(Buffer.from(genesis.genesisSeed + ':' + kind + ':' + i))
       const x = h[0] % W, y = h[1] % H, k = x + ',' + y
       i++
-      if (taken.has(k) || onTrail(x, y) || inHamlet(x, y) || nearSpawn(x, y) || !ok(x, y)) continue
+      if (taken.has(k) || isEdge(x, y) || onTrail(x, y) || inHamlet(x, y) || nearSpawn(x, y) || !ok(x, y)) continue
       taken.add(k); addFn(kind + '-' + placed, x, y); placed++
     }
   }
