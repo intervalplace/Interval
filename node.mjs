@@ -152,6 +152,12 @@ export class IntervalNode {
     return true
   }
 
+  async publishSignedChat(msg) { // browser-signed: validate, echo, publish
+    if (!this.acceptChat(msg)) return false
+    if (this.onChat) this.onChat(msg)
+    await this.p2p.services.pubsub.publish(this.chatTopic, Buffer.from(JSON.stringify(msg)))
+    return true
+  }
   async publishChat(identity, text) {
     const msg = E.signInput(
       { type: 'chat', playerId: identity.playerId, tick: this.state.tick, text: String(text).slice(0, 80) },
