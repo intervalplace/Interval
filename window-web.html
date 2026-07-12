@@ -213,6 +213,23 @@ function itemSprite(item) {
       pl([[16,3],[26,16],[16,29],[6,16]], '#8ce0ff', '#2a7d9e')
       pl([[16,3],[16,29],[6,16]], 'rgba(255,255,255,.28)')
       g.fillStyle = '#e0f6ff'; g.fillRect(14, 12, 3, 3); break
+    case 'seeds':
+      g.fillStyle = '#8a6a3a'
+      for (const [sx3, sy3, r3] of [[12,13,0.4],[19,10,0.9],[22,17,0.1],[14,20,0.7],[19,22,0.5]]) {
+        g.save(); g.translate(sx3, sy3); g.rotate(r3)
+        g.beginPath(); g.ellipse(0, 0, 2.2, 3.4, 0, 0, 7); g.fill(); g.restore()
+      }
+      g.fillStyle = 'rgba(255,255,255,.25)'; g.fillRect(18, 9, 1.4, 1.4); break
+    case 'grain':
+      for (const [gx3, off] of [[11, 0], [17, -2], [23, 0]]) {
+        g.strokeStyle = '#a08a2a'; g.lineWidth = 1.6
+        g.beginPath(); g.moveTo(gx3, 27); g.lineTo(gx3 + 2, 12 + off); g.stroke()
+        g.fillStyle = '#e8c53a'
+        g.beginPath(); g.ellipse(gx3 + 2, 9 + off, 3, 5.4, 0.15, 0, 7); g.fill()
+        g.strokeStyle = '#c9a52a'; g.lineWidth = 0.8
+        g.beginPath(); g.moveTo(gx3 + 2, 5 + off); g.lineTo(gx3 + 2, 13 + off); g.stroke()
+      }
+      break
     case 'gold-coin':
       g.fillStyle = '#8a6415'; g.beginPath(); g.arc(16, 17.4, 10, 0, 7); g.fill()
       g.fillStyle = '#e8b53a'; g.beginPath(); g.arc(16, 16, 10, 0, 7); g.fill()
@@ -319,6 +336,8 @@ const BRIDGE_TO_INPUT = (a) =>
   : a.do === 'invoke' ? { type: 'invoke' }
   : a.do === 'attackp' ? { type: 'attackp', targetId: a.targetId }
   : a.do === 'sell' ? { type: 'sell', slot: a.slot }
+  : a.do === 'plant' ? { type: 'plant', slot: a.slot }
+  : a.do === 'harvest' ? { type: 'harvest', nodeId: a.nodeId }
   : a.do === 'cast' ? { type: 'cast', spell: 'anchor' }
   : a.do === 'cook' ? { type: 'cook', slot: a.slot }
   : a.do === 'stop' ? { type: 'stop' }
@@ -405,7 +424,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b66'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b67'  // stamp: if your screen says an older build, hard-refresh
 const send = a => {
   if (ws.readyState !== 1) return
   if (ownKey && a.do === 'chat') { signChat(a.text); return }
@@ -567,7 +586,7 @@ const SLEEP_AFTER = 500
 const CAPE_COLORS = {
   woodcutting: '#2f7d2f', mining: '#5a6b7d', fishing: '#2a6f9e',
   cooking: '#7d2f5a', smithing: '#b06a2a', firemaking: '#c9432a',
-  prayer: '#e8e4d0', magic: '#3a7d9e', ranged: '#5c7d3a', attack: '#8e1f1f', defence: '#3a5a8e', hitpoints: '#7d7d2f',
+  prayer: '#e8e4d0', magic: '#3a7d9e', ranged: '#5c7d3a', farming: '#7d9e3a', attack: '#8e1f1f', defence: '#3a5a8e', hitpoints: '#7d7d2f',
 }
 function capeOf(p) { // mastery is a fact; the cape is what it looks like
   const mastered = Object.entries(p.skills).filter(([, xp]) => XP_TO_LVL(xp) >= 99)
@@ -668,6 +687,11 @@ function onState(s, worldId) {
     feed('"' + pendingName + '" is taken. You remain nameless.')
     pendingName = ''
   }
+  else if (!me.name && pendingName && !s.names?.[pendingName]) {
+    // a single dropped packet once cost a citizen their name forever:
+    // the claim repeats each tick until the census answers
+    send({ do: 'name', name: pendingName })
+  }
   else if (me && intent?.kind === 'cookall') {
     const i = me.inventory.findIndex(sl => sl && sl.item === 'raw-fish')
     const fire = Object.values(s.nodes).find(n => (n.type === 'campfire' || n.type === 'fire')
@@ -695,7 +719,10 @@ function onState(s, worldId) {
       // for the following tick: continuous motion, no stutter, no drift.
       if (ownKey) {
         const ghost = { ...me, x: moveLock.x, y: moveLock.y }
-        stepToward(s, ghost, goal, intent.kind !== 'walk', moveLock.tick + 1)
+        // pickup and walk mean STANDING ON the goal; everything else means
+        // standing beside it. Getting this wrong marched the citizen on and
+        // off the bones forever, a graveside indecision.
+        stepToward(s, ghost, goal, intent.kind !== 'walk' && intent.kind !== 'pickup', moveLock.tick + 1)
       }
       // custodial windows cannot stamp ticks: they walk one settled step at a time
     }
@@ -706,10 +733,12 @@ function onState(s, worldId) {
       send({ do: 'attack', mobId: intent.id })
       if (!intent.announced) { feed('You draw your bow at the ' + (s.mobs[intent.id]?.type ?? 'creature') + '!'); intent.announced = true }
     }
-    else if ((intent.kind === 'gather' || intent.kind === 'attack' || intent.kind === 'gatherfire' || intent.kind === 'anvilgo' || intent.kind === 'meet')
+    else if ((intent.kind === 'gather' || intent.kind === 'attack' || intent.kind === 'gatherfire' || intent.kind === 'anvilgo' || intent.kind === 'meet' || intent.kind === 'plant' || intent.kind === 'harvest')
              && Math.abs(me.x - goal.x) + Math.abs(me.y - goal.y) === 1) {
       // arrived: engage automatically: clicking once was the whole command
-      if (intent.kind === 'gather') { send({ do: 'gather', nodeId: intent.id }); feed(intent.msg); intent = null }
+      if (intent.kind === 'plant') { send({ do: 'plant', slot: intent.slot }); feed('You press a seed into the tilled earth.'); intent = null }
+      else if (intent.kind === 'harvest') { send({ do: 'harvest', nodeId: intent.id }); feed('You gather the golden heads. The earth rests.'); intent = null }
+      else if (intent.kind === 'gather') { send({ do: 'gather', nodeId: intent.id }); feed(intent.msg); intent = null }
       else if (intent.kind === 'attack') {
         // the hunt persists: keep the intent until the state confirms the
         // fight began, so a goblin that steps at the tick boundary is chased
@@ -1007,9 +1036,13 @@ function drawCitizen(X, Y, o) {
   const now = o.now
   const bob = o.anim === 'idle' ? Math.sin(now / 600) * 0.8 : 0
   const step = o.anim === 'walk' ? Math.sin(now / 110) : 0
-  const swing = (o.anim === 'gather' || o.anim === 'fight')
-    ? Math.sin(now / (o.anim === 'fight' ? 130 : o.tool === 'rod' ? 700 : 200)) : 0
-  const lunge = o.anim === 'fight' ? Math.max(0, Math.sin(now / 130)) * 3 * o.face : 0
+  // combat breathes (spec 6m), and so does the body: a full strike on the
+  // exchange tick, a ready guard between: no more windmilling at the air
+  const strikeT = o.anim === 'fight' ? Math.max(0, Math.sin(renderT(now) * Math.PI)) : 0
+  const swing = o.anim === 'fight'
+    ? (o.exchange ? strikeT * 1.2 : 0.25 + Math.sin(now / 600) * 0.08)
+    : o.anim === 'gather' ? Math.sin(now / (o.tool === 'rod' ? 700 : 200)) : 0
+  const lunge = o.anim === 'fight' && o.exchange ? strikeT * 4 * o.face : 0
   X += lunge; Y += bob
   const F = o.face
 
@@ -1378,6 +1411,36 @@ function drawScene(now) {
           cx.fill()
         }
       }
+      if (n.type === 'plot') {
+        // tilled rows; then the crop, staged purely by elapsed ticks (spec 6o)
+        cx.fillStyle = '#4a3520'; cx.fillRect(X + 4, Y + 6, 32, 28)
+        cx.fillStyle = '#3a2a18'
+        for (let r2 = 0; r2 < 4; r2++) cx.fillRect(X + 5, Y + 9 + r2 * 7, 30, 2.2)
+        if (n.plantedAt > 0) {
+          const el2 = s.tick - n.plantedAt
+          const stage = el2 >= 1200 ? 3 : el2 >= 800 ? 2 : el2 >= 400 ? 1 : 0
+          for (let c2 = 0; c2 < 4; c2++) {
+            const gx = X + 8 + c2 * 8, gy = Y + 10 + (c2 % 2) * 14
+            if (stage === 0) { cx.fillStyle = '#7dbb45'; cx.fillRect(gx, gy + 4, 2, 3) }
+            else if (stage === 1) {
+              cx.strokeStyle = '#5c9e33'; cx.lineWidth = 1.6
+              cx.beginPath(); cx.moveTo(gx + 1, gy + 8); cx.lineTo(gx + 1, gy); cx.stroke()
+              cx.fillStyle = '#7dbb45'; cx.fillRect(gx - 1.4, gy - 1, 4.8, 2.4)
+            } else {
+              const sway = Math.sin(now / 900 + gx) * 1.2
+              cx.strokeStyle = stage === 3 ? '#a08a2a' : '#5c9e33'; cx.lineWidth = 1.8
+              cx.beginPath(); cx.moveTo(gx + 1, gy + 10); cx.lineTo(gx + 1 + sway, gy - 2); cx.stroke()
+              cx.fillStyle = stage === 3 ? '#e8c53a' : '#96c95e'
+              cx.beginPath(); cx.ellipse(gx + 1 + sway, gy - 3, 2.6, 4.2, 0.2, 0, 7); cx.fill()
+            }
+          }
+          if (stage === 3) { // ripe: a faint golden shimmer calls the sower home
+            cx.fillStyle = 'rgba(232,197,58,' + (0.06 + (Math.sin(now / 500) + 1) * 0.04) + ')'
+            cx.fillRect(X + 4, Y + 6, 32, 28)
+          }
+        }
+        return
+      }
       if (n.type === 'store') {
         shadow(X, Y, 14)
         poly([[X+4,Y+34],[X+36,Y+34],[X+36,Y+16],[X+4,Y+16]], '#5b4a33', '#1c1710')
@@ -1546,6 +1609,8 @@ function drawScene(now) {
       if (!awake) cx.globalAlpha = 0.55
       drawCitizen(px(ix), py(iy), {
         now, pid, face: facing[pid] ?? 1, anim, tool, mine: pid === myId,
+      exchange: (p.action?.type === 'attack' || p.action?.type === 'attackp')
+        && ((s.tick - (p.action.since ?? 0)) % 2 === 0),
       cape: capeOf(p),
       bow: p.equipment?.weapon?.item === 'wooden-bow',
       shooting: p.equipment?.weapon?.item === 'wooden-bow' && p.action
@@ -2073,6 +2138,24 @@ cv.addEventListener('click', (e) => {
     }
 
   for (const [id, n] of Object.entries(world.nodes))
+    if (n.type === 'plot' && n.x === x && n.y === y) {
+      const el2 = world.tick - (n.plantedAt || 0)
+      if (!n.plantedAt) {
+        const sSlot = me.inventory.findIndex(sl => sl?.item === 'seeds')
+        if (sSlot === -1) { feed('Bare, tilled earth. It waits for seeds. (Goblins hoard them.)'); return }
+        intent = { kind: 'plant', id, slot: sSlot }
+      } else if (el2 >= 1200) {
+        if (n.by === myId) intent = { kind: 'harvest', id }
+        else { feed('A ripe crop: but the harvest belongs to whoever sowed.'); return }
+      } else {
+        feed(el2 < 400 ? 'A sprout. The interval provides, slowly.'
+          : el2 < 800 ? 'Green rows, knee-high. Patience.'
+          : 'Flowering. Nearly.')
+        return
+      }
+      return
+    }
+  for (const [id, n] of Object.entries(world.nodes))
     if (n.x === x && n.y === y) {
       if (me.action?.nodeId === id) return                     // already working it: silent
       if (n.type !== 'campfire' && n.type !== 'fire' && n.type !== 'bank' && n.type !== 'anvil' && n.depletedUntil > world.tick) {
@@ -2180,6 +2263,36 @@ cv.addEventListener('click', (e) => {
       if (n.type === 'well') { feed('You peer into the well. Somewhere far below, a tick echoes.'); return }
       if (n.type === 'signpost') { feed('West: Westhearth. East: Eastmere. North: Anchor.'); return }
       if (n.type === 'wall') { feed('The wall is old, and it is not going anywhere.'); return }
+      if (n.type === 'plot') {
+        // tilled rows; then the crop, staged purely by elapsed ticks (spec 6o)
+        cx.fillStyle = '#4a3520'; cx.fillRect(X + 4, Y + 6, 32, 28)
+        cx.fillStyle = '#3a2a18'
+        for (let r2 = 0; r2 < 4; r2++) cx.fillRect(X + 5, Y + 9 + r2 * 7, 30, 2.2)
+        if (n.plantedAt > 0) {
+          const el2 = s.tick - n.plantedAt
+          const stage = el2 >= 1200 ? 3 : el2 >= 800 ? 2 : el2 >= 400 ? 1 : 0
+          for (let c2 = 0; c2 < 4; c2++) {
+            const gx = X + 8 + c2 * 8, gy = Y + 10 + (c2 % 2) * 14
+            if (stage === 0) { cx.fillStyle = '#7dbb45'; cx.fillRect(gx, gy + 4, 2, 3) }
+            else if (stage === 1) {
+              cx.strokeStyle = '#5c9e33'; cx.lineWidth = 1.6
+              cx.beginPath(); cx.moveTo(gx + 1, gy + 8); cx.lineTo(gx + 1, gy); cx.stroke()
+              cx.fillStyle = '#7dbb45'; cx.fillRect(gx - 1.4, gy - 1, 4.8, 2.4)
+            } else {
+              const sway = Math.sin(now / 900 + gx) * 1.2
+              cx.strokeStyle = stage === 3 ? '#a08a2a' : '#5c9e33'; cx.lineWidth = 1.8
+              cx.beginPath(); cx.moveTo(gx + 1, gy + 10); cx.lineTo(gx + 1 + sway, gy - 2); cx.stroke()
+              cx.fillStyle = stage === 3 ? '#e8c53a' : '#96c95e'
+              cx.beginPath(); cx.ellipse(gx + 1 + sway, gy - 3, 2.6, 4.2, 0.2, 0, 7); cx.fill()
+            }
+          }
+          if (stage === 3) { // ripe: a faint golden shimmer calls the sower home
+            cx.fillStyle = 'rgba(232,197,58,' + (0.06 + (Math.sin(now / 500) + 1) * 0.04) + ')'
+            cx.fillRect(X + 4, Y + 6, 32, 28)
+          }
+        }
+        return
+      }
       if (n.type === 'store') {
         shadow(X, Y, 14)
         poly([[X+4,Y+34],[X+36,Y+34],[X+36,Y+16],[X+4,Y+16]], '#5b4a33', '#1c1710')

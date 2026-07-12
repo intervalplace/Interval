@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.33';
+const SPEC_VERSION = '0.34';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -34,7 +34,7 @@ const HEAL_FISH = 3;
 const HP_START_XP = 1154; // hitpoints level 10
 const MOB_STATS = {
   goblin: { maxHp: 5, atk: 1, def: 1, maxHit: 1, respawn: 16,
-            drops: [{ item: 'bones' }, { item: 'ore', chance: 64 }] },
+            drops: [{ item: 'bones' }, { item: 'ore', chance: 64 }, { item: 'seeds', chance: 64 }] },
   wolf:   { maxHp: 8, atk: 2, def: 2, maxHit: 2, respawn: 150,
             drops: [{ item: 'bones' }, { item: 'bones', chance: 96 }] },
   troll:  { maxHp: 20, atk: 4, def: 4, maxHit: 3, respawn: 300,
@@ -43,10 +43,11 @@ const MOB_STATS = {
             drops: [{ item: 'bones' }, { item: 'bones', chance: 128 }, { item: 'bronze-hatchet', chance: 16 }] },
 };
 // the store's ledger (spec 6l)
+const GROW_TICKS_RIPE = 1200; // spec 6o: twelve minutes, seed to harvest
 const PRICES = {
   'logs': 2, 'ore': 5, 'raw-fish': 3, 'cooked-fish': 6, 'bones': 2, 'arrows': 1,
   'magic-stone': 20, 'bronze-sword': 15, 'bronze-hatchet': 10, 'bronze-pickaxe': 10,
-  'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8,
+  'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8, 'grain': 4,
 };
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 // the Wilds (spec 2g): where citizens may hunt citizens
@@ -218,7 +219,7 @@ function addPlayer(state, playerId, x, y) {
   state.players[playerId] = {
     x, y,
     skills: { woodcutting: 0, mining: 0, fishing: 0, cooking: 0, smithing: 0,
-              firemaking: 0, prayer: 0, ranged: 0, magic: 0, attack: 0, defence: 0, hitpoints: HP_START_XP },
+              firemaking: 0, prayer: 0, ranged: 0, magic: 0, farming: 0, attack: 0, defence: 0, hitpoints: HP_START_XP },
     hp: 10,
     equipment: { weapon: null, head: null, body: null },
     bank: {},
@@ -318,6 +319,17 @@ function validInput(state, input) {
       const cheb = Math.max(Math.abs(p.x - q.x), Math.abs(p.y - q.y));
       return cheb <= 4 && p.equipment.weapon?.item === 'wooden-bow'
         && p.inventory.some(sl => sl?.item === 'arrows');
+    }
+    case 'plant': {
+      const sl = p.inventory[input.slot];
+      if (!Number.isInteger(input.slot) || sl?.item !== 'seeds') return false;
+      return Object.values(state.nodes).some(n => n.type === 'plot' && !n.plantedAt && adjacent(p, n));
+    }
+    case 'harvest': {
+      const n = state.nodes[input.nodeId];
+      return !!n && n.type === 'plot' && n.plantedAt > 0 && n.by === input.playerId
+        && (state.tick - n.plantedAt) >= GROW_TICKS_RIPE && adjacent(p, n)
+        && firstFreeSlot(p.inventory) !== -1;
     }
     case 'sell': {
       const sl = p.inventory[input.slot];
@@ -494,6 +506,29 @@ function nextState(state, inputs, beacon) {
       const q = s.players[inp.targetId];
       if (q && q.hp > 0 && inWilds(p.x, p.y) && inWilds(q.x, q.y)) {
         p.action = { type: 'attackp', targetId: inp.targetId, since: s.tick };
+      }
+    } else if (inp.type === 'plant') {
+      const sl = p.inventory[inp.slot];
+      const plot = Object.values(s.nodes).find(n => n.type === 'plot' && !n.plantedAt && adjacent(p, n));
+      if (sl?.item === 'seeds' && plot) {
+        sl.qty = (sl.qty ?? 1) - 1;
+        if (sl.qty <= 0) p.inventory[inp.slot] = null;
+        plot.plantedAt = s.tick;
+        plot.by = pid;
+        p.skills.farming += 10;
+      }
+    } else if (inp.type === 'harvest') {
+      const n = s.nodes[inp.nodeId];
+      if (n?.type === 'plot' && n.plantedAt > 0 && n.by === pid
+        && (s.tick - n.plantedAt) >= GROW_TICKS_RIPE && adjacent(p, n)) {
+        const ex = p.inventory.findIndex(s2 => s2?.item === 'grain');
+        const slot = firstFreeSlot(p.inventory);
+        if (ex !== -1) p.inventory[ex].qty += 2;
+        else if (slot !== -1) p.inventory[slot] = { item: 'grain', qty: 2 };
+        else { continue; }
+        n.plantedAt = 0;
+        delete n.by;
+        p.skills.farming += 40;
       }
     } else if (inp.type === 'sell') {
       const sl = p.inventory[inp.slot];

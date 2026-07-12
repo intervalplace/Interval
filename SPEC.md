@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.33 ("The Constitution")
+# Interval: Protocol Specification v0.34 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -97,6 +97,32 @@ an inventory item. What gold BUYS is reserved for a future amendment:
 the till is patient.
 
 New inert node type: `store` (with its `keeper`).
+
+## 6o. Farming (v0.34): the thirteenth skill
+
+Growth is state transition made visible: nothing in this world was
+ever more constitutional than a seed.
+
+**Plots** are nodes, tilled and waiting near every settlement.
+**Seeds** drop from goblins (sometimes; they hoard them and forget
+why). `plant {slot}` is valid beside an empty plot with seeds in the
+slot: one seed is consumed, the plot records `plantedAt` (the tick)
+and `by` (the sower), and grants 10 farming xp.
+
+Growth is a pure function of elapsed ticks: no timers, no watering,
+no randomness. Stages derive as sprout (< 400 ticks), growing
+(< 800), flowering (< 1200), ripe (>= 1200): twelve minutes from
+seed to harvest, identical on every node of the mesh.
+
+`harvest {nodeId}` is valid beside a ripe plot for its sower alone:
+**the harvest belongs to whoever sowed**. It yields 2 `grain`
+(stackable, like arrows), grants 40 farming xp, and the plot returns
+to bare earth. Grain sells for 4 gold; what else grain becomes is
+reserved (the oven is patient).
+
+A plot's crop survives checkpoints, restarts, and migrations, because
+it is nothing but numbers in the founding's arithmetic: sow before
+sleep, and the interval farms while you dream.
 
 ## 6n. The quiver (v0.33)
 
