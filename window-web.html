@@ -319,7 +319,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b62'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b63'  // stamp: if your screen says an older build, hard-refresh
 const send = a => {
   if (ws.readyState !== 1) return
   if (ownKey && a.do === 'chat') { signChat(a.text); return }
@@ -345,7 +345,11 @@ function nextStep(s, me, goals) {
   const q = [[me.x, me.y]]
   while (q.length) {
     const [cx2, cy2] = q.shift()
-    for (const [mx, my] of DIRS8) {
+    // FOUR directions, not eight: the pathfinder must speak the same law
+    // as the mover. Diagonal plans produced diagonal steps the engine
+    // silently refused: the citizen danced in place, or traced great
+    // staircase circles, deaf to its own legs.
+    for (const [mx, my] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nx = cx2 + mx, ny = cy2 + my
       const k = key(nx, ny)
       if (nx < 0 || nx >= W || ny < 0 || ny >= H || prev.has(k) || blockedAt(s, nx, ny)) continue
@@ -376,6 +380,7 @@ function stepToward(s, me, goal, reach) {
   if (step === null) { feed("You can't reach that."); intent = null; return }
   if (step === 'arrived') return
   facing[myId] = step.dx !== 0 ? step.dx : (facing[myId] ?? 1)
+  moveLock = { x: me.x + step.dx, y: me.y + step.dy, until: (world?.tick ?? 0) + 3 }
   send({ do: 'move', dx: step.dx, dy: step.dy })
 }
 
@@ -447,6 +452,7 @@ function drawMini(s) {
   cx.globalAlpha = 1
 }
 let pendingLight = null // { slot, tick } while coaxing a fire
+let moveLock = null // { x, y, until } the step in flight: plan nothing atop it
 function renderT(now) { // one clock for drawing AND clicking: what you see is what you hit
   if (tickOffset !== null && curState) {
     const renderTick = (now - tickOffset) / 600 - 1.0
@@ -587,6 +593,13 @@ function onState(s, worldId) {
     intent = null // the fight began, or the target is gone
   }
   else if (me && intent && !me.action) {
+    // one step at a time: a move sent last tick lands NEXT tick. Planning
+    // from a position that is about to change sent the citizen in great
+    // staircase circles, and slipped gathers in one tile off target.
+    if (moveLock) {
+      if ((me.x === moveLock.x && me.y === moveLock.y) || s.tick >= moveLock.until) moveLock = null
+      else { prev = s; panel(s); return }
+    }
     const goal = intent.kind === 'walk' ? intent
       : intent.kind === 'pickup' ? s.ground[intent.id]
       : intent.kind === 'meet' ? s.players[intent.id]
