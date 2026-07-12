@@ -142,8 +142,11 @@ const DAY = 2400              // ticks per day: a full day every 24 minutes
 const lightCv = document.createElement('canvas')
 let vignette = null
 const cv = document.getElementById('world'), cx = cv.getContext('2d')
-const ICONS = { 'logs': '🪵', 'ore': '🪨', 'raw-fish': '🐟', 'cooked-fish': '🍖', 'burnt-fish': '💀', 'bones': '🦴',
-                'bronze-sword': '🗡️', 'bronze-hatchet': '🪓', 'bronze-pickaxe': '⛏️' }
+const ICONS = { 'logs': '🪵', 'ore': '🪨', 'raw-fish': '🐟', 'cooked-fish': '🍖',
+                'burnt-fish': '<span style="filter:brightness(.4) sepia(.8) hue-rotate(-30deg)">🐟</span>',
+                'bones': '🦴', 'bronze-sword': '🗡️', 'bronze-hatchet': '🪓', 'bronze-pickaxe': '⛏️',
+                'wooden-bow': '🏹', 'arrows': '<span style="display:inline-block;transform:rotate(45deg)">➵</span>',
+                'bronze-helm': '🪖', 'bronze-plate': '🛡️', 'magic-stone': '💠', 'sigil': '🌑' }
 const EQUIPPABLE = new Set(['bronze-sword', 'bronze-hatchet', 'bronze-pickaxe', 'bronze-helm', 'bronze-plate', 'wooden-bow'])
 const XP_TABLE = (() => { const t = [0, 0]; let pts = 0
   for (let l = 2; l <= 99; l++) { pts += Math.floor((l-1) + 300 * Math.pow(2, (l-1)/7)); t[l] = Math.floor(pts/4) }
@@ -171,8 +174,72 @@ if (!uid) {
   localStorage.setItem('interval-uid', uid)
 }
 const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host)
-ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', uid }))
+ws.onopen = async () => {
+  ownKey = await ownIdentity()
+  if (ownKey) ws.send(JSON.stringify({ type: 'adopt', pub: ownKey.pub }))
+  else ws.send(JSON.stringify({ type: 'auth', uid }))
+}
 let entered = false, loginName = '', pendingName = ''
+let ownKey = null // { priv: CryptoKey, pub: hex } when this browser holds its own identity
+
+// the engine's canonical encoding, replicated exactly: signatures must
+// agree to the byte or every node in the world will ignore us
+function canonicalJS(obj) {
+  if (obj === null || typeof obj !== 'object') return JSON.stringify(obj)
+  if (Array.isArray(obj)) return '[' + obj.map(canonicalJS).join(',') + ']'
+  return '{' + Object.keys(obj).sort().map(k => JSON.stringify(k) + ':' + canonicalJS(obj[k])).join(',') + '}'
+}
+const toHex = (buf) => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('')
+const fromHex = (h) => new Uint8Array(h.match(/../g).map(x => parseInt(x, 16)))
+
+async function ownIdentity() {
+  if (!crypto?.subtle) return null
+  try {
+    const saved = localStorage.getItem('interval-ownkey')
+    if (saved) {
+      const { pk8, pub } = JSON.parse(saved)
+      const priv = await crypto.subtle.importKey('pkcs8', fromHex(pk8), { name: 'Ed25519' }, true, ['sign'])
+      return { priv, pub }
+    }
+    const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify'])
+    const pub = toHex(await crypto.subtle.exportKey('raw', kp.publicKey))
+    const pk8 = toHex(await crypto.subtle.exportKey('pkcs8', kp.privateKey))
+    localStorage.setItem('interval-ownkey', JSON.stringify({ pk8, pub }))
+    return { priv: kp.privateKey, pub }
+  } catch { return null } // no Ed25519 here: the pillar will hold a key instead
+}
+
+const BRIDGE_TO_INPUT = (a) =>
+    a.do === 'move' ? { type: 'move', dx: a.dx, dy: a.dy }
+  : a.do === 'spawn' ? { type: 'spawn' }
+  : a.do === 'gather' ? { type: 'gather', nodeId: a.nodeId }
+  : a.do === 'attack' ? { type: 'attack', mobId: a.mobId }
+  : a.do === 'eat' ? { type: 'eat', slot: a.slot }
+  : a.do === 'drop' ? { type: 'drop', slot: a.slot }
+  : a.do === 'pickup' ? { type: 'pickup', groundId: a.groundId }
+  : a.do === 'wield' ? { type: 'wield', slot: a.slot }
+  : a.do === 'unwield' ? { type: 'unwield', gear: a.gear ?? 'weapon' }
+  : a.do === 'smith' ? { type: 'smith', recipe: a.recipe }
+  : a.do === 'name' ? { type: 'name', name: a.name }
+  : a.do === 'offer' ? { type: 'offer', to: a.to, slot: a.slot }
+  : a.do === 'accept' ? { type: 'accept', from: a.from, slot: a.slot }
+  : a.do === 'decline' ? { type: 'decline' }
+  : a.do === 'deposit' ? { type: 'deposit', slot: a.slot }
+  : a.do === 'withdraw' ? { type: 'withdraw', item: a.item }
+  : a.do === 'light' ? { type: 'light', slot: a.slot }
+  : a.do === 'bury' ? { type: 'bury', slot: a.slot }
+  : a.do === 'fletch' ? { type: 'fletch', slot: a.slot, make: a.make }
+  : a.do === 'invoke' ? { type: 'invoke' }
+  : a.do === 'cast' ? { type: 'cast', spell: 'anchor' }
+  : null
+
+async function signAndSend(a) {
+  const f = BRIDGE_TO_INPUT(a)
+  if (!f) return
+  const input = { tick: (world?.tick ?? 0) + 1, playerId: ownKey.pub, ...f }
+  const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode(canonicalJS(input))))
+  ws.send(JSON.stringify({ type: 'raw', input: { ...input, sig } }))
+}
 
 // ---- sound: the world's voice, synthesized from nothing ----
 // The AudioContext wakes on the gate click (browsers require a gesture),
@@ -241,8 +308,12 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b54'  // stamp: if your screen says an older build, hard-refresh
-const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
+const BUILD = 'b56'  // stamp: if your screen says an older build, hard-refresh
+const send = a => {
+  if (ws.readyState !== 1) return
+  if (ownKey && BRIDGE_TO_INPUT(a)) { signAndSend(a); return }
+  ws.send(JSON.stringify({ type: 'act', action: a }))
+}
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
   lastFeed = { text: t, at: now }
@@ -329,6 +400,7 @@ const hitFlash = {}   // pid -> ms timestamp of last damage taken
 let celebrate = null  // { text, at }: level-up banner + sparks
 const bubbles = {}    // pid -> { text, at } speech bubbles
 const mobFacing = {}  // mobId -> -1 left / 1 right
+const MOB_LEVEL = { goblin: 2, wolf: 5, troll: 9 } // derived from their stats row
 const splats = []     // { x, y, amount, at } damage made visible
 const layerArr = []   // reused render layer (perf)
 function chooseAction(opts) {
@@ -377,6 +449,10 @@ function updateGate(s, worldId) {
     ? 'Enter as ' + (me.name ?? 'citizen ' + myId.slice(0, 6) + '\u2026')
     : 'Enter the world'
   document.getElementById('gatename').style.display = (me?.name) ? 'none' : 'block'
+  const keyEl = document.getElementById('gatekey')
+  if (keyEl) keyEl.textContent = ownKey
+    ? 'your key lives in this browser and never leaves it (' + ownKey.pub.slice(0, 8) + '\u2026)'
+    : myId ? 'identity held by the pillar for you (key ' + myId.slice(0, 8) + '\u2026)' : ''
   validateGateName(s)
 }
 
@@ -1143,6 +1219,11 @@ function drawScene(now) {
     layer.push({ z: Z(miy, 3), draw: () => {
       const X = px(mix), Y = py(miy)
       const engaged = meP?.action?.mobId === id
+      cx.font = 'bold 7px Verdana'; cx.textAlign = 'center'
+      cx.fillStyle = 'rgba(0,0,0,.45)'
+      cx.fillText(m.type + ' \u00b7 ' + (MOB_LEVEL[m.type] ?? '?'), X + 20.7, Y - 2.3)
+      cx.fillStyle = '#ffe08a'
+      cx.fillText(m.type + ' \u00b7 ' + (MOB_LEVEL[m.type] ?? '?'), X + 20, Y - 3)
       const hop = engaged ? Math.abs(Math.sin(now / 160)) * 2 : Math.sin(now / 700 + m.x) * 0.7
       shadow(X, Y, 9)
       if (m.type === 'troll') {
@@ -1414,7 +1495,12 @@ function panel(s) {
         + '<div style="height:3px;width:' + pct + '%;background:' + (hot ? '#ffcc33' : '#8a7a4a') + '"></div></div></div>'
     }).join('')
   document.getElementById('inv').innerHTML = me.inventory.slice(0, 28)
-    .map((it, i) => '<div class="slot" data-i="' + i + '" title="' + (it ? it.item : '') + '">' + (it ? (ICONS[it.item] ?? '?') : '') + '</div>').join('')
+    .map((it, i) => '<div class="slot" data-i="' + i + '" title="' + (it ? it.item : '') + '">'
+      + (it ? (ICONS[it.item] ?? '?')
+        + (it.qty > 1 ? '<div style="position:absolute;top:1px;right:2.4px;font-size:8px;color:#ffe08a">' + it.qty + '</div>' : '')
+        + '<div style="position:absolute;bottom:1px;left:0;right:0;font-size:6.4px;color:#9a8c6a;line-height:1;overflow:hidden;white-space:nowrap;text-align:center">' + it.item.replace(/-/g, ' ') + '</div>'
+        : '')
+      + '</div>').join('')
   // trade offers: incoming (accept) and outgoing (cancel)
   const offers = []
   for (const [pid, p] of Object.entries(s.players)) {
