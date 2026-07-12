@@ -186,6 +186,12 @@ function handle(ws, buf) {
       ws.send(JSON.stringify({ type: 'hello', playerId: m.pub, external: true }))
       return
     }
+    if (m.type === 'rawsay') {
+      const ext = sockets.get(ws)
+      if (!ext?.external || m.msg?.playerId !== ext.playerId) return
+      node.publishSignedChat(m.msg).catch(() => {})
+      return
+    }
     if (m.type === 'raw') {
       const ext = sockets.get(ws)
       if (!ext?.external) return
@@ -229,7 +235,8 @@ function handle(ws, buf) {
     else if (a.do === 'offer_trade') client.offerTrade(String(a.to), a.giveSlot | 0, String(a.wantItem))
     else if (a.do === 'accept_trade') client.acceptTrade(String(a.from))
     else if (a.do === 'cancel_trade') client.cancelTrade()
-    else if (a.do === 'chat') client.chat(String(a.text))
+    else if (a.do === 'chat') { if (client.chat) client.chat(String(a.text)) }
+    else if (a.do === 'attackp') { if (client.attackp) client.attackp(String(a.targetId)) }
     else if (a.do === 'name') client.claimName(String(a.name))
     else if (a.do === 'stop') client.stop()
 }
