@@ -56,5 +56,6 @@ export function buildWorld(genesis) {
   place('tree', 34, () => true, (id, x, y) => E.addNode(w, id, 'tree', x, y))
   place('rock', 14, (x, y) => y < trailY, (id, x, y) => E.addNode(w, id, 'rock', x, y))
   place('gob', 12, (x) => x > 12 && x < W - 13, (id, x, y) => E.addMob(w, id, 'goblin', x, y))
+  place('wolf', 6, (x, y) => y <= 3 || y >= H - 4, (id, x, y) => E.addMob(w, id, 'wolf', x, y))
   return w
 }
