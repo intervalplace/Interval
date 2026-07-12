@@ -16,7 +16,7 @@ import { buildWorld } from './worldgen.mjs'
 
 const SEED = 'solo-' + (process.env.INTERVAL_SEED || 'world')
 const RULES_HASH = E.sha256(fs.readFileSync(new URL('./SPEC.md', import.meta.url))).toString('hex')
-const WORLD_W = 56, WORLD_H = 24
+const WORLD_W = 60, WORLD_H = 30
 const WORLD_FILE = 'checkpoints/world.json'   // the founding record
 const CP_FILE = 'checkpoints/web.json'        // the living state
 
