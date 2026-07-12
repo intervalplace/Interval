@@ -241,7 +241,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b48'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b49'  // stamp: if your screen says an older build, hard-refresh
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
@@ -323,6 +323,7 @@ ws.onmessage = (ev) => {
 let prev = null
 let curState = null, prevState = null, stateAt = 0, curWorldId = ''
 let statePeriod = 600  // measured broadcast rhythm: states are never exactly on time
+let worstFrame = 0, lastFrameAt = 0, worstJitter = 0, meterAt = 0, meterText = ''
 const hitFlash = {}   // pid -> ms timestamp of last damage taken
 let celebrate = null  // { text, at }: level-up banner + sparks
 const bubbles = {}    // pid -> { text, at } speech bubbles
@@ -398,6 +399,7 @@ function onState(s, worldId) {
   if (stateAt) { // smooth the measured period; jitter here was the walking stutter
     const dt = arrivedAt - stateAt
     if (dt > 300 && dt < 1200) statePeriod = statePeriod * 0.85 + dt * 0.15
+    worstJitter = Math.max(worstJitter, Math.abs(dt - 600))
   }
   stateAt = arrivedAt
   if (prevState) for (const pid in s.players) {
@@ -901,6 +903,16 @@ function drawScene(now) {
         cx.globalAlpha = 1
       }
       if (n.type === 'wall') {
+        const cxW = Math.floor(W / 2)
+        const onPerimeter = (n.y === 2 || n.y === 10 || n.x === cxW - 8 || n.x === cxW + 8)
+        if (!onPerimeter) { // workshop timber: lighter build, lower profile
+          poly([[X+6,Y+32],[X+34,Y+32],[X+34,Y+18],[X+6,Y+18]], '#5c4a30', '#2c2216')
+          cx.fillStyle = 'rgba(0,0,0,.16)'
+          cx.fillRect(X + 6, Y + 24.5, 28, 1.4)
+          cx.fillRect(X + 13, Y + 18, 1.4, 14); cx.fillRect(X + 26, Y + 18, 1.4, 14)
+          cx.fillStyle = 'rgba(255,255,255,.05)'; cx.fillRect(X + 6, Y + 18, 28, 1.6)
+          return
+        }
         const v = tileHash(n.x, n.y, 5) % 3
         poly([[X+2,Y+34],[X+38,Y+34],[X+38,Y+14],[X+2,Y+14]], ['#6e6a62', '#66625a', '#726e66'][v], '#2c2a26')
         cx.fillStyle = 'rgba(0,0,0,.14)'
@@ -910,13 +922,14 @@ function drawScene(now) {
       }
       if (n.type === 'signpost') {
         shadow(X, Y, 7)
-        cx.fillStyle = '#4a3a22'; cx.fillRect(X + 18.5, Y + 12, 3.4, 22)
-        cx.fillStyle = '#6e5433'
-        poly([[X+8,Y+14],[X+22,Y+14],[X+25,Y+16.5],[X+22,Y+19],[X+8,Y+19]], '#6e5433', '#2c2216')
-        poly([[X+32,Y+21],[X+18,Y+21],[X+15,Y+23.5],[X+18,Y+26],[X+32,Y+26]], '#5f4a2c', '#2c2216')
-        cx.fillStyle = '#2c2216'; cx.font = 'bold 5px Verdana'; cx.textAlign = 'center'
-        cx.fillText('ANCHOR', X + 15, Y + 17.8)
-        cx.fillText('EASTMERE', X + 24, Y + 24.8)
+        cx.fillStyle = '#4a3a22'; cx.fillRect(X + 18.5, Y + 6, 3.4, 28)
+        cx.font = 'bold 4.5px Verdana'; cx.textAlign = 'center'
+        poly([[X+13,Y+9],[X+27,Y+9],[X+27,Y+3],[X+20,Y-1],[X+13,Y+3]], '#6e5433', '#2c2216')
+        cx.fillStyle = '#2c2216'; cx.fillText('ANCHOR', X + 20, Y + 7)
+        poly([[X+7,Y+12],[X+29,Y+12],[X+33,Y+14.5],[X+29,Y+17],[X+7,Y+17]], '#5f4a2c', '#2c2216')
+        cx.fillStyle = '#2c2216'; cx.fillText('EASTMERE', X + 18, Y + 15.6)
+        poly([[X+33,Y+20],[X+11,Y+20],[X+7,Y+22.5],[X+11,Y+25],[X+33,Y+25]], '#6e5433', '#2c2216')
+        cx.fillStyle = '#2c2216'; cx.fillText('WESTHEARTH', X + 22, Y + 23.6)
       }
       if (n.type === 'guard' || n.type === 'smith') {
         shadow(X, Y, 8)
@@ -1240,10 +1253,16 @@ function drawScene(now) {
   const phase = cyc < 0.06 ? 'dawn' : cyc < 0.44 ? 'day' : cyc < 0.56 ? 'dusk'
               : cyc < 0.94 ? 'night' : 'dawn'
   cx.fillStyle = 'rgba(217,201,163,.75)'; cx.font = '10px Verdana'; cx.textAlign = 'left'
-  cx.fillText('world ' + curWorldId + '  \u00b7  tick ' + s.tick + '  \u00b7  ' + phase + '  \u00b7  ' + BUILD, 6, cv.height - 6)
+  cx.fillText('world ' + curWorldId + '  \u00b7  tick ' + s.tick + '  \u00b7  ' + phase + '  \u00b7  ' + BUILD + meterText, 6, cv.height - 6)
 }
 requestAnimationFrame(function frame(now) {
-  if (document.hidden) { requestAnimationFrame(frame); return } drawScene(now); requestAnimationFrame(frame) })
+  if (document.hidden) { requestAnimationFrame(frame); return }
+  if (lastFrameAt) worstFrame = Math.max(worstFrame, now - lastFrameAt)
+  lastFrameAt = now
+  if (now - meterAt > 2000) { // meter: worst frame gap + broadcast jitter, 2s window
+    meterText = '  \u00b7  frame ' + Math.round(worstFrame) + 'ms  \u00b7  jit \u00b1' + Math.round(worstJitter) + 'ms'
+    worstFrame = 0; worstJitter = 0; meterAt = now
+  } drawScene(now); requestAnimationFrame(frame) })
 
 let panelSig = ''
 function panel(s) {
@@ -1470,6 +1489,16 @@ cv.addEventListener('click', (e) => {
         smithBest(me); return
       }
       if (n.type === 'wall') {
+        const cxW = Math.floor(W / 2)
+        const onPerimeter = (n.y === 2 || n.y === 10 || n.x === cxW - 8 || n.x === cxW + 8)
+        if (!onPerimeter) { // workshop timber: lighter build, lower profile
+          poly([[X+6,Y+32],[X+34,Y+32],[X+34,Y+18],[X+6,Y+18]], '#5c4a30', '#2c2216')
+          cx.fillStyle = 'rgba(0,0,0,.16)'
+          cx.fillRect(X + 6, Y + 24.5, 28, 1.4)
+          cx.fillRect(X + 13, Y + 18, 1.4, 14); cx.fillRect(X + 26, Y + 18, 1.4, 14)
+          cx.fillStyle = 'rgba(255,255,255,.05)'; cx.fillRect(X + 6, Y + 18, 28, 1.6)
+          return
+        }
         const v = tileHash(n.x, n.y, 5) % 3
         poly([[X+2,Y+34],[X+38,Y+34],[X+38,Y+14],[X+2,Y+14]], ['#6e6a62', '#66625a', '#726e66'][v], '#2c2a26')
         cx.fillStyle = 'rgba(0,0,0,.14)'
@@ -1479,13 +1508,14 @@ cv.addEventListener('click', (e) => {
       }
       if (n.type === 'signpost') {
         shadow(X, Y, 7)
-        cx.fillStyle = '#4a3a22'; cx.fillRect(X + 18.5, Y + 12, 3.4, 22)
-        cx.fillStyle = '#6e5433'
-        poly([[X+8,Y+14],[X+22,Y+14],[X+25,Y+16.5],[X+22,Y+19],[X+8,Y+19]], '#6e5433', '#2c2216')
-        poly([[X+32,Y+21],[X+18,Y+21],[X+15,Y+23.5],[X+18,Y+26],[X+32,Y+26]], '#5f4a2c', '#2c2216')
-        cx.fillStyle = '#2c2216'; cx.font = 'bold 5px Verdana'; cx.textAlign = 'center'
-        cx.fillText('ANCHOR', X + 15, Y + 17.8)
-        cx.fillText('EASTMERE', X + 24, Y + 24.8)
+        cx.fillStyle = '#4a3a22'; cx.fillRect(X + 18.5, Y + 6, 3.4, 28)
+        cx.font = 'bold 4.5px Verdana'; cx.textAlign = 'center'
+        poly([[X+13,Y+9],[X+27,Y+9],[X+27,Y+3],[X+20,Y-1],[X+13,Y+3]], '#6e5433', '#2c2216')
+        cx.fillStyle = '#2c2216'; cx.fillText('ANCHOR', X + 20, Y + 7)
+        poly([[X+7,Y+12],[X+29,Y+12],[X+33,Y+14.5],[X+29,Y+17],[X+7,Y+17]], '#5f4a2c', '#2c2216')
+        cx.fillStyle = '#2c2216'; cx.fillText('EASTMERE', X + 18, Y + 15.6)
+        poly([[X+33,Y+20],[X+11,Y+20],[X+7,Y+22.5],[X+11,Y+25],[X+33,Y+25]], '#6e5433', '#2c2216')
+        cx.fillStyle = '#2c2216'; cx.fillText('WESTHEARTH', X + 22, Y + 23.6)
       }
       if (n.type === 'guard' || n.type === 'smith') {
         shadow(X, Y, 8)
