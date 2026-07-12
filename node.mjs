@@ -8,6 +8,7 @@
 // literally a different network. Forks are separate worlds by construction.
 
 import { createLibp2p } from 'libp2p'
+import { generateKeyPair, privateKeyFromRaw } from '@libp2p/crypto/keys'
 import { tcp } from '@libp2p/tcp'
 import { noise } from '@chainsafe/libp2p-noise'
 import { yamux } from '@chainsafe/libp2p-yamux'
@@ -47,6 +48,7 @@ export class IntervalNode {
     this.tickLog = new Map()            // tick -> inputs applied (recent history)
     this.checkpointFile = opts.checkpointFile || null
     this.listen = opts.listen || null
+    this.peerKeyFile = opts.peerKeyFile || null
     // resume from disk if a checkpoint exists (spec §9a: persistence)
     if (this.checkpointFile && fs.existsSync(this.checkpointFile)) {
       const cp = JSON.parse(fs.readFileSync(this.checkpointFile))
@@ -56,7 +58,20 @@ export class IntervalNode {
   }
 
   async start() {
+    // a node's peer identity persists across restarts: a witness that
+    // changes its name every morning is not a stable witness
+    let peerPriv = null
+    if (this.peerKeyFile) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(this.peerKeyFile, 'utf8')).raw
+        peerPriv = privateKeyFromRaw(Uint8Array.from(Buffer.from(raw, 'hex')))
+      } catch {
+        peerPriv = await generateKeyPair('Ed25519')
+        fs.writeFileSync(this.peerKeyFile, JSON.stringify({ raw: Buffer.from(peerPriv.raw).toString('hex') }))
+      }
+    }
     this.p2p = await createLibp2p({
+      ...(peerPriv ? { privateKey: peerPriv } : {}),
       addresses: { listen: [this.listen ?? '/ip4/127.0.0.1/tcp/0'] },
       transports: [tcp()],
       connectionEncrypters: [noise()],
