@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.22 ("The Constitution")
+# Interval: Protocol Specification v0.23 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -84,7 +84,8 @@ A node is `{type, x, y, depletedUntil}`. Types: `tree`, `rock`,
 `fishing-spot` (gatherable); `campfire` (permanent; enables cooking,
 §6a); `fire` (player-made via firemaking §6f, carries `expiresAt` and
 vanishes at the start of that tick; enables cooking like a campfire);
-`anvil` (enables smithing, §6d); and `bank` (enables banking, §6g). A node with `depletedUntil > tick` yields nothing and
+`anvil` (enables smithing, §6d); `bank` (enables banking, §6g); and
+`house` (inert and impassable: the shelter of the hamlets, §2b). A node with `depletedUntil > tick` yields nothing and
 cannot be targeted.
 
 Gather yield table: `tree` → `logs` (woodcutting, 25 XP), `rock` →
@@ -138,6 +139,15 @@ The table is **hardcoded as spec constants** (see the reference
 implementation's `XP_TABLE`); implementations MUST use the constants,
 not recompute them. Anchor values: level 2 = 83 XP, level 50 = 101,333,
 level 99 = 13,034,431. Levels range 1–99.
+
+## 4b. Beyond mastery
+
+The level function does not stop at 99: it continues by the same
+recurrence, without bound. Every mechanic that reads a level reads
+`min(level, 99)`: mastery is the ceiling of power, and nothing past it
+buys a stronger swing or a faster axe. Levels past 99 are honor, proof
+of intervals spent. A bot can reach them; so can you. The ledger does
+not care, and that is the point.
 
 ## 5. Actions
 

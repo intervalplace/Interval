@@ -148,7 +148,17 @@ const EQUIPPABLE = new Set(['bronze-sword', 'bronze-hatchet', 'bronze-pickaxe'])
 const XP_TABLE = (() => { const t = [0, 0]; let pts = 0
   for (let l = 2; l <= 99; l++) { pts += Math.floor((l-1) + 300 * Math.pow(2, (l-1)/7)); t[l] = Math.floor(pts/4) }
   return t })()
-const XP_TO_LVL = xp => { let l = 1; while (l < 99 && xp >= XP_TABLE[l+1]) l++; return l }
+const XP_TO_LVL = xp => {
+  let l = 1
+  while (l < 99 && xp >= XP_TABLE[l+1]) l++
+  if (l < 99 || xp < XP_TABLE[99]) return l
+  let points = XP_TABLE[99] * 4
+  while (true) { // beyond mastery: honor without bound (spec 4b)
+    points += Math.floor(l + 300 * Math.pow(2, l / 7))
+    if (xp < Math.floor(points / 4)) return l
+    l++
+  }
+}
 const SKILL_OF_NODE = { 'tree': 'woodcutting', 'rock': 'mining', 'fishing-spot': 'fishing' }
 
 let myId = null, myName = '', world = null, intent = null, feedLines = []
@@ -231,7 +241,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b38'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b40'  // stamp: if your screen says an older build, hard-refresh
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
@@ -324,7 +334,7 @@ function updateGate(s, worldId) {
   const souls = Object.keys(s.players).length
   const awakeN = Object.values(s.players).filter(p => isAwake(p, s.tick)).length
   document.getElementById('gateinfo').textContent =
-    'interval ' + s.tick.toLocaleString() + ' \u00b7 ' + awakeN + ' awake of ' + souls + ' citizen' + (souls === 1 ? '' : 's') + ' \u00b7 world ' + worldId
+    'interval ' + s.tick.toLocaleString() + ' \u00b7 ' + awakeN + ' awake of ' + souls + ' soul' + (souls === 1 ? '' : 's') + ' \u00b7 world ' + worldId
   const btn = document.getElementById('gatebtn')
   btn.disabled = !myId
   btn.textContent = me
@@ -678,16 +688,23 @@ function drawScene(now) {
     if (n.type === 'fishing-spot') {
       // ponds paint flat on the ground, below every standing thing
       layer.push({ z: Z(n.y, 0), draw: () => {
+        // neighboring waters merge into one body: banks only where land meets it
+        const wat = (x2, y2) => Object.values(s.nodes).some(o => o.type === 'fishing-spot' && o.x === x2 && o.y === y2)
+        const nN = wat(n.x, n.y - 1), nS = wat(n.x, n.y + 1), nE = wat(n.x + 1, n.y), nW = wat(n.x - 1, n.y)
         const grad = cx.createLinearGradient(X, Y, X, Y + TILE)
         grad.addColorStop(0, dep ? '#26404e' : '#2a5f7d')
         grad.addColorStop(1, dep ? '#1d3340' : '#1f4a63')
         cx.fillStyle = grad
+        const ix0 = nW ? 0 : 4, iy0 = nN ? 0 : 4
+        const ix1 = nE ? TILE : TILE - 4, iy1 = nS ? TILE : TILE - 4
+        cx.fillRect(X + ix0, Y + iy0, ix1 - ix0, iy1 - iy0)
+        cx.strokeStyle = 'rgba(20,30,15,.55)'; cx.lineWidth = 2
         cx.beginPath()
-        cx.moveTo(X + 8, Y + 3); cx.lineTo(X + TILE - 6, Y + 5)
-        cx.lineTo(X + TILE - 3, Y + 16); cx.lineTo(X + TILE - 7, Y + TILE - 4)
-        cx.lineTo(X + 9, Y + TILE - 3); cx.lineTo(X + 3, Y + 22); cx.closePath()
-        cx.fill()
-        cx.strokeStyle = 'rgba(20,30,15,.5)'; cx.lineWidth = 2; cx.stroke()
+        if (!nN) { cx.moveTo(X + ix0, Y + iy0 + 1); cx.lineTo(X + ix1, Y + iy0 + 1) }
+        if (!nS) { cx.moveTo(X + ix0, Y + iy1 - 1); cx.lineTo(X + ix1, Y + iy1 - 1) }
+        if (!nW) { cx.moveTo(X + ix0 + 1, Y + iy0); cx.lineTo(X + ix0 + 1, Y + iy1) }
+        if (!nE) { cx.moveTo(X + ix1 - 1, Y + iy0); cx.lineTo(X + ix1 - 1, Y + iy1) }
+        cx.stroke()
         cx.fillStyle = 'rgba(255,255,255,.45)'
         const d1 = (now / 90) % (TILE - 20), d2 = (now / 130 + 14) % (TILE - 20)
         cx.fillRect(X + 8 + d1, Y + 13, 8, 1.4)
@@ -745,6 +762,21 @@ function drawScene(now) {
           cx.fillRect(X + 18 + Math.sin(t2 * 9 + i) * 5, Y + 22 - t2 * 26, 1.8, 1.8)
         }
         cx.globalAlpha = 1
+      }
+      if (n.type === 'house') {
+        const v = tileHash(n.x, n.y, 5) % 2
+        shadow(X, Y, 15)
+        poly([[X+5,Y+34],[X+35,Y+34],[X+35,Y+18],[X+5,Y+18]], v ? '#5b4a33' : '#54453a', '#1c1710')
+        cx.fillStyle = 'rgba(0,0,0,.12)'
+        for (let i = 0; i < 3; i++) cx.fillRect(X + 6, Y + 21 + i * 4.4, 28, 1.2)
+        poly([[X+3,Y+18],[X+37,Y+18],[X+20,Y+6]], v ? '#6e5433' : '#7a5c36', '#2c2216')
+        cx.fillStyle = '#3a2f22'; cx.fillRect(X + 16.5, Y + 24, 7, 10)
+        cx.fillStyle = '#26501a'
+        const cyc2 = (((s.tick + t) % 2400) / 2400)
+        const nightNow = (Math.sin(cyc2 * Math.PI * 2) + 1) / 2 < 0.42
+        cx.fillStyle = nightNow ? '#f4d03f' : '#2c2620'
+        cx.fillRect(X + 27, Y + 22, 5, 5)
+        cx.strokeStyle = '#1c1710'; cx.lineWidth = 1; cx.strokeRect(X + 27, Y + 22, 5, 5)
       }
       if (n.type === 'bank') {
         shadow(X, Y, 15)
@@ -1172,6 +1204,21 @@ cv.addEventListener('click', (e) => {
       if (n.type === 'anvil') {
         if (!adj(n)) { intent = { kind: 'anvilgo', id }; feed('You head to the anvil.'); return }
         smithBest(me); return
+      }
+      if (n.type === 'house') {
+        const v = tileHash(n.x, n.y, 5) % 2
+        shadow(X, Y, 15)
+        poly([[X+5,Y+34],[X+35,Y+34],[X+35,Y+18],[X+5,Y+18]], v ? '#5b4a33' : '#54453a', '#1c1710')
+        cx.fillStyle = 'rgba(0,0,0,.12)'
+        for (let i = 0; i < 3; i++) cx.fillRect(X + 6, Y + 21 + i * 4.4, 28, 1.2)
+        poly([[X+3,Y+18],[X+37,Y+18],[X+20,Y+6]], v ? '#6e5433' : '#7a5c36', '#2c2216')
+        cx.fillStyle = '#3a2f22'; cx.fillRect(X + 16.5, Y + 24, 7, 10)
+        cx.fillStyle = '#26501a'
+        const cyc2 = (((s.tick + t) % 2400) / 2400)
+        const nightNow = (Math.sin(cyc2 * Math.PI * 2) + 1) / 2 < 0.42
+        cx.fillStyle = nightNow ? '#f4d03f' : '#2c2620'
+        cx.fillRect(X + 27, Y + 22, 5, 5)
+        cx.strokeStyle = '#1c1710'; cx.lineWidth = 1; cx.strokeRect(X + 27, Y + 22, 5, 5)
       }
       if (n.type === 'bank') {
         if (!adj(n)) { intent = { kind: 'walk', x: n.x, y: n.y + 1 }; feed('You head to the bank.') }

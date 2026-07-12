@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.22';
+const SPEC_VERSION = '0.23';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -54,8 +54,17 @@ const XP_TABLE = [0,0,83,174,276,388,512,650,801,969,1154,1358,1584,1833,2107,24
 function levelForXp(xp) {
   let lvl = 1;
   while (lvl < 99 && xp >= XP_TABLE[lvl + 1]) lvl++;
-  return lvl;
+  if (lvl < 99 || xp < XP_TABLE[99]) return lvl;
+  // beyond mastery (spec 4b): the same recurrence, continued without bound
+  let points = XP_TABLE[99] * 4;
+  while (true) {
+    points += Math.floor(lvl + 300 * Math.pow(2, lvl / 7));
+    if (xp < Math.floor(points / 4)) return lvl;
+    lvl++;
+  }
 }
+// mechanics read capped mastery (spec 4b)
+const effLevel = (xp) => Math.min(levelForXp(xp), 99);
 
 // ---------- canonical encoding & hashing ----------
 
@@ -413,7 +422,7 @@ function nextState(state, inputs, beacon) {
       const sl = p.inventory[inp.slot];
       const clear = !Object.values(s.nodes).some(n => n.x === p.x && n.y === p.y);
       if (sl && sl.item === 'logs' && clear) {
-        const lvl = levelForXp(p.skills.firemaking);
+        const lvl = effLevel(p.skills.firemaking);
         if (roll(beacon, pid, 'light') < Math.min(64 + 2 * lvl, 240)) {
           p.inventory[inp.slot] = null;
           p.skills.firemaking += XP_FIREMAKING;
@@ -462,7 +471,7 @@ function nextState(state, inputs, beacon) {
       const slot = p.inventory[inp.slot];
       if (slot && slot.item === 'cooked-fish') {
         p.inventory[inp.slot] = null;
-        p.hp = Math.min(p.hp + HEAL_FISH, levelForXp(p.skills.hitpoints));
+        p.hp = Math.min(p.hp + HEAL_FISH, effLevel(p.skills.hitpoints));
         p.action = null; // §5: you stop what you're doing to eat
       }
     } else if (inp.type === 'cook') {
@@ -470,7 +479,7 @@ function nextState(state, inputs, beacon) {
       const slot = p.inventory[inp.slot];
       const nearFire = Object.values(s.nodes).some(n => (n.type === 'campfire' || n.type === 'fire') && adjacent(p, n));
       if (slot && slot.item === 'raw-fish' && nearFire) {
-        const lvl = levelForXp(p.skills.cooking);
+        const lvl = effLevel(p.skills.cooking);
         const threshold = Math.min(64 + 2 * lvl, 240);
         const r = roll(beacon, pid, 'cook');
         if (r < threshold) {
@@ -500,7 +509,7 @@ function nextState(state, inputs, beacon) {
       const stats = m && MOB_STATS[m.type];
       if (!m || m.hp <= 0 || !adjacent(p, m)) { p.action = null; continue; }
 
-      const atkLvl = levelForXp(p.skills.attack);
+      const atkLvl = effLevel(p.skills.attack);
       const T = clamp(128 + 4 * (atkLvl - stats.def), 16, 240);
       if (roll(beacon, pid, 'atk') < T) {
         const maxHit = 1 + Math.floor(atkLvl / 10)
@@ -522,7 +531,7 @@ function nextState(state, inputs, beacon) {
         p.action = null;
       } else {
         // retaliation (spec §6b.4)
-        const defLvl = levelForXp(p.skills.defence);
+        const defLvl = effLevel(p.skills.defence);
         const Tm = clamp(128 + 4 * (stats.atk - defLvl), 16, 240);
         if (roll(beacon, pid, 'mobatk') < Tm) {
           p.hp -= 1 + (roll(beacon, pid, 'mobdmg') % stats.maxHit);
@@ -530,7 +539,7 @@ function nextState(state, inputs, beacon) {
             // death (spec §6c): respawn, full hp, inventory destroyed
             const sp = spawnOf(s.genesis);
             p.x = sp.x; p.y = sp.y;
-            p.hp = levelForXp(p.skills.hitpoints);
+            p.hp = effLevel(p.skills.hitpoints);
             p.inventory = Array(INV_SLOTS).fill(null);
             p.equipment = { weapon: null }; // the sink spares nothing (§5d)
             p.action = null;
@@ -554,7 +563,7 @@ function nextState(state, inputs, beacon) {
     if (slot === -1) { p.action = null; continue; }
 
     const y = NODE_YIELD[n.type];
-    const lvl = levelForXp(p.skills[y.skill]);
+    const lvl = effLevel(p.skills[y.skill]);
     const toolBonus = p.equipment.weapon?.item === TOOL_FOR[n.type] ? 24 : 0;
     const threshold = Math.min(64 + 2 * lvl + toolBonus, 240);
     const r = roll(beacon, pid, 'gather');
@@ -575,5 +584,5 @@ module.exports = {
   canonical, stateHash, sha256, beaconValue, roll,
   generateIdentity, signInput, verifyInputSig,
   exportIdentity, importIdentity, loadOrCreateIdentity,
-  SLEEP_AFTER, isAwake, spawnOf, makeGenesis, newWorld, sameWorld, addPlayer, addNode, addMob, nextState, MOB_STATS, RECIPES, EQUIPPABLE,
+  SLEEP_AFTER, isAwake, effLevel, spawnOf, makeGenesis, newWorld, sameWorld, addPlayer, addNode, addMob, nextState, MOB_STATS, RECIPES, EQUIPPABLE,
 };
