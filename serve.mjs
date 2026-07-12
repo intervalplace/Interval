@@ -40,7 +40,15 @@ if (saved && saved.genesis.rulesHash === RULES_HASH && saved.genesis.genesisSeed
   if (saved && fs.existsSync(CP_FILE)) {
     try {
       const old = JSON.parse(fs.readFileSync(CP_FILE)).state
-      GENESIS._imported = Object.entries(old.players).map(([pid, p]) => ({
+      // the founding carries everyone who LIVED: a name, any xp beyond
+      // birth, anything owned. Pure ghosts (spawned once, did nothing,
+      // never returned) rest in the old world's history.
+      const lived = (p) => p.name
+        || Object.entries(p.skills).some(([k, xp]) => k !== 'hitpoints' ? xp > 0 : xp > 1154)
+        || (p.inventory ?? []).some(Boolean)
+        || Object.keys(p.bank ?? {}).length > 0
+        || p.equipment?.weapon
+      GENESIS._imported = Object.entries(old.players).filter(([, p]) => lived(p)).map(([pid, p]) => ({
         pid, skills: p.skills, name: p.name, hp: p.hp, bank: p.bank ?? {},
         inventory: (p.inventory ?? []).filter(sl => sl && KNOWN_ITEMS.has(sl.item)),
         weapon: p.equipment?.weapon && KNOWN_ITEMS.has(p.equipment.weapon.item) ? p.equipment.weapon : null,
