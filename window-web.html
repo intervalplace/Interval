@@ -144,7 +144,7 @@ let vignette = null
 const cv = document.getElementById('world'), cx = cv.getContext('2d')
 const ICONS = { 'logs': '🪵', 'ore': '🪨', 'raw-fish': '🐟', 'cooked-fish': '🍖', 'burnt-fish': '💀', 'bones': '🦴',
                 'bronze-sword': '🗡️', 'bronze-hatchet': '🪓', 'bronze-pickaxe': '⛏️' }
-const EQUIPPABLE = new Set(['bronze-sword', 'bronze-hatchet', 'bronze-pickaxe'])
+const EQUIPPABLE = new Set(['bronze-sword', 'bronze-hatchet', 'bronze-pickaxe', 'bronze-helm', 'bronze-plate', 'wooden-bow'])
 const XP_TABLE = (() => { const t = [0, 0]; let pts = 0
   for (let l = 2; l <= 99; l++) { pts += Math.floor((l-1) + 300 * Math.pow(2, (l-1)/7)); t[l] = Math.floor(pts/4) }
   return t })()
@@ -241,7 +241,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b50'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b52'  // stamp: if your screen says an older build, hard-refresh
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
@@ -419,10 +419,11 @@ function onState(s, worldId) {
     worstJitter = Math.max(worstJitter, Math.abs(dt - 600))
   }
   stateAt = arrivedAt
-  // tick-domain clock: map wall time onto the tick line, gently resynced.
-  // Arrival jitter moves ARRIVALS; it cannot move the ticks themselves.
+  // tick-domain clock, anchored on the FASTEST delivery ever observed:
+  // late states cannot move a minimum. It drifts up 2ms per state so a
+  // clock-skew or route change heals within a minute.
   const impliedOffset = arrivedAt - s.tick * 600
-  tickOffset = tickOffset === null ? impliedOffset : tickOffset * 0.92 + impliedOffset * 0.08
+  tickOffset = tickOffset === null ? impliedOffset : Math.min(tickOffset + 2, impliedOffset)
   if (prevState) for (const pid in s.players) {
     const o = prevState.players[pid]
     if (o && s.players[pid].hp < o.hp) hitFlash[pid] = performance.now()
@@ -457,6 +458,13 @@ function onState(s, worldId) {
       : intent.kind === 'meet' ? s.players[intent.id]
       : (s.nodes[intent.id] ?? s.mobs[intent.id])
     if (!goal) { intent = null }
+    else if (intent.kind === 'attack'
+             && me.equipment?.weapon?.item === 'wooden-bow'
+             && me.inventory.some(sl => sl?.item === 'arrows')
+             && Math.max(Math.abs(me.x - goal.x), Math.abs(me.y - goal.y)) <= 4) {
+      send({ do: 'attack', mobId: intent.id })
+      if (!intent.announced) { feed('You draw your bow at the ' + (s.mobs[intent.id]?.type ?? 'creature') + '!'); intent.announced = true }
+    }
     else if ((intent.kind === 'gather' || intent.kind === 'attack' || intent.kind === 'gatherfire' || intent.kind === 'anvilgo' || intent.kind === 'meet')
              && Math.abs(me.x - goal.x) + Math.abs(me.y - goal.y) === 1) {
       // arrived: engage automatically: clicking once was the whole command
@@ -702,6 +710,14 @@ function drawCitizen(X, Y, o) {
 
   const look = lookOf(o.pid)
   if (o.anim === 'idle') Y += Math.sin(o.now / 800 + X * 0.1) * 0.7
+  if (o.bow) { // the bow rides the back, string catching the light
+    const BF = o.face ?? 1
+    cx.strokeStyle = '#5c4023'; cx.lineWidth = 2.4
+    cx.beginPath(); cx.arc(X + 20 - BF * 7, Y + 19, 8, -1.2, 1.2); cx.stroke()
+    cx.strokeStyle = '#d9d3c0'; cx.lineWidth = 0.9
+    cx.beginPath(); cx.moveTo(X + 20 - BF * 7 + Math.cos(-1.2) * 8, Y + 19 + Math.sin(-1.2) * 8)
+    cx.lineTo(X + 20 - BF * 7 + Math.cos(1.2) * 8, Y + 19 + Math.sin(1.2) * 8); cx.stroke()
+  }
   if (o.cape) {
     const sway = Math.sin(o.now / 420 + X) * 1.6 + (o.anim === 'walk' ? Math.sin(o.now / 130) * 2.2 : 0)
     const capeC = o.cape.radiant
@@ -724,6 +740,11 @@ function drawCitizen(X, Y, o) {
   // tunic (trapezoid, slight lean while working)
   const lean = swing * 1.5 * F
   poly([[X+14+lean, Y+16], [X+26+lean, Y+16], [X+27, Y+29], [X+13, Y+29]], tunic, tunicDk)
+  if (o.plate) { // bronze across the chest: the tunic peeks at the shoulders
+    cx.fillStyle = '#a3743a'; cx.fillRect(X + 13.5, Y + 16.5, 13, 6.5)
+    cx.fillStyle = 'rgba(255,255,255,.18)'; cx.fillRect(X + 13.5, Y + 16.5, 13, 1.4)
+    cx.fillStyle = 'rgba(0,0,0,.18)'; cx.fillRect(X + 19.6, Y + 16.5, 0.9, 6.5)
+  }
   cx.fillStyle = tunicDk; cx.fillRect(X + 13, Y + 22, 14, 1.6) // belt
   // rear arm
   cx.fillStyle = skin
@@ -770,9 +791,15 @@ function drawCitizen(X, Y, o) {
   }
   // head: skin, hair cap, eye toward facing
   cx.fillStyle = skin; cx.fillRect(X + 15.5, Y + 7, 9, 9)
-  cx.fillStyle = flash ? '#ffffff' : look.hair
-  cx.fillRect(X + 15, Y + 5.5, 10, 3.4)
-  cx.fillRect(X + (F > 0 ? 15 : 23), Y + 7, 2, 5) // sideburn on trailing side
+  if (o.helm) { // bronze over the brow; the barber weeps
+    cx.fillStyle = '#a3743a'
+    cx.fillRect(X + 14.5, Y + 5, 11, 4.6)
+    cx.fillStyle = 'rgba(255,255,255,.2)'; cx.fillRect(X + 14.5, Y + 5, 11, 1.2)
+  } else {
+    cx.fillStyle = flash ? '#ffffff' : look.hair
+    cx.fillRect(X + 15, Y + 5.5, 10, 3.4)
+    cx.fillRect(X + (F > 0 ? 15 : 23), Y + 7, 2, 5) // sideburn on trailing side
+  }
   cx.fillStyle = '#1c1710'
   cx.fillRect(X + (F > 0 ? 21.5 : 17), Y + 10, 1.6, 1.6)
 
@@ -793,8 +820,10 @@ function drawScene(now) {
   // that tick, however raggedly the broadcasts arrived
   let t
   if (tickOffset !== null && curState) {
-    const renderTick = (now - tickOffset) / 600 - 0.15
-    t = Math.min(1.2, Math.max(0, renderTick - (curState.tick - 1)))
+    // render a full tick behind the fastest schedule: jitter up to 600ms
+    // arrives before we ever need the state it carries
+    const renderTick = (now - tickOffset) / 600 - 1.0
+    t = Math.min(1.15, Math.max(0, renderTick - (curState.tick - 1)))
   } else t = Math.min(1.2, (now - stateAt) / statePeriod)
 
   // camera follows you, clamped to world edges, smooth between ticks
@@ -1144,6 +1173,8 @@ function drawScene(now) {
       drawCitizen(px(ix), py(iy), {
         now, pid, face: facing[pid] ?? 1, anim, tool, mine: pid === myId,
       cape: capeOf(p),
+      bow: p.equipment?.weapon?.item === 'wooden-bow',
+      helm: !!p.equipment?.head, plate: !!p.equipment?.body,
         sword: wep === 'bronze-sword', wepItem: wep, bronzeTool,
         name: p.name ?? pid.slice(0, 6), hp: p.hp, maxHp: XP_TO_LVL(p.skills.hitpoints),
         hitAt: hitFlash[pid],
@@ -1360,9 +1391,13 @@ function panel(s) {
   } else vaultEl.style.display = 'none'
 
   const wep = me.equipment?.weapon
-  document.getElementById('equip').innerHTML = wep
+  let gearLine = wep
     ? 'Weapon: ' + (ICONS[wep.item] ?? '') + ' ' + wep.item.replace('-', ' ') + ' <span style="color:var(--dim)">(tap to sheathe)</span>'
     : 'Weapon: <span style="color:var(--dim)">bare hands</span>'
+  const hd = me.equipment.head, bd = me.equipment.body
+  if (hd || bd) gearLine += '<br>' + [hd && ('Head: ' + hd.item.replace(/-/g, ' ')),
+    bd && ('Body: ' + bd.item.replace(/-/g, ' '))].filter(Boolean).join(' \u00b7 ')
+  document.getElementById('equip').innerHTML = gearLine
   document.getElementById('status').textContent =
     me.action ? 'busy: ' + me.action.type : 'idle: click the world'
 }
@@ -1461,6 +1496,12 @@ document.getElementById('inv').addEventListener('click', (e) => {
   const nearBank = Object.values(world.nodes).some(n => n.type === 'bank'
     && Math.abs(meNow.x - n.x) + Math.abs(meNow.y - n.y) === 1)
   if (nearBank) { send({ do: 'deposit', slot: +i }); feed('You deposit the ' + it.item.replace('-', ' ') + '.'); return }
+  if (it.item === 'arrows') {
+    chooseAction([
+      { label: 'keep (' + it.qty + ' arrows)', act: () => feed('Arrows fly on their own: wield a bow and attack anything within four tiles.') },
+      { label: 'drop', act: () => { send({ do: 'drop', slot: +i }); feed('You drop the arrows.') } },
+    ]); return
+  }
   if (it.item === 'bones') {
     chooseAction([
       { label: 'bury', act: () => { send({ do: 'bury', slot: +i }); feed('You bury the bones. The earth accepts them.') } },
