@@ -215,7 +215,13 @@ node.onChat = (msg) => {
 }
 
 const worldId = RULES_HASH.slice(0, 12)
+let lastTickAt = 0
 node.onTick = (state) => {
+  const nowT = Date.now()
+  if (lastTickAt && nowT - lastTickAt > 1500) {
+    console.warn('[tick-gap] ' + (nowT - lastTickAt) + 'ms between broadcasts at tick ' + state.tick + ': the event loop or host stalled')
+  }
+  lastTickAt = nowT
   const msg = JSON.stringify({ type: 'state', state, worldId })
   for (const ws of sockets.keys()) if (ws.readyState === 1) ws.send(msg)
 }
