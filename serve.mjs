@@ -16,7 +16,7 @@ import { buildWorld } from './worldgen.mjs'
 
 const SEED = 'solo-' + (process.env.INTERVAL_SEED || 'world')
 const RULES_HASH = E.sha256(fs.readFileSync(new URL('./SPEC.md', import.meta.url))).toString('hex')
-const WORLD_W = 72, WORLD_H = 36
+const WORLD_W = 120, WORLD_H = 72
 const WORLD_FILE = 'checkpoints/world.json'   // the founding record
 const CP_FILE = 'checkpoints/web.json'        // the living state
 
@@ -219,6 +219,7 @@ function handle(ws, buf) {
     else if (a.do === 'pickup') client.pickup(String(a.groundId))
     else if (a.do === 'light') client.light(a.slot | 0)
     else if (a.do === 'bury') client.bury(a.slot | 0)
+    else if (a.do === 'sell') client.sell(a.slot | 0)
     else if (a.do === 'invoke') client.invoke()
     else if (a.do === 'cast') client.cast('anchor')
     else if (a.do === 'fletch') client.fletch(a.slot | 0, a.make === 'arrows' ? 'arrows' : 'bow')
