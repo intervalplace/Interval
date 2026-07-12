@@ -352,7 +352,9 @@ async function signChat(text) {
 async function signAndSend(a) {
   const f = BRIDGE_TO_INPUT(a)
   if (!f) return
-  const input = { tick: a._tick ?? allocTick(), playerId: ownKey.pub, ...f }
+  const tk = a._tick ?? allocTick()
+  if (tk === null) return // saturated: the earlier click carries the intent
+  const input = { tick: tk, playerId: ownKey.pub, ...f }
   const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode(canonicalJS(input))))
   ws.send(JSON.stringify({ type: 'raw', input: { ...input, sig } }))
 }
@@ -424,7 +426,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b68'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b69'  // stamp: if your screen says an older build, hard-refresh
 const send = a => {
   if (ws.readyState !== 1) return
   if (ownKey && a.do === 'chat') { signChat(a.text); return }
@@ -486,6 +488,7 @@ function stepToward(s, me, goal, reach, stampTick) {
   if (step === 'arrived') return
   facing[myId] = step.dx !== 0 ? step.dx : (facing[myId] ?? 1)
   const tk = allocTick()
+  if (tk === null) return // the tick line is full; step on the next state
   moveLock = { x: me.x + step.dx, y: me.y + step.dy, tick: tk, until: tk + 2 }
   send({ do: 'move', dx: step.dx, dy: step.dy, _tick: tk })
 }
@@ -562,7 +565,12 @@ let nameTries = 0
 let moveLock = null // { x, y, until } the step in flight: plan nothing atop it
 let lastStamped = 0 // the tick allocator: two inputs on one tick annihilate
 function allocTick() {
+  // at most two ticks of lookahead. Beyond that, an eager clicker was
+  // stamping ever-further futures: each impatient click made the world
+  // LESS responsive. A saturated allocator drops the duplicate instead:
+  // the click already in flight will do the same job.
   const t = Math.max((world?.tick ?? 0) + 1, lastStamped + 1)
+  if (t > (world?.tick ?? 0) + 2) return null
   lastStamped = t
   return t
 }
@@ -1045,16 +1053,19 @@ function drawCitizen(X, Y, o) {
   const now = o.now
   const bob = o.anim === 'idle' ? Math.sin(now / 600) * 0.8 : 0
   const step = o.anim === 'walk' ? Math.sin(now / 110) : 0
-  const hurt = (o.now - (hitFlash[o.pid] ?? -9999)) < 260
-  const recoil = hurt ? (1 - (o.now - (hitFlash[o.pid] ?? 0)) / 260) : 0
-  if (hurt) { X -= (o.face ?? 1) * recoil * 3; Y += recoil * 1.2 }
+  const hurt = (o.now - (hitFlash[o.pid] ?? -9999)) < 320
+  const recoil = hurt ? (1 - (o.now - (hitFlash[o.pid] ?? 0)) / 320) : 0
+  if (hurt) { X -= (o.face ?? 1) * recoil * 7; Y += recoil * 2.5 } // struck: thrown back
   // combat breathes (spec 6m), and so does the body: a full strike on the
-  // exchange tick, a ready guard between: no more windmilling at the air
-  const strikeT = o.anim === 'fight' ? Math.max(0, Math.sin(renderT(now) * Math.PI)) : 0
-  const swing = o.anim === 'fight'
+  // exchange tick, a ready guard between. A hurt body does not strike:
+  // it staggers, weapon dropped low: attack and defence finally read apart.
+  const striking = o.anim === 'fight' && !o.shooting && !hurt
+  const strikeT = striking ? Math.max(0, Math.sin(renderT(now) * Math.PI)) : 0
+  const swing = hurt && o.anim === 'fight' ? -0.35
+    : striking
     ? (o.exchange ? strikeT * 1.2 : 0.25 + Math.sin(now / 600) * 0.08)
     : o.anim === 'gather' ? Math.sin(now / (o.tool === 'rod' ? 700 : 200)) : 0
-  const lunge = o.anim === 'fight' && o.exchange ? strikeT * 4 * o.face : 0
+  const lunge = striking && o.exchange ? strikeT * 4 * o.face : 0
   X += lunge; Y += bob
   const F = o.face
 
@@ -1119,7 +1130,7 @@ function drawCitizen(X, Y, o) {
   const ax = X + (F > 0 ? 25 : 12), ay = Y + 17
   cx.save()
   cx.translate(ax + 1.5, ay + 1)
-  cx.rotate(F * (o.anim === 'gather' ? -0.6 + swing * 0.9 : o.anim === 'fight' ? -0.3 + swing * 1.1 : 0.15))
+  cx.rotate(F * (o.anim === 'gather' ? -0.6 + swing * 0.9 : (o.anim === 'fight' && !o.shooting) ? -0.3 + swing * 1.1 : 0.15))
   cx.fillStyle = skin; cx.fillRect(-1.5, 0, 3, 9)
   const metal = o.bronzeTool ? '#c9862a' : '#8a8a82'
   if (o.anim === 'gather' && o.tool === 'rod') { // fishing rod: long, thin, line down
