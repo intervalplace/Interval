@@ -20,6 +20,14 @@ export function buildWorld(genesis) {
   put('anvil-east', 'anvil', W - 6, trailY + 2)
   put('hearth-east', 'campfire', W - 8, trailY - 1)
 
+  // the shelter of the hamlets (spec 2b): homes make a place a place
+  put('house-w1', 'house', 3, trailY - 3)
+  put('house-w2', 'house', 8, trailY - 3)
+  put('house-w3', 'house', 3, trailY + 3)
+  put('house-e1', 'house', W - 4, trailY - 3)
+  put('house-e2', 'house', W - 9, trailY - 3)
+  put('house-e3', 'house', W - 4, trailY + 3)
+
   // waters near each hamlet
   const waters = [
     [10, trailY + 4], [11, trailY + 4], [10, trailY + 5],
