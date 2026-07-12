@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.28 ("The Constitution")
+# Interval: Protocol Specification v0.29 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -62,6 +62,15 @@ hearth. Inert citizen-shaped nodes (`guard`, `smith`) are furniture
 with faces: impassable, unattackable, and reassuring.
 
 New inert node types: `wall`, `signpost`, `guard`, `smith`, `well`.
+
+## 2e. The highlands, the cave, and the deep forest
+
+Northeast of Anchor rise the **rocky highlands**: dense ore and, glinting
+among the gray, **magic rocks**, veined with light. Sunk into the
+highlands is **the cave**, a dark gallery where **trolls** dwell.
+Southwest across the trail spreads the **deep forest**, thick with
+trees. Windows may paint the cave dark and the forest deep; the nodes
+and mobs stand where the founding says.
 
 ## 2c. The hedge is law
 
@@ -143,7 +152,9 @@ attack stands and fights. Mobs respawn at home. The goblins pace
 because the beacon says so; every node watches them pace identically.
 
 **Mob kinds.** `goblin` (5 hp, meadow-dweller) and, from v0.25,
-`wolf` (8 hp, hits up to 2, drops bones and sometimes more bones).
+`wolf` (8 hp, hits up to 2, drops bones and sometimes more bones); and, from
+v0.29, `troll` (20 hp, hits up to 3, dwells in the cave, drops bones,
+ore, and rarely a bronze-plate it has no use for).
 Wolves keep to the fringes of the world; the hedgerows are theirs.
 Every mob kind inherits wandering, pinning, home respawn, and
 drops-to-ground from the universal mechanisms; a new creature costs
@@ -407,6 +418,23 @@ orthogonally adjacent to a `bank` node (withdraw also needs a free
 inventory slot). One item per interval: patience is the fee.
 **The bank survives death** (§6c): what you carry can burn; what you
 vault endures. This is the world's memory, and the foundation of wealth.
+
+## 6k. Magic (the dark half of the interval)
+
+Mining a `magic-rock` yields a `magic-stone` (30 mining xp; the rock
+rests long after). Magic itself begins at night: **`invoke` is valid
+only while the world is dark** (`phase = (tick mod 2400) / 2400`;
+night iff `(sin(2 pi phase) + 1) / 2 < 0.42`, the same sky every
+window already paints). Invoking consumes 3 carried magic-stones and
+grants 1 `sigil` and 20 magic xp. A sigil is a compressed piece of
+night; daylight cannot make one.
+
+`cast {spell}` spends sigils. The first spell is `anchor` (1 sigil,
+30 magic xp): the caster is returned instantly to the plaza beside the
+well of Anchor, the fixed point every genesis carries. Further spells
+are reserved for future amendments; the dark is patient too.
+
+`magic` joins the skills: the twelfth.
 
 ## 6i. Armor (the deeper ore sink)
 

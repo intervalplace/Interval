@@ -241,7 +241,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b52'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b53'  // stamp: if your screen says an older build, hard-refresh
 const send = a => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'act', action: a }))
 const feed = t => { const now = performance.now()
   if (t === lastFeed.text && now - lastFeed.at < 2000) return // no log spam
@@ -351,7 +351,7 @@ const SLEEP_AFTER = 500
 const CAPE_COLORS = {
   woodcutting: '#2f7d2f', mining: '#5a6b7d', fishing: '#2a6f9e',
   cooking: '#7d2f5a', smithing: '#b06a2a', firemaking: '#c9432a',
-  prayer: '#e8e4d0', attack: '#8e1f1f', defence: '#3a5a8e', hitpoints: '#7d7d2f',
+  prayer: '#e8e4d0', magic: '#3a7d9e', ranged: '#5c7d3a', attack: '#8e1f1f', defence: '#3a5a8e', hitpoints: '#7d7d2f',
 }
 function capeOf(p) { // mastery is a fact; the cape is what it looks like
   const mastered = Object.entries(p.skills).filter(([, xp]) => XP_TO_LVL(xp) >= 99)
@@ -605,6 +605,8 @@ const trailYOf = () => Math.floor(H / 2)
 function terrainOf(x, y) {
   const ty = trailYOf()
   const cx2 = Math.floor(W / 2)
+  if (x >= W - 14 && x <= W - 4 && y >= 3 && y <= 9) return 'cave'
+  if (x >= W - 22 && y <= 14) return 'scree'
   if (x >= cx2 - 8 && x <= cx2 + 8 && y >= 2 && y <= 10) return 'cobble' // Anchor
   if (Math.abs(x - cx2) <= (tileHash(0, y, 3) % 2) && y > 10 && y < ty) return 'trail' // the north road
   if (Math.abs(y - ty) <= (tileHash(x, 0, 3) % 2)) return 'trail'   // a road that wavers like a real one
@@ -613,6 +615,8 @@ function terrainOf(x, y) {
 }
 function tileShade(x, y) {
   const t = terrainOf(x, y)
+  if (t === 'cave') return ['#2e2c33', '#34323a', '#2a282f'][tileHash(x, y, 0) % 3]
+  if (t === 'scree') return ['#5d5a52', '#65625a', '#57544c'][tileHash(x, y, 0) % 3]
   if (t === 'cobble') return ['#7a756b', '#827d73', '#726d63'][tileHash(x, y, 0) % 3]
   if (t === 'trail') return ['#8a7449', '#937d50', '#816c42'][tileHash(x, y, 0) % 3]
   if (t === 'plaza') return ['#6e5f3e', '#75663f', '#665837'][tileHash(x, y, 0) % 3]
@@ -657,6 +661,12 @@ function buildGround() {
       if (x === 0 && y > 0 && y < H - 1) { g.fillRect(px(x) + TILE - 5, py(y), 2.4, TILE); if (y % 2 === 0) g.fillRect(px(x) + TILE - 11, py(y) + 18, 9, 4) }
       if (x === W - 1 && y > 0 && y < H - 1) { g.fillRect(px(x) + 3, py(y), 2.4, TILE); if (y % 2 === 0) g.fillRect(px(x) + 2, py(y) + 18, 9, 4) }
       continue
+    }
+    // cave gloom: the dark pools at the edges
+    if (terrainOf(x, y) === 'cave') {
+      g.fillStyle = 'rgba(0,0,0,.25)'
+      if (terrainOf(x, y - 1) !== 'cave') g.fillRect(px(x), py(y), TILE, 8)
+      if (terrainOf(x - 1, y) !== 'cave') g.fillRect(px(x), py(y), 8, TILE)
     }
     // grass tufts (meadow only; nothing grows on a well-walked road)
     if (terrainOf(x, y) === 'meadow' && h2(x, y, 1) < 0.35) {
@@ -936,6 +946,18 @@ function drawScene(now) {
           poly([[X+14,Y+20],[X+26,Y+20],[X+22,Y+26],[X+18,Y+26]], '#4a3319')
         }
       }
+      if (n.type === 'magic-rock') {
+        shadow(X, Y, 10)
+        const pulse = (Math.sin(now / 600 + n.x) + 1) / 2
+        poly([[X+8,Y+30],[X+14,Y+18],[X+24,Y+15],[X+32,Y+22],[X+29,Y+31],[X+11,Y+32]], dep ? '#3a3a44' : '#4a4a5c', '#1c1c26')
+        if (!dep) {
+          cx.fillStyle = 'rgba(120,220,255,' + (0.25 + pulse * 0.3) + ')'
+          poly([[X+16,Y+14],[X+20,Y+4],[X+24,Y+13],[X+20,Y+18]], 'rgba(140,235,255,' + (0.55 + pulse * 0.4) + ')')
+          poly([[X+24,Y+18],[X+29,Y+11],[X+31,Y+19]], 'rgba(170,160,255,' + (0.5 + pulse * 0.4) + ')')
+          cx.fillStyle = 'rgba(140,225,255,' + (0.10 + pulse * 0.12) + ')'
+          cx.beginPath(); cx.arc(X + 21, Y + 18, 16 + pulse * 4, 0, 7); cx.fill()
+        }
+      }
       if (n.type === 'rock') {
         const v = tileHash(n.x, n.y, 8) % 3
         const c = dep ? '#3a3a3a' : ['#7a7a72', '#83786a', '#6f7478'][v]
@@ -1118,6 +1140,22 @@ function drawScene(now) {
       const engaged = meP?.action?.mobId === id
       const hop = engaged ? Math.abs(Math.sin(now / 160)) * 2 : Math.sin(now / 700 + m.x) * 0.7
       shadow(X, Y, 9)
+      if (m.type === 'troll') {
+        const heave = Math.sin(now / 800 + m.x) * 1
+        poly([[X+6,Y+33],[X+8,Y+12+heave],[X+20,Y+6+heave],[X+32,Y+12+heave],[X+34,Y+33]], '#5c6b52', '#2a3324')
+        poly([[X+10,Y+30],[X+12,Y+14+heave],[X+20,Y+10+heave],[X+28,Y+14+heave],[X+30,Y+30]], '#6b7a5e')
+        cx.fillStyle = 'rgba(0,0,0,.2)'; cx.fillRect(X + 12, Y + 20 + heave, 16, 2)
+        cx.fillStyle = '#c9302c'
+        cx.fillRect(X + 15 + MF * 1.5, Y + 15 + heave, 2.8, 2.8); cx.fillRect(X + 22 + MF * 1.5, Y + 15 + heave, 2.8, 2.8)
+        cx.save(); cx.translate(X + (MF > 0 ? 33 : 7), Y + 22 + heave)
+        cx.rotate(MF * (engaged ? Math.sin(now / 200) * 0.6 : 0.3))
+        cx.fillStyle = '#4a3a26'; cx.fillRect(-2, -14, 4, 16)
+        cx.fillStyle = '#5c4a32'; cx.beginPath(); cx.arc(0, -14, 4.4, 0, 7); cx.fill()
+        cx.restore()
+        cx.fillStyle = '#4a1008'; cx.fillRect(X + 10, Y + 1, 20, 3.4)
+        cx.fillStyle = '#c0392b'; cx.fillRect(X + 10, Y + 1, 20 * (m.hp / 20), 3.4)
+        return
+      }
       if (m.type === 'wolf') {
         const lope = Math.sin(now / 300 + m.x) * 0.8
         poly([[X+7,Y+28+lope],[X+12,Y+21+lope],[X+27,Y+21+lope],[X+33,Y+26+lope],[X+29,Y+31],[X+11,Y+31]], '#6e6e72', '#3a3a3e')
@@ -1284,6 +1322,15 @@ function drawScene(now) {
     // campfires hold back the night
     L.globalCompositeOperation = 'destination-out'
     for (const n of (s._nodesV ?? Object.values(s.nodes))) {
+      if (n.type === 'magic-rock' && n.depletedUntil <= s.tick) {
+        const MX = px(n.x) + 20, MY = py(n.y) + 20
+        const mg = L.createRadialGradient(MX, MY, 4, MX, MY, 46)
+        mg.addColorStop(0, 'rgba(120,220,255,.5)'); mg.addColorStop(1, 'rgba(120,220,255,0)')
+        L.globalCompositeOperation = 'destination-out'
+        L.fillStyle = mg; L.beginPath(); L.arc(MX, MY, 46, 0, 7); L.fill()
+        L.globalCompositeOperation = 'source-over'
+        continue
+      }
       if (n.type !== 'campfire' && n.type !== 'fire') continue
       const fx = px(n.x - cam.x) + 20, fy = py(n.y - cam.y) + 24
       if (fx < -120 || fx > cv.width + 120 || fy < -120 || fy > cv.height + 120) continue
@@ -1295,6 +1342,15 @@ function drawScene(now) {
     cx.drawImage(lightCv, 0, 0)
     // warm halo on top of the cut
     for (const n of (s._nodesV ?? Object.values(s.nodes))) {
+      if (n.type === 'magic-rock' && n.depletedUntil <= s.tick) {
+        const MX = px(n.x) + 20, MY = py(n.y) + 20
+        const mg = L.createRadialGradient(MX, MY, 4, MX, MY, 46)
+        mg.addColorStop(0, 'rgba(120,220,255,.5)'); mg.addColorStop(1, 'rgba(120,220,255,0)')
+        L.globalCompositeOperation = 'destination-out'
+        L.fillStyle = mg; L.beginPath(); L.arc(MX, MY, 46, 0, 7); L.fill()
+        L.globalCompositeOperation = 'source-over'
+        continue
+      }
       if (n.type !== 'campfire' && n.type !== 'fire') continue
       const fx = px(n.x - cam.x) + 20, fy = py(n.y - cam.y) + 24
       const grad2 = cx.createRadialGradient(fx, fy, 4, fx, fy, 60)
@@ -1496,6 +1552,30 @@ document.getElementById('inv').addEventListener('click', (e) => {
   const nearBank = Object.values(world.nodes).some(n => n.type === 'bank'
     && Math.abs(meNow.x - n.x) + Math.abs(meNow.y - n.y) === 1)
   if (nearBank) { send({ do: 'deposit', slot: +i }); feed('You deposit the ' + it.item.replace('-', ' ') + '.'); return }
+  if (it.item === 'magic-stone') {
+    const count = me.inventory.filter(sl => sl?.item === 'magic-stone').length
+    chooseAction([
+      { label: 'invoke sigil (' + count + '/3 stones)', act: () => {
+        const cyc2 = ((world?.tick ?? 0) % 2400) / 2400
+        const nightNow = (Math.sin(cyc2 * Math.PI * 2) + 1) / 2 < 0.42
+        if (!nightNow) { feed('The stones are dull in daylight. Magic waits for the dark half of the interval.'); return }
+        if (count < 3) { feed('Three stones make a sigil. You carry ' + count + '.'); return }
+        send({ do: 'invoke' })
+        feed('You press the stones together in the dark. They remember being one.')
+      } },
+      { label: 'drop', act: () => { send({ do: 'drop', slot: +i }); feed('You drop the magic stone.') } },
+    ]); return
+  }
+  if (it.item === 'sigil') {
+    chooseAction([
+      { label: 'cast: return to Anchor', act: () => {
+        send({ do: 'cast' })
+        feed('You speak the founding moment aloud. The world agrees you were always here.')
+        tone(700, 0.4, { type: 'sine', vol: 0.05 }); tone(1050, 0.5, { type: 'sine', vol: 0.04, at: 0.1 })
+      } },
+      { label: 'keep', act: () => feed('A compressed piece of night. It hums faintly.') },
+    ]); return
+  }
   if (it.item === 'arrows') {
     chooseAction([
       { label: 'keep (' + it.qty + ' arrows)', act: () => feed('Arrows fly on their own: wield a bow and attack anything within four tiles.') },

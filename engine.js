@@ -14,15 +14,21 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.28';
+const SPEC_VERSION = '0.29';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
 const NODE_YIELD = {
-  'tree':         { item: 'logs',     skill: 'woodcutting', xp: 25 },
-  'rock':         { item: 'ore',      skill: 'mining',      xp: 35 },
-  'fishing-spot': { item: 'raw-fish', skill: 'fishing',     xp: 30 },
+  'tree':         { item: 'logs',        skill: 'woodcutting', xp: 25 },
+  'rock':         { item: 'ore',         skill: 'mining',      xp: 35 },
+  'fishing-spot': { item: 'raw-fish',    skill: 'fishing',     xp: 30 },
+  'magic-rock':   { item: 'magic-stone', skill: 'mining',      xp: 30 },
 };
+// night (spec 6k): the same sky every window paints, now load-bearing
+function isNight(tick) {
+  const phase = (tick % 2400) / 2400;
+  return (Math.sin(phase * Math.PI * 2) + 1) / 2 < 0.42;
+}
 const XP_COOK = 30;
 const HEAL_FISH = 3;
 const HP_START_XP = 1154; // hitpoints level 10
@@ -31,6 +37,8 @@ const MOB_STATS = {
             drops: [{ item: 'bones' }, { item: 'ore', chance: 64 }] },
   wolf:   { maxHp: 8, atk: 2, def: 2, maxHit: 2, respawn: 150,
             drops: [{ item: 'bones' }, { item: 'bones', chance: 96 }] },
+  troll:  { maxHp: 20, atk: 4, def: 4, maxHit: 3, respawn: 300,
+            drops: [{ item: 'bones' }, { item: 'ore' }, { item: 'bronze-plate', chance: 24 }] },
 };
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 // the city of Anchor (spec 2d): mob-forbidden bounds
@@ -200,7 +208,7 @@ function addPlayer(state, playerId, x, y) {
   state.players[playerId] = {
     x, y,
     skills: { woodcutting: 0, mining: 0, fishing: 0, cooking: 0, smithing: 0,
-              firemaking: 0, prayer: 0, ranged: 0, attack: 0, defence: 0, hitpoints: HP_START_XP },
+              firemaking: 0, prayer: 0, ranged: 0, magic: 0, attack: 0, defence: 0, hitpoints: HP_START_XP },
     hp: 10,
     equipment: { weapon: null, head: null, body: null },
     bank: {},
@@ -290,6 +298,15 @@ function validInput(state, input) {
       const cheb = Math.max(Math.abs(p.x - m.x), Math.abs(p.y - m.y));
       return cheb <= 4 && p.equipment.weapon?.item === 'wooden-bow'
         && p.inventory.some(sl => sl?.item === 'arrows');
+    }
+    case 'invoke': {
+      // magic begins at night (spec 6k): daylight cannot make a sigil
+      if (!isNight(state.tick)) return false;
+      return p.inventory.filter(sl => sl?.item === 'magic-stone').length >= 3;
+    }
+    case 'cast': {
+      if (input.spell !== 'anchor') return false;
+      return p.inventory.some(sl => sl?.item === 'sigil');
     }
     case 'fletch': {
       const sl = p.inventory[input.slot];
@@ -447,6 +464,28 @@ function nextState(state, inputs, beacon) {
         const cur = p.equipment[g];
         p.equipment[g] = sl;
         p.inventory[inp.slot] = cur;
+      }
+    } else if (inp.type === 'invoke') {
+      if (isNight(s.tick)) {
+        const slots = [];
+        for (let i2 = 0; i2 < p.inventory.length && slots.length < 3; i2++) {
+          if (p.inventory[i2]?.item === 'magic-stone') slots.push(i2);
+        }
+        if (slots.length === 3) {
+          for (const i2 of slots) p.inventory[i2] = null;
+          p.inventory[slots[0]] = { item: 'sigil', qty: 1 };
+          p.skills.magic += 20;
+        }
+      }
+    } else if (inp.type === 'cast') {
+      const si = p.inventory.findIndex(sl => sl?.item === 'sigil');
+      if (inp.spell === 'anchor' && si !== -1) {
+        p.inventory[si] = null;
+        const cx2 = Math.floor(s.genesis.worldW / 2);
+        p.x = cx2; p.y = 7; // the plaza beside the well: the fixed point
+        p.action = null;
+        p.trade = null;
+        p.skills.magic += 30;
       }
     } else if (inp.type === 'fletch') {
       const sl = p.inventory[inp.slot];
