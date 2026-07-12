@@ -194,6 +194,8 @@ function handle(ws, buf) {
     else if (a.do === 'pickup') client.pickup(String(a.groundId))
     else if (a.do === 'light') client.light(a.slot | 0)
     else if (a.do === 'bury') client.bury(a.slot | 0)
+    else if (a.do === 'fletch') client.fletch(a.slot | 0, a.make === 'arrows' ? 'arrows' : 'bow')
+    else if (a.do === 'unequip') client.unequip(['weapon','head','body'].includes(a.gear) ? a.gear : 'weapon')
     else if (a.do === 'deposit') client.deposit(a.slot | 0)
     else if (a.do === 'withdraw') client.withdraw(String(a.item))
     else if (a.do === 'offer_trade') client.offerTrade(String(a.to), a.giveSlot | 0, String(a.wantItem))
