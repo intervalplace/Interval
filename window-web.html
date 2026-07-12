@@ -232,6 +232,7 @@ const BRIDGE_TO_INPUT = (a) =>
   : a.do === 'fletch' ? { type: 'fletch', slot: a.slot, make: a.make }
   : a.do === 'invoke' ? { type: 'invoke' }
   : a.do === 'attackp' ? { type: 'attackp', targetId: a.targetId }
+  : a.do === 'sell' ? { type: 'sell', slot: a.slot }
   : a.do === 'cast' ? { type: 'cast', spell: 'anchor' }
   : a.do === 'cook' ? { type: 'cook', slot: a.slot }
   : a.do === 'stop' ? { type: 'stop' }
@@ -318,7 +319,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b61'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b62'  // stamp: if your screen says an older build, hard-refresh
 const send = a => {
   if (ws.readyState !== 1) return
   if (ownKey && a.do === 'chat') { signChat(a.text); return }
@@ -1859,9 +1860,10 @@ cv.addEventListener('click', (e) => {
   const me = world.players[myId]; if (!me) return
   const adj = (o) => Math.abs(me.x - o.x) + Math.abs(me.y - o.y) === 1
 
-  // any click that gives a new order interrupts the current work: the
-  // citizen serves the latest command, not the oldest
-  if (me.action) send({ do: 'stop' })
+  // a new order interrupts the old work by REPLACING it: the engine
+  // honors the latest input natively. (An explicit stop sent alongside
+  // the new action once tripped the one-input-per-tick rule: both
+  // dropped, and the citizen froze mid-swing, deaf to all clicks.)
   pendingLight = null
   // hit-test against RENDERED positions: a goblin mid-stride is clickable
   // where its body is, not where the grid will say it is in 300ms
