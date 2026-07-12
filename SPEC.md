@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.34 ("The Constitution")
+# Interval: Protocol Specification v0.35 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -97,6 +97,12 @@ an inventory item. What gold BUYS is reserved for a future amendment:
 the till is patient.
 
 New inert node type: `store` (with its `keeper`).
+
+## 6p. Fletching (v0.35): the fourteenth skill
+
+Whittling a bow never taught anyone to aim. `fletch` xp moves to its
+own skill: bows grant 15 fletching xp, arrows 5. `ranged` is earned
+only the honest way: by loosing arrows at something that objects.
 
 ## 6o. Farming (v0.34): the thirteenth skill
 

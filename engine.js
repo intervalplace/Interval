@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.34';
+const SPEC_VERSION = '0.35';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -219,7 +219,7 @@ function addPlayer(state, playerId, x, y) {
   state.players[playerId] = {
     x, y,
     skills: { woodcutting: 0, mining: 0, fishing: 0, cooking: 0, smithing: 0,
-              firemaking: 0, prayer: 0, ranged: 0, magic: 0, farming: 0, attack: 0, defence: 0, hitpoints: HP_START_XP },
+              firemaking: 0, prayer: 0, ranged: 0, magic: 0, farming: 0, fletching: 0, attack: 0, defence: 0, hitpoints: HP_START_XP },
     hp: 10,
     equipment: { weapon: null, head: null, body: null },
     bank: {},
@@ -563,13 +563,13 @@ function nextState(state, inputs, beacon) {
       const sl = p.inventory[inp.slot];
       if (sl && inp.make === 'bow' && sl.item === 'logs') {
         p.inventory[inp.slot] = { item: 'wooden-bow', qty: 1 };
-        p.skills.ranged += 15;
+        p.skills.fletching += 15;
       } else if (sl && inp.make === 'arrows' && sl.item === 'bones') {
         const ex = p.inventory.findIndex((s2, i2) => s2?.item === 'arrows' && i2 !== inp.slot);
         p.inventory[inp.slot] = null;
         if (ex !== -1) p.inventory[ex].qty += 5;                    // the quiver (6n)
         else p.inventory[inp.slot] = { item: 'arrows', qty: 5 };
-        p.skills.ranged += 5;
+        p.skills.fletching += 5;
       }
     } else if (inp.type === 'unwield') {
       const g = ['weapon', 'head', 'body'].includes(inp.gear) ? inp.gear : 'weapon';

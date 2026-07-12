@@ -324,7 +324,7 @@ const BRIDGE_TO_INPUT = (a) =>
   : a.do === 'wield' ? { type: 'wield', slot: a.slot }
   : a.do === 'unwield' ? { type: 'unwield', gear: a.gear ?? 'weapon' }
   : a.do === 'smith' ? { type: 'smith', recipe: a.recipe }
-  : a.do === 'name' ? { type: 'name', name: a.name }
+  : a.do === 'name' ? { type: 'claim_name', name: a.name } // the engine's word since v0.4; a guessed translation cost weeks of nameless citizens
   : a.do === 'offer' ? { type: 'offer', to: a.to, slot: a.slot }
   : a.do === 'accept' ? { type: 'accept', from: a.from, slot: a.slot }
   : a.do === 'decline' ? { type: 'decline' }
@@ -352,7 +352,7 @@ async function signChat(text) {
 async function signAndSend(a) {
   const f = BRIDGE_TO_INPUT(a)
   if (!f) return
-  const input = { tick: a._tick ?? ((world?.tick ?? 0) + 1), playerId: ownKey.pub, ...f }
+  const input = { tick: a._tick ?? allocTick(), playerId: ownKey.pub, ...f }
   const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode(canonicalJS(input))))
   ws.send(JSON.stringify({ type: 'raw', input: { ...input, sig } }))
 }
@@ -424,7 +424,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b67'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b68'  // stamp: if your screen says an older build, hard-refresh
 const send = a => {
   if (ws.readyState !== 1) return
   if (ownKey && a.do === 'chat') { signChat(a.text); return }
@@ -485,7 +485,7 @@ function stepToward(s, me, goal, reach, stampTick) {
   if (step === null) { feed("You can't reach that."); intent = null; return }
   if (step === 'arrived') return
   facing[myId] = step.dx !== 0 ? step.dx : (facing[myId] ?? 1)
-  const tk = stampTick ?? ((world?.tick ?? 0) + 1)
+  const tk = allocTick()
   moveLock = { x: me.x + step.dx, y: me.y + step.dy, tick: tk, until: tk + 2 }
   send({ do: 'move', dx: step.dx, dy: step.dy, _tick: tk })
 }
@@ -558,7 +558,14 @@ function drawMini(s) {
   cx.globalAlpha = 1
 }
 let pendingLight = null // { slot, tick } while coaxing a fire
+let nameTries = 0
 let moveLock = null // { x, y, until } the step in flight: plan nothing atop it
+let lastStamped = 0 // the tick allocator: two inputs on one tick annihilate
+function allocTick() {
+  const t = Math.max((world?.tick ?? 0) + 1, lastStamped + 1)
+  lastStamped = t
+  return t
+}
 function renderT(now) { // one clock for drawing AND clicking: what you see is what you hit
   if (tickOffset !== null && curState) {
     const renderTick = (now - tickOffset) / 600 - 1.0
@@ -586,7 +593,7 @@ const SLEEP_AFTER = 500
 const CAPE_COLORS = {
   woodcutting: '#2f7d2f', mining: '#5a6b7d', fishing: '#2a6f9e',
   cooking: '#7d2f5a', smithing: '#b06a2a', firemaking: '#c9432a',
-  prayer: '#e8e4d0', magic: '#3a7d9e', ranged: '#5c7d3a', farming: '#7d9e3a', attack: '#8e1f1f', defence: '#3a5a8e', hitpoints: '#7d7d2f',
+  prayer: '#e8e4d0', magic: '#3a7d9e', ranged: '#5c7d3a', farming: '#7d9e3a', fletching: '#9e7d3a', attack: '#8e1f1f', defence: '#3a5a8e', hitpoints: '#7d7d2f',
 }
 function capeOf(p) { // mastery is a fact; the cape is what it looks like
   const mastered = Object.entries(p.skills).filter(([, xp]) => XP_TO_LVL(xp) >= 99)
@@ -687,10 +694,12 @@ function onState(s, worldId) {
     feed('"' + pendingName + '" is taken. You remain nameless.')
     pendingName = ''
   }
-  else if (!me.name && pendingName && !s.names?.[pendingName]) {
-    // a single dropped packet once cost a citizen their name forever:
-    // the claim repeats each tick until the census answers
-    send({ do: 'name', name: pendingName })
+  else if (!me.name && pendingName && !s.names?.[pendingName] && s.tick % 4 === 0) {
+    // the claim repeats, PACED: an every-tick retry once starved the
+    // citizen's own legs of input slots and pinned them at spawn
+    nameTries = (nameTries ?? 0) + 1
+    if (nameTries > 8) { feed('The census is not answering. Walk on; try naming again later.'); pendingName = '' ; nameTries = 0 }
+    else send({ do: 'name', name: pendingName })
   }
   else if (me && intent?.kind === 'cookall') {
     const i = me.inventory.findIndex(sl => sl && sl.item === 'raw-fish')
@@ -722,7 +731,7 @@ function onState(s, worldId) {
         // pickup and walk mean STANDING ON the goal; everything else means
         // standing beside it. Getting this wrong marched the citizen on and
         // off the bones forever, a graveside indecision.
-        stepToward(s, ghost, goal, intent.kind !== 'walk' && intent.kind !== 'pickup', moveLock.tick + 1)
+        stepToward(s, ghost, goal, intent.kind !== 'walk' && intent.kind !== 'pickup')
       }
       // custodial windows cannot stamp ticks: they walk one settled step at a time
     }
@@ -1036,6 +1045,9 @@ function drawCitizen(X, Y, o) {
   const now = o.now
   const bob = o.anim === 'idle' ? Math.sin(now / 600) * 0.8 : 0
   const step = o.anim === 'walk' ? Math.sin(now / 110) : 0
+  const hurt = (o.now - (hitFlash[o.pid] ?? -9999)) < 260
+  const recoil = hurt ? (1 - (o.now - (hitFlash[o.pid] ?? 0)) / 260) : 0
+  if (hurt) { X -= (o.face ?? 1) * recoil * 3; Y += recoil * 1.2 }
   // combat breathes (spec 6m), and so does the body: a full strike on the
   // exchange tick, a ready guard between: no more windmilling at the air
   const strikeT = o.anim === 'fight' ? Math.max(0, Math.sin(renderT(now) * Math.PI)) : 0
