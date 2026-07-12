@@ -215,10 +215,14 @@ export class IntervalNode {
     this.inputBuffer.delete(tick)
     this.checkDivergence(tick + 1)
 
-    // persist checkpoint every tick (spec §9a)
+    // persist checkpoint every tick (spec §9a): OFF the tick path.
+    // A synchronous write here stalled broadcasts by up to 400ms; the
+    // walking stutter was this line. Disk is patient; the tick is not.
     if (this.checkpointFile) {
-      fs.writeFileSync(this.checkpointFile,
-        JSON.stringify({ tick: this.state.tick, state: this.state }))
+      const snap = JSON.stringify({ tick: this.state.tick, state: this.state })
+      fs.promises.writeFile(this.checkpointFile + '.tmp', snap)
+        .then(() => fs.promises.rename(this.checkpointFile + '.tmp', this.checkpointFile))
+        .catch(() => {})
     }
 
     await this.p2p.services.pubsub.publish(
