@@ -52,6 +52,8 @@ export class IntervalClient {
   pickup(groundId) { return this.#send({ type: 'pickup', groundId }) }
   light(slot) { return this.#send({ type: 'light', slot }) }
   bury(slot) { return this.#send({ type: 'bury', slot }) }
+  fletch(slot, make) { return this.#send({ type: 'fletch', slot, make }) }
+  unequip(gear) { return this.#send({ type: 'unwield', gear }) }
   deposit(slot) { return this.#send({ type: 'deposit', slot }) }
   withdraw(item) { return this.#send({ type: 'withdraw', item }) }
   smith(recipe) { return this.#send({ type: 'smith', recipe }) }
