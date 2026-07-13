@@ -47,8 +47,9 @@
   Same ticks, same citizens, same fires. No window is authoritative: that is the whole point.</div>
 </div>
 <div id="stat"></div>
-<div id="inv3d" style="position:fixed;bottom:22px;left:50%;transform:translateX(-50%);display:flex;gap:5px;
-  flex-wrap:wrap;justify-content:center;max-width:92vw;z-index:5;pointer-events:none"></div>
+<div id="invact" style="position:fixed;bottom:196px;left:50%;transform:translateX(-50%);display:none;gap:6px;z-index:6"></div>
+<div id="inv3d" style="position:fixed;bottom:14px;left:50%;transform:translateX(-50%);display:grid;
+  grid-template-columns:repeat(7,40px);gap:4px;z-index:5"></div>
 <div id="feed"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -225,6 +226,9 @@ const BRIDGE = (a) =>
   : a.do === 'spawn' ? { type: 'spawn' }
   : a.do === 'attack' ? { type: 'attack', mobId: a.mobId }
   : a.do === 'gather' ? { type: 'gather', nodeId: a.nodeId }
+  : a.do === 'eat' ? { type: 'eat', slot: a.slot }
+  : a.do === 'drop' ? { type: 'drop', slot: a.slot }
+  : a.do === 'wield' ? { type: 'wield', slot: a.slot }
   : null
 async function send(a) {
   if (ws.readyState !== 1 || !ownKey) return
@@ -246,7 +250,7 @@ renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.outputEncoding = THREE.sRGBEncoding
 renderer.toneMapping = THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure = 1.05
+renderer.toneMappingExposure = 0.92 // the sun need not shout
 document.body.appendChild(renderer.domElement)
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix()
@@ -295,7 +299,7 @@ function terrainOf(x, y) {
 const TERRAIN_COL = { meadow: 0x3d5a23, trail: 0x8a7449, cobble: 0x7a756b, plaza: 0x6e5f3e,
   scree: 0x5d5a52, cave: 0x22202a, wilds: 0x4a3d2e, sea: 0x2a5f7d, mountain: 0x6e6a60, bridge: 0x8a6a3a }
 
-let groundBuilt = false, groundMesh = null, stars = null
+let groundBuilt = false, groundMesh = null, stars = null, motes = null
 function buildGround(s0) {
   // the water's bed: lakes and rivers were planes UNDER a flat earth,
   // drowned in soil. Carve their basins first; then the water shows.
@@ -373,6 +377,13 @@ function buildGround(s0) {
   tufts.count = ti
   scene.add(tufts)
   // stars: the night has a ceiling
+  // motes: pollen by day, fireflies by night: the air itself is alive
+  const moteGeo = new THREE.BufferGeometry()
+  const motePos = []
+  for (let i = 0; i < 260; i++) motePos.push((tileHash(i, 4, 60) % 400) / 10 - 20, 0.3 + (tileHash(i, 5, 61) % 30) / 10, (tileHash(i, 6, 62) % 400) / 10 - 20)
+  moteGeo.setAttribute('position', new THREE.Float32BufferAttribute(motePos, 3))
+  motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({ color: 0xfff4c0, size: 0.05, transparent: true, opacity: 0.5 }))
+  scene.add(motes)
   const starGeo = new THREE.BufferGeometry()
   const starPos = []
   for (let i = 0; i < 700; i++) {
@@ -771,7 +782,8 @@ function syncBeings(s, prev) {
     const ix = ox + (thing.x - ox) * t2, iy = oy + (thing.y - oy) * t2
     m.position.set(wx(ix), 0, wz(iy))
     if (kind === 'citizen' && (thing.action?.type === 'attack' || thing.action?.type === 'attackp')) {
-      const lg = Math.max(0, Math.sin(performance.now() / 300)) * 0.14 // the lunge
+      const exch2 = ((s.tick - (thing.action.since ?? 0)) % 2 === 0) || thing.equipment?.weapon?.item === 'old-chain'
+      const lg = exch2 ? Math.max(0, Math.sin(t2 * Math.PI)) * 0.16 : 0 // lunge WITH the strike
       m.position.x += Math.sin(m.rotation.y) * lg
       m.position.z += Math.cos(m.rotation.y) * lg
     }
@@ -826,12 +838,17 @@ function syncBeings(s, prev) {
       if (m.userData.arms) {
         const fighting = thing.action?.type === 'attack' || thing.action?.type === 'attackp'
         const working = thing.action?.type === 'gather'
+        // the swing obeys spec 6m: a full strike on the exchange tick,
+        // a raised guard between. No more hummingbird arms.
+        const exch = fighting && ((s.tick - (thing.action.since ?? 0)) % 2 === 0
+          || thing.equipment?.weapon?.item === 'old-chain')
+        const strikeT2 = exch ? Math.max(0, Math.sin(t2 * Math.PI)) : 0
         m.userData.legs[0].rotation.x = moving ? ph * 0.65 : 0
         m.userData.legs[1].rotation.x = moving ? -ph * 0.65 : 0
         m.userData.legs[0].userData.joint.rotation.x = moving ? Math.max(0, -ph) * 0.9 : 0
         m.userData.legs[1].userData.joint.rotation.x = moving ? Math.max(0, ph) * 0.9 : 0
         m.userData.arms[0].rotation.x = moving ? -ph * 0.5 : 0.06
-        m.userData.arms[1].rotation.x = fighting ? (-2.3 + Math.abs(Math.sin(performance.now() / 300)) * 2.1)
+        m.userData.arms[1].rotation.x = fighting ? (exch ? (-2.4 + strikeT2 * 2.4) : -1.1)
           : working ? (-2.0 + Math.abs(Math.sin(performance.now() / 420)) * 1.5) // the axe rises and falls
           : (moving ? ph * 0.5 : 0.06)
         m.userData.arms[0].userData.joint.rotation.x = moving ? -0.3 : -0.12
@@ -966,6 +983,21 @@ ws.onmessage = async (ev) => {
 const ray = new THREE.Raycaster(), mouse = new THREE.Vector2()
 let walkGoal = null
 let lastInvSig = ''
+let selSlot = -1
+document.getElementById('inv3d').addEventListener('click', (e) => {
+  const s2 = e.target.closest('[data-slot]')
+  if (!s2) return
+  const i2 = Number(s2.dataset.slot)
+  selSlot = selSlot === i2 ? -1 : i2
+  lastInvSig = '' // force redraw
+})
+document.getElementById('invact').addEventListener('click', (e) => {
+  const b2 = e.target.closest('[data-act]')
+  if (!b2 || selSlot < 0) return
+  send({ do: b2.dataset.act, slot: selSlot })
+  snd('pluck')
+  selSlot = -1; lastInvSig = ''
+})
 // the goal ring: yellow means walking, exactly like the reference window
 const goalRing = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.44, 24),
   new THREE.MeshBasicMaterial({ color: 0xffe83a, transparent: true, opacity: 0.85, side: THREE.DoubleSide }))
@@ -987,7 +1019,7 @@ const GATHERABLE = new Set(['tree', 'rock', 'magic-rock', 'fishing-spot'])
 function nearestTapTarget(cxp, cyp) {
   const ndc = new THREE.Vector2((cxp / innerWidth) * 2 - 1, -(cyp / innerHeight) * 2 + 1)
   const v3 = new THREE.Vector3()
-  let best = null, bd = 0.085 // ~ a thumb, in NDC
+  let best = null, bd = 0.11 // ~ a generous thumb, in NDC
   for (const m of beings.values()) {
     if (m.userData.beingKind !== 'mob' || !m.visible) continue
     v3.copy(m.position); v3.y += 0.4; v3.project(camera)
@@ -1118,12 +1150,20 @@ function animate(now) {
   // the sun crosses the sky because the tick says so
   const sunA = cyc * Math.PI * 2
   sun.position.set(Math.cos(sunA) * 20, Math.max(2, Math.sin(sunA) * 24), 8)
-  sun.intensity = Math.max(0.02, bright * 1.15)
+  sun.intensity = Math.max(0.02, bright * 0.98)
   sun.color.setHSL(0.09, 0.5, 0.55 + bright * 0.35)
-  ambient.intensity = 0.12 + bright * 0.45
+  ambient.intensity = 0.10 + bright * 0.33
   moon.intensity = 0.15 + (1 - bright) * 0.4
   scene.fog.color.setHSL(0.62, 0.4, 0.02 + bright * 0.16)
   if (stars) stars.material.opacity = Math.max(0, (0.45 - bright) * 2)
+  if (motes) { // they drift with the citizen, wandering gently
+    motes.position.set(Math.floor(fx / 8) * 8, 0, Math.floor(fz / 8) * 8)
+    motes.rotation.y = now / 40000
+    const nighty = bright < 0.35
+    motes.material.color.set(nighty ? 0xffc966 : 0xfff4c0) // fireflies after dark
+    motes.material.size = nighty ? 0.075 : 0.05
+    motes.material.opacity = nighty ? 0.85 : 0.4
+  }
   renderer.setClearColor(scene.fog.color)
   // fires flicker; water breathes; canopies sway
   for (const [, pl] of fireLights) pl.intensity = 1.2 + Math.sin(now / 90 + pl.position.x) * 0.35 + (1 - bright) * 0.8
@@ -1150,23 +1190,34 @@ function animate(now) {
   const bAge = (now - burstAt) / 420
   if (bAge < 1) { tapBurst.material.opacity = 0.9 * (1 - bAge); tapBurst.scale.setScalar(1 + bAge * 3.2) }
   else tapBurst.material.opacity = 0
-  // the pack: item chips, refreshed when the inventory truly changes
+  // the pack: every slot, always visible, and it answers the finger
   if (me) try {
-    const stacks = {}
-    for (const sl of me.inventory ?? []) if (sl) stacks[sl.item] = (stacks[sl.item] ?? 0) + (sl.qty ?? 1)
-    const sig2 = JSON.stringify(stacks) + '|' + (me.gold ?? 0)
-    const gained = lastInvSig && sig2.length > lastInvSig.length
+    const sig2 = JSON.stringify(me.inventory) + '|' + (me.gold ?? 0) + '|' + selSlot
     if (sig2 !== lastInvSig) {
+      const gained = lastInvSig && sig2.length > lastInvSig.length
       lastInvSig = sig2
-      if (gained) { snd('pluck') }
-      // the same item art as /play: one hand draws for both windows
-      const slot2 = (inner, label) => '<span style="background:rgba(20,17,12,.85);border:2px solid #6b5d43;' +
-        'width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center;position:relative;border-radius:4px">' +
-        inner + (label ? '<span style="position:absolute;bottom:0;right:2px;color:#ffcc33;font-size:10px;font-weight:bold;text-shadow:0 1px 2px #000">' + label + '</span>' : '') + '</span>'
-      const chips = Object.entries(stacks).map(([it, q]) =>
-        slot2('<img src="' + itemSprite(it).toDataURL() + '" style="width:30px;height:30px;image-rendering:pixelated">', q > 1 ? q : '')).join('')
-      document.getElementById('inv3d').innerHTML = (chips || '<span style="color:#5c564a;font-size:11px;background:rgba(20,17,12,.7);padding:4px 10px;border-radius:3px">pack: empty</span>') +
-        ((me.gold ?? 0) > 0 ? slot2('<img src="' + itemSprite('gold-coin').toDataURL() + '" style="width:28px;height:28px;image-rendering:pixelated">', me.gold) : '')
+      if (gained) snd('pluck')
+      let html2 = ''
+      for (let i2 = 0; i2 < 28; i2++) {
+        const sl = me.inventory?.[i2]
+        const sel = i2 === selSlot
+        html2 += '<span data-slot="' + i2 + '" style="background:rgba(20,17,12,.85);border:2px solid ' + (sel ? '#ffcc33' : '#6b5d43') + ';' +
+          'width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;position:relative;border-radius:4px;cursor:pointer">' +
+          (sl ? '<img src="' + itemSprite(sl.item).toDataURL() + '" style="width:28px;height:28px;image-rendering:pixelated;pointer-events:none">' : '') +
+          (sl && (sl.qty ?? 1) > 1 ? '<span style="position:absolute;bottom:0;right:2px;color:#ffcc33;font-size:10px;font-weight:bold;pointer-events:none">' + sl.qty + '</span>' : '') +
+          '</span>'
+      }
+      document.getElementById('inv3d').innerHTML = html2
+      const bar = document.getElementById('invact')
+      const sl3 = selSlot >= 0 ? me.inventory?.[selSlot] : null
+      if (sl3) {
+        const EQ = ['bronze-sword', 'bronze-hatchet', 'bronze-pickaxe', 'bronze-helm', 'bronze-plate', 'wooden-bow', 'star-sword', 'star-helm', 'star-plate', 'old-chain']
+        const btn = (label3, act3) => '<button data-act="' + act3 + '" style="background:#494034;color:#ffcc33;border:2px solid #6b5d43;padding:7px 16px;font-family:Verdana;font-size:12px;cursor:pointer">' + label3 + '</button>'
+        bar.innerHTML = (sl3.item === 'cooked-fish' ? btn('eat', 'eat') : '')
+          + (EQ.includes(sl3.item) ? btn('wield', 'wield') : '')
+          + btn('drop', 'drop')
+        bar.style.display = 'flex'
+      } else { bar.style.display = 'none' }
     }
   } catch (e) { document.getElementById('inv3d').textContent = '[pack error] ' + e.message }
   statEl.textContent = 'tick ' + s.tick + ' · ' + Object.keys(s.players).length + ' citizens · '
