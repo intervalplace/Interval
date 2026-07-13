@@ -28,6 +28,14 @@ if (!URL_) { console.log('usage: node join.mjs https://host [name] [--chop]'); p
 // own cache if it does not. A node that needs the pillar to be BORN
 // is sovereign only between restarts.
 const host = new URL(URL_).hostname
+// a loopback door is only real if the pillar itself is local (our tests);
+// otherwise it is proxy poisoning, and dialing it calls our own empty room
+const LOCAL_OK = ['localhost', '127.0.0.1', '::1'].includes(host)
+const usableDoor = (a) => LOCAL_OK || !(/\/ip4\/127\./.test(a) || /\/ip6\/::1\//.test(a))
+
+// a witness must not die of a wrong number: rude sockets are logged, not fatal
+process.on('uncaughtException', (e) => console.log('[net] a connection died rudely (' + (e.code ?? e.message) + '); the interval continues'))
+process.on('unhandledRejection', (e) => console.log('[net] a promise died rudely (' + (e?.code ?? e?.message ?? e) + '); the interval continues'))
 fs.mkdirSync('identities', { recursive: true })
 const G_CACHE = `identities/genesis-${host}.json`
 const P_BOOK = `identities/peers-${host}.json`
@@ -69,8 +77,9 @@ console.log('[join] listening for peers on tcp/' + node.listenPort() + (P2P_PORT
 
 // the peer book: every door we ever opened, remembered on disk
 let book = []
-try { book = JSON.parse(fs.readFileSync(P_BOOK, 'utf8')) } catch {}
+try { book = JSON.parse(fs.readFileSync(P_BOOK, 'utf8')).filter(usableDoor) } catch {}
 const remember = (a) => {
+  if (!usableDoor(a)) return
   if (!book.includes(a)) { book.push(a); book = book.slice(-20); fs.writeFileSync(P_BOOK, JSON.stringify(book)) }
 }
 let pillarUp = true
@@ -98,7 +107,7 @@ async function meshUp() {
     const r = await fetch(URL_ + '/api/peers').then(x => x.json())
     for (const a of r.peers ?? []) {
       const pid2 = /\/p2p\/(.+)$/.exec(a)?.[1]
-      if (!pid2 || dialedPeers.has(pid2)) continue
+      if (!pid2 || dialedPeers.has(pid2) || !usableDoor(a)) continue
       dialedPeers.add(pid2)
       try {
         await node.dial(multiaddr(a))
