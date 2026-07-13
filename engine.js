@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.37';
+const SPEC_VERSION = '0.38';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -167,6 +167,25 @@ function beaconValue(genesisSeed, tick) {
     Buffer.from(genesisSeed),
     Buffer.from(String(tick)),
   ]));
+}
+
+// v0.38: the lots are drawn from the citizens' own deeds. The old beacon
+// was a pure function of public constants: every roll for all eternity
+// was computable at genesis. The lots were face-up. Now each tick's
+// beacon folds in the digest of the inputs actually applied, then walks
+// a sequential hash chain too long to outrun inside a tick. Predicting
+// tomorrow's roll requires knowing today's deeds first, and your own
+// deed reshuffles the very lots you were trying to read. Verification
+// is recomputation, which is what a witness already does all day.
+const LOTS_N = 20000; // sequential hashes per tick: the delay
+function inputsDigest(inputs) {
+  const sigs = inputs.map((i) => i.sig ?? '').sort();
+  return sha256(Buffer.from('deeds' + JSON.stringify(sigs)));
+}
+function delayChain(prevBeacon, digest) {
+  let h = sha256(Buffer.concat([prevBeacon, digest]));
+  for (let i = 1; i < LOTS_N; i++) h = sha256(h);
+  return h;
 }
 
 function roll(beacon, playerId, tag) {
@@ -414,9 +433,13 @@ function validInput(state, input) {
 
 // ---------- the transition function ----------
 
-function nextState(state, inputs, beacon) {
+function nextState(state, inputs, _legacyBeacon) {
   const s = JSON.parse(JSON.stringify(state)); // pure: never mutate caller's state
   s.tick = state.tick + 1;
+  // the beacon rides IN the state now (v0.38). A pre-0.38 state migrates
+  // itself: seeded once from the old formula, then history takes over.
+  if (!s.beacon) s.beacon = beaconValue(state.genesis.genesisSeed, state.tick).toString('hex');
+  const beacon = Buffer.from(s.beacon, 'hex');
 
   // mob respawns (spec §3.3): processed at tick start
   for (const m of Object.values(s.mobs)) {
@@ -837,6 +860,8 @@ function nextState(state, inputs, beacon) {
     }
   }
 
+  // tomorrow's lots, drawn from today's deeds (spec 7, v0.38)
+  s.beacon = delayChain(beacon, inputsDigest(inputs)).toString('hex');
   return s;
 }
 

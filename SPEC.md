@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.37 ("The Constitution")
+# Interval: Protocol Specification v0.38 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -618,16 +618,42 @@ one message per tick per key: the interval applies to speech too.
 Clients may mute any key locally. The world does not remember what was
 said; only who said it.
 
-## 7. Verifiable randomness
+## 7. Verifiable randomness: the drawing of lots (v0.38)
 
-Each tick has a **beacon value** `B(tick)`: 32 bytes agreed by the
-network (v0.2 reference: `SHA-256("beacon" || genesisSeed || tick)`;
-production: a distributed randomness beacon such as drand).
+Each tick carries a **beacon** in the state itself: 32 bytes drawn
+from the world's own history. The old formula
+(`SHA-256("beacon" || genesisSeed || tick)`) was a pure function of
+public constants: every roll for all eternity was computable at
+genesis. The lots were dealt face-up. v0.38 redraws them from the one
+thing nobody controls alone: the citizens' deeds.
 
 ```
-roll(B, tick, playerId, tag) =
-  first byte of SHA-256( B(tick) || playerId || tag )
+beacon(0)   = SHA-256("beacon" || genesisSeed || tick0)   (migration seed)
+deeds(T)    = SHA-256("deeds" || sorted signatures of inputs applied at T)
+beacon(T+1) = SHA-256^N( beacon(T) || deeds(T) ),  N = 20,000
+
+roll(beacon(T), playerId, tag) =
+  first byte of SHA-256( beacon(T) || playerId || tag )
 ```
+
+Properties, honestly stated:
+
+- **Deterministic & replayable.** The beacon is part of the state; the
+  same genesis and input log always reproduce it. Verification is
+  recomputation, which is what a witness does all day anyway.
+- **Unpredictable while it matters.** Tomorrow's lots depend on today's
+  deeds, then walk N sequential hashes (~65ms on commodity hardware):
+  by the time anyone could know them, the inputs that will be judged by
+  them are already committed (the tick allocator stamps ahead).
+- **Acting reshuffles the draw.** Your attack is itself an input to the
+  digest that seeds the roll that judges it. You cannot read the lots
+  and then act, because acting redraws the lots.
+- **Residual bias, bounded.** A lone actor on a quiet night can grind at
+  most one bit per tick (submit or withhold their own deed) and must
+  still outrun the chain to see the result before committing. On a
+  quiet night with no deeds at all the chain advances predictably: but
+  the only rolls worth predicting involve acting, and acting ends the
+  quiet. The bias buys nothing it doesn't immediately destroy.
 
 No client-side randomness exists anywhere in the protocol.
 
