@@ -426,7 +426,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b71'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b72'  // stamp: if your screen says an older build, hard-refresh
 const send = a => {
   if (ws.readyState !== 1) return
   if (ownKey && a.do === 'chat') { signChat(a.text); return }
@@ -530,6 +530,37 @@ const MOB_LEVEL = { goblin: 2, wolf: 5, troll: 9, bear: 7 } // derived from thei
 const splats = []     // { x, y, amount, at } damage made visible
 const effects = []    // { kind, x, y, at } rites and works made visible
 const layerArr = []   // reused render layer (perf)
+function flashClick(tx, ty, isAct) {
+  effects.push({ kind: 'click', x: tx, y: ty, act: isAct, at: performance.now() })
+}
+// the goal marker: pulsing corner brackets on wherever the citizen is headed.
+// Yellow means walking; ember means about to ACT. No more mystery strolls.
+function drawGoalMarker(s, tNow) {
+  if (!intent) return
+  let gx = null, gy = null, isAct = true
+  if (intent.kind === 'walk') { gx = intent.x; gy = intent.y; isAct = false }
+  else if (intent.kind === 'pickup') { const g2 = s.ground[intent.id]; if (g2) { gx = g2.x; gy = g2.y } }
+  else if (intent.kind === 'attack' || intent.kind === 'meet') {
+    const e2 = s.mobs[intent.id] ?? s.players[intent.id]
+    if (e2) {
+      const o2 = (s.mobs[intent.id] ? prevState?.mobs?.[intent.id] : prevState?.players?.[intent.id])
+      gx = o2 ? o2.x + (e2.x - o2.x) * tNow : e2.x
+      gy = o2 ? o2.y + (e2.y - o2.y) * tNow : e2.y
+    }
+  } else { const n2 = s.nodes[intent.id]; if (n2) { gx = n2.x; gy = n2.y } }
+  if (gx === null) return
+  const X = px(gx), Y = py(gy)
+  const pulse = 2 + Math.sin(performance.now() / 260) * 1.4
+  const L2 = 9, off = -1 - pulse
+  cx.strokeStyle = isAct ? 'rgba(232,110,58,.9)' : 'rgba(255,232,58,.85)'
+  cx.lineWidth = 2.4
+  cx.beginPath()
+  cx.moveTo(X + off, Y + off + L2); cx.lineTo(X + off, Y + off); cx.lineTo(X + off + L2, Y + off)
+  cx.moveTo(X + TILE - off - L2, Y + off); cx.lineTo(X + TILE - off, Y + off); cx.lineTo(X + TILE - off, Y + off + L2)
+  cx.moveTo(X + TILE - off, Y + TILE - off - L2); cx.lineTo(X + TILE - off, Y + TILE - off); cx.lineTo(X + TILE - off - L2, Y + TILE - off)
+  cx.moveTo(X + off + L2, Y + TILE - off); cx.lineTo(X + off, Y + TILE - off); cx.lineTo(X + off, Y + TILE - off - L2)
+  cx.stroke()
+}
 const miniCv = document.createElement('canvas')
 let miniReady = false
 function buildMini() {
@@ -1709,6 +1740,7 @@ function drawScene(now) {
     }})
   }
 
+  drawGoalMarker(s, t)
   layer.sort((a, b) => a.z - b.z)
   for (const item of layer) item.draw()
 
@@ -1734,13 +1766,25 @@ function drawScene(now) {
   // rites: brief particle truths
   for (let i = effects.length - 1; i >= 0; i--) {
     const ef = effects[i]
-    const life = ef.kind === 'arrowshot' ? 380 : 800
+    const life = ef.kind === 'arrowshot' ? 380 : ef.kind === 'click' ? 420 : 800
     const age = now - ef.at
     if (age > life) { effects.splice(i, 1); continue }
     const p2 = age / life
     const EX = px(ef.x) + 20, EY = py(ef.y) + 20
     cx.globalAlpha = 1 - p2
-    if (ef.kind === 'bury') {
+    if (ef.kind === 'click') {
+      const CX2 = px(ef.x) + 20, CY2 = py(ef.y) + 20
+      const sh = 14 * (1 - p2)
+      cx.strokeStyle = ef.act ? 'rgba(232,110,58,.95)' : 'rgba(255,232,58,.9)'
+      cx.lineWidth = 2.6
+      cx.beginPath()
+      for (const [dx2, dy2] of [[-1,-1],[1,-1],[1,1],[-1,1]]) {
+        cx.moveTo(CX2 + dx2 * sh, CY2 + dy2 * (sh - 5))
+        cx.lineTo(CX2 + dx2 * sh, CY2 + dy2 * sh)
+        cx.lineTo(CX2 + dx2 * (sh - 5), CY2 + dy2 * sh)
+      }
+      cx.stroke()
+    } else if (ef.kind === 'bury') {
       cx.fillStyle = '#e8e4d0'
       for (let k = 0; k < 5; k++) cx.fillRect(EX - 10 + k * 5 + Math.sin(p2 * 6 + k) * 2, EY + 8 - p2 * 22 - k * 2, 1.8, 1.8)
     } else if (ef.kind === 'invoke') {
@@ -2210,6 +2254,7 @@ cv.addEventListener('click', (e) => {
   }
   if (best?.kind === 'mob') {
     const { id, m } = best
+    flashClick(m.x, m.y, true)
     if (me.action?.mobId === id) return                        // already fighting it: silent
     if (adj(m)) { send({ do: 'attack', mobId: id }); feed('You attack the ' + m.type + '!') }
     else intent = { kind: 'attack', id }                       // hunt it down, then engage
@@ -2217,6 +2262,7 @@ cv.addEventListener('click', (e) => {
   }
   if (best?.kind === 'citizen') {
     const { id: pid, p } = best
+    flashClick(p.x, p.y, true)
     if (inWildsC(me.x, me.y) && inWildsC(p.x, p.y)) {
       const nm = p.name ?? pid.slice(0, 6)
       chooseAction([
@@ -2237,6 +2283,7 @@ cv.addEventListener('click', (e) => {
 
   for (const [id, n] of Object.entries(world.nodes))
     if (n.type === 'plot' && n.x === x && n.y === y) {
+      flashClick(x, y, true)
       const el2 = world.tick - (n.plantedAt || 0)
       if (!n.plantedAt) {
         const sSlot = me.inventory.findIndex(sl => sl?.item === 'seeds')
@@ -2419,12 +2466,14 @@ cv.addEventListener('click', (e) => {
       const msg = { 'tree': 'You swing your axe at the tree.',
                     'rock': 'You take a swing at the rock.',
                     'fishing-spot': 'You cast your line\u2026' }[n.type] ?? 'You begin gathering.'
+      flashClick(n.x, n.y, true)
       if (adj(n)) { send({ do: 'gather', nodeId: id }); feed(msg) }
       else intent = { kind: 'gather', id, msg }                // one click does it all
       return
     }
 
   if (blockedAt(world, x, y)) return
+  flashClick(x, y, false)
   intent = { kind: 'walk', x, y }
   if (me.action) send({ do: 'stop' })
 })
