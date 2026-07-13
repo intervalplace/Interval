@@ -176,6 +176,7 @@ const server = http.createServer((req, res) => {
     }
     const NC = { 'Cache-Control': 'no-cache' } // stale windows caused ghost bugs
     if (path === '/play') { res.writeHead(200, { 'Content-Type': 'text/html', ...NC }); return res.end(fs.readFileSync(new URL('./window-web.html', import.meta.url))) }
+    if (path === '/deluxe') { res.writeHead(200, { 'Content-Type': 'text/html', ...NC }); return res.end(fs.readFileSync(new URL('./window-3d.html', import.meta.url))) }
     if (path.startsWith('/site/')) {
       const f = path.slice(6).replace(/[^a-z0-9.-]/g, '')
       const ext = f.split('.').pop()
