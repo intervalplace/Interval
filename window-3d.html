@@ -36,6 +36,7 @@
 <script>
 const feedEl = document.getElementById('feed'), statEl = document.getElementById('stat')
 const feed = (t) => { feedEl.textContent = t; setTimeout(() => { if (feedEl.textContent === t) feedEl.textContent = '' }, 4000) }
+addEventListener('error', (e) => { feedEl.textContent = '[err] ' + (e.message ?? e.type) })
 
 // ---- the same wire AND the same key as /play: one citizen, two windows.
 // Walk here; watch yourself move in pixels over there. That is the proof.
@@ -333,7 +334,8 @@ function beingMesh(kind, id, thing) {
   const g = new THREE.Group()
   if (kind === 'citizen') {
     const hv = parseInt(id.slice(0, 8), 16)
-    const tunic = new THREE.Color().setHSL((hv % 360) / 360, 0.5, 0.4)
+    // an adventurer's palette: worn dyes, not resort pastels
+    const tunic = new THREE.Color().setHSL((hv % 360) / 360, 0.34, 0.30)
     const skinC = [0xd9a877, 0xc98a5e, 0x8a5a3a, 0xe8c9a0][hv % 4]
     const hairC = [0x2a2018, 0x5c4023, 0x8a6a3a, 0x1a1a1a, 0x9e3a1a][(hv >> 4) % 5]
     const M = (c, r = 0.75) => new THREE.MeshStandardMaterial({ color: c, roughness: r })
@@ -376,6 +378,17 @@ function beingMesh(kind, id, thing) {
     const footL = cast(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.05, 0.16), M(0x2a1c10)))
     footL.position.set(0, -0.38, 0.03); legL.userData.joint.add(footL)
     const footR = footL.clone(); legR.userData.joint.add(footR)
+    // the road shows on the body: pauldrons, bracers, a weathered cloak
+    for (const [px3, arm2] of [[-0.2, armL], [0.2, armR]]) {
+      const pd = cast(new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.6), M(0x3a2e20, 0.85)))
+      pd.position.set(px3, 0.88, 0); g.add(pd)
+      const brace = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.12, 8), M(0x4a3520, 0.9)))
+      brace.position.y = -0.08; arm2.userData.joint.add(brace)
+    }
+    const cloak = cast(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.5, 0.03),
+      M(new THREE.Color().setHSL(((hv >> 8) % 360) / 360, 0.25, 0.16), 1)))
+    cloak.position.set(0, 0.6, -0.13); cloak.rotation.x = 0.08
+    g.add(cloak); g.userData.cloak = cloak
     // the hand knows its weapon
     const hand = armR.userData.joint
     const sword = cast(new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.4, 0.018), M(0xc9c2b2, 0.25)))
@@ -393,27 +406,57 @@ function beingMesh(kind, id, thing) {
     const cast = (m) => { m.castShadow = true; return m }
     const biped = thing.type === 'goblin' || thing.type === 'troll'
     if (biped) {
-      const body = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.6, sz * 0.7, sz * 0.4), M(col)))
-      body.position.y = sz * 0.6; g.add(body)
-      const head = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.42, sz * 0.4, sz * 0.4), M(col)))
-      head.position.y = sz * 1.12; g.add(head)
-      const earL = cast(new THREE.Mesh(new THREE.ConeGeometry(sz * 0.08, sz * 0.25, 4), M(col)))
-      earL.position.set(-sz * 0.24, sz * 1.32, 0); earL.rotation.z = 0.5; g.add(earL)
-      const earR = earL.clone(); earR.position.x = sz * 0.24; earR.rotation.z = -0.5; g.add(earR)
+      const troll = thing.type === 'troll'
+      const dcol = new THREE.Color(col).multiplyScalar(troll ? 0.75 : 0.85) // darker hide
+      const hunch = new THREE.Group(); hunch.rotation.x = 0.32; g.add(hunch) // it LOOMS
+      const body = cast(new THREE.Mesh(new THREE.SphereGeometry(sz * 0.42, 10, 8), new THREE.MeshStandardMaterial({ color: dcol, roughness: 1 })))
+      body.position.y = sz * 0.62; body.scale.set(1, 1.2, 0.85); hunch.add(body)
+      const head = cast(new THREE.Mesh(new THREE.SphereGeometry(sz * 0.26, 10, 8), new THREE.MeshStandardMaterial({ color: dcol, roughness: 1 })))
+      head.position.set(0, sz * 1.12, sz * 0.16); head.scale.set(1, 0.9, 1.05); hunch.add(head)
+      const jaw = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.34, sz * 0.12, sz * 0.22), new THREE.MeshStandardMaterial({ color: dcol, roughness: 1 })))
+      jaw.position.set(0, sz * 1.0, sz * 0.26); hunch.add(jaw) // the underbite
+      for (const fx2 of [-0.08, 0.08]) { // tusks
+        const tusk = cast(new THREE.Mesh(new THREE.ConeGeometry(sz * 0.03, sz * 0.12, 4), new THREE.MeshStandardMaterial({ color: 0xd9d3c0 })))
+        tusk.position.set(sz * fx2 * 2, sz * 1.08, sz * 0.34); hunch.add(tusk)
+      }
+      const earL = cast(new THREE.Mesh(new THREE.ConeGeometry(sz * 0.07, sz * 0.3, 4), new THREE.MeshStandardMaterial({ color: dcol })))
+      earL.position.set(-sz * 0.26, sz * 1.28, 0); earL.rotation.z = 0.9; hunch.add(earL)
+      const earR = earL.clone(); earR.position.x = sz * 0.26; earR.rotation.z = -0.9; hunch.add(earR)
+      // long arms, knuckles toward the ground
       for (const sx2 of [-1, 1]) {
-        const leg = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.16, sz * 0.3, sz * 0.16), M(col)))
+        const arm2 = cast(new THREE.Mesh(new THREE.CylinderGeometry(sz * 0.09, sz * 0.12, sz * 0.75, 6), new THREE.MeshStandardMaterial({ color: dcol, roughness: 1 })))
+        arm2.position.set(sx2 * sz * 0.44, sz * 0.5, sz * 0.1); arm2.rotation.z = sx2 * 0.18; arm2.rotation.x = -0.15; hunch.add(arm2)
+        const fist = cast(new THREE.Mesh(new THREE.SphereGeometry(sz * 0.13, 8, 6), new THREE.MeshStandardMaterial({ color: dcol })))
+        fist.position.set(sx2 * sz * 0.5, sz * 0.12, sz * 0.18); hunch.add(fist)
+      }
+      if (troll) for (let sp2 = 0; sp2 < 4; sp2++) { // a ridge of back spikes
+        const spike = cast(new THREE.Mesh(new THREE.ConeGeometry(sz * 0.06, sz * 0.22, 4), new THREE.MeshStandardMaterial({ color: 0x33402e })))
+        spike.position.set(0, sz * (0.5 + sp2 * 0.22), -sz * 0.36 + sp2 * sz * 0.02)
+        spike.rotation.x = -0.7; hunch.add(spike)
+      }
+      for (const sx2 of [-1, 1]) {
+        const leg = cast(new THREE.Mesh(new THREE.CylinderGeometry(sz * 0.11, sz * 0.13, sz * 0.3, 6), new THREE.MeshStandardMaterial({ color: dcol, roughness: 1 })))
         leg.position.set(sx2 * sz * 0.18, sz * 0.15, 0); g.add(leg)
       }
-      const eyeL = new THREE.Mesh(new THREE.SphereGeometry(sz * 0.05), new THREE.MeshBasicMaterial({ color: thing.type === 'troll' ? 0xff5533 : 0x10100c }))
-      eyeL.position.set(-sz * 0.1, sz * 1.14, sz * 0.21); g.add(eyeL)
-      const eyeR = eyeL.clone(); eyeR.position.x = sz * 0.1; g.add(eyeR)
+      const eyeL = new THREE.Mesh(new THREE.SphereGeometry(sz * 0.05), new THREE.MeshBasicMaterial({ color: troll ? 0xff4422 : 0xd9c93a }))
+      eyeL.position.set(-sz * 0.1, sz * 1.16, sz * 0.36); hunch.add(eyeL)
+      const eyeR = eyeL.clone(); eyeR.position.x = sz * 0.1; hunch.add(eyeR)
+      g.userData.hunch = hunch
     } else { // quadrupeds: wolf, bear
       const body = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.9, sz * 0.45, sz * 0.4), M(col)))
       body.position.y = sz * 0.5; g.add(body); g.userData.qbody = body
       const head = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.34, sz * 0.32, sz * 0.3), M(col)))
       head.position.set(sz * 0.55, sz * 0.62, 0); g.add(head)
-      const snout = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.18, sz * 0.14, sz * 0.16), M(col)))
-      snout.position.set(sz * 0.74, sz * 0.56, 0); g.add(snout)
+      const snout = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.2, sz * 0.13, sz * 0.15), M(col)))
+      snout.position.set(sz * 0.74, sz * 0.54, 0); g.add(snout)
+      for (const fz of [-0.05, 0.05]) { // fangs
+        const fang = new THREE.Mesh(new THREE.ConeGeometry(sz * 0.02, sz * 0.07, 4), new THREE.MeshBasicMaterial({ color: 0xe8e4d0 }))
+        fang.position.set(sz * 0.8, sz * 0.45, sz * fz); fang.rotation.x = Math.PI; g.add(fang)
+      }
+      if (thing.type === 'bear') { // the hump: mass reads as menace
+        const hump = cast(new THREE.Mesh(new THREE.SphereGeometry(sz * 0.3, 8, 6), M(col)))
+        hump.position.set(-sz * 0.15, sz * 0.72, 0); g.add(hump)
+      }
       const earL = cast(new THREE.Mesh(new THREE.ConeGeometry(sz * 0.06, sz * 0.15, 4), M(col)))
       earL.position.set(sz * 0.48, sz * 0.82, -sz * 0.1); g.add(earL)
       const earR = earL.clone(); earR.position.z = sz * 0.1; g.add(earR)
@@ -464,6 +507,8 @@ function syncBeings(s, prev) {
         m.userData.arms[1].rotation.x = fighting ? (-1.7 + Math.abs(Math.sin(performance.now() / 300)) * 1.2) : (moving ? ph * 0.5 : 0.06)
         m.userData.arms[0].userData.joint.rotation.x = moving ? -0.3 : -0.12
         m.userData.arms[1].userData.joint.rotation.x = fighting ? -0.5 : (moving ? -0.3 : -0.12)
+        m.userData.torso.scale.y = 1 + Math.sin(performance.now() / 900 + m.position.x) * 0.015 // breath
+        if (m.userData.cloak) m.userData.cloak.rotation.x = 0.08 + (moving ? 0.28 + ph * 0.05 : Math.sin(performance.now() / 1100) * 0.03)
         const wep = thing.equipment?.weapon?.item
         m.userData.sword.visible = wep === 'bronze-sword' || wep === 'star-sword'
         m.userData.sword.material.color.set(wep === 'star-sword' ? 0x8ce0ff : 0xc9c2b2)
@@ -480,6 +525,7 @@ function syncBeings(s, prev) {
       }
       if (m.userData.legs4) for (let li = 0; li < 4; li++)
         m.userData.legs4[li].rotation.x = moving ? Math.sin(performance.now() / 130 + li * Math.PI / 2) * 0.6 : 0
+      if (m.userData.hunch) m.userData.hunch.rotation.x = 0.32 + Math.sin(performance.now() / 700 + m.position.x) * 0.04 // it breathes
       if (m.userData.hpbar) {
         const maxHp2 = 10 + Math.floor((thing.skills?.hitpoints ?? 0) / 1154)
         const fr = thing.hp / Math.max(1, Math.min(99, effHp(thing)))
@@ -519,6 +565,10 @@ ws.onmessage = async (ev) => {
   if (m.type === 'state') {
     prevWorld = world; world = m.state
     clock = { tick: m.state.tick, at: performance.now() }
+    // the first spawn was stamped tick 1 into a world at tick twenty
+    // thousand: born stale, rejected, invisible. Ask again each state
+    // until the census answers: exactly like the reference window.
+    if (ownKey && !m.state.players[ownKey.pub] && m.state.tick % 3 === 0) send({ do: 'spawn' })
     if (!groundBuilt) {
       W = m.state.genesis.worldW; H = m.state.genesis.worldH
       buildGround()
@@ -626,7 +676,9 @@ function animate(now) {
   const bAge = (now - burstAt) / 420
   if (bAge < 1) { tapBurst.material.opacity = 0.9 * (1 - bAge); tapBurst.scale.setScalar(1 + bAge * 3.2) }
   else tapBurst.material.opacity = 0
-  statEl.textContent = 'tick ' + s.tick + ' · ' + Object.keys(s.players).length + ' citizens · deluxe window (three.js) · same world as /play'
+  statEl.textContent = 'tick ' + s.tick + ' · ' + Object.keys(s.players).length + ' citizens · '
+    + (me ? 'you are ' + (me.name ?? 'unnamed') + ' · ' : ownKey ? 'spawning you… · ' : 'spectating · ')
+    + 'same world as /play'
   renderer.render(scene, camera)
 }
 requestAnimationFrame(animate)
