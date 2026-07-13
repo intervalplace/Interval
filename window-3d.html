@@ -1156,14 +1156,6 @@ function animate(now) {
   moon.intensity = 0.15 + (1 - bright) * 0.4
   scene.fog.color.setHSL(0.62, 0.4, 0.02 + bright * 0.16)
   if (stars) stars.material.opacity = Math.max(0, (0.45 - bright) * 2)
-  if (motes) { // they drift with the citizen, wandering gently
-    motes.position.set(Math.floor(fx / 8) * 8, 0, Math.floor(fz / 8) * 8)
-    motes.rotation.y = now / 40000
-    const nighty = bright < 0.35
-    motes.material.color.set(nighty ? 0xffc966 : 0xfff4c0) // fireflies after dark
-    motes.material.size = nighty ? 0.075 : 0.05
-    motes.material.opacity = nighty ? 0.85 : 0.4
-  }
   renderer.setClearColor(scene.fog.color)
   // fires flicker; water breathes; canopies sway
   for (const [, pl] of fireLights) pl.intensity = 1.2 + Math.sin(now / 90 + pl.position.x) * 0.35 + (1 - bright) * 0.8
@@ -1185,6 +1177,14 @@ function animate(now) {
   const cy2 = Math.sin(camPitch) * camDist, cr = Math.cos(camPitch) * camDist
   camera.position.lerp(new THREE.Vector3(fx + Math.sin(camAz) * cr, cy2, fz + Math.cos(camAz) * cr), 0.28)
   camera.lookAt(fx, 0.6, fz)
+  if (motes) { // they drift with the citizen, wandering gently
+    motes.position.set(Math.floor(fx / 8) * 8, 0, Math.floor(fz / 8) * 8)
+    motes.rotation.y = now / 40000
+    const nighty = bright < 0.35
+    motes.material.color.set(nighty ? 0xffc966 : 0xfff4c0) // fireflies after dark
+    motes.material.size = nighty ? 0.075 : 0.05
+    motes.material.opacity = nighty ? 0.85 : 0.4
+  }
   goalRing.material.opacity = 0.55 + Math.sin(now / 260) * 0.3
   goalRing.scale.setScalar(1 + Math.sin(now / 260) * 0.08)
   const bAge = (now - burstAt) / 420
