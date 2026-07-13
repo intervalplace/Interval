@@ -147,7 +147,10 @@ const server = http.createServer((req, res) => {
         try {
           const { peerId, port } = JSON.parse(body)
           if (!/^12D3Koo[1-9A-HJ-NP-Za-km-z]+$/.test(peerId ?? '') || !Number.isInteger(port)) { res.writeHead(400); res.end(); return }
-          const ip = (req.socket.remoteAddress ?? '').replace(/^::ffff:/, '')
+          // behind nginx the socket says 127.0.0.1 about everyone: honor the
+          // forwarded header first, or the directory fills with loopback ghosts
+          const fwd = (req.headers['x-forwarded-for'] ?? '').split(',')[0].trim()
+          const ip = (fwd || req.socket.remoteAddress || '').replace(/^::ffff:/, '')
           const fam = ip.includes(':') ? 'ip6' : 'ip4'
           announced.set(peerId, { addr: '/' + fam + '/' + ip + '/tcp/' + port + '/p2p/' + peerId, at: Date.now() })
           res.writeHead(200, { 'Content-Type': 'application/json' })
