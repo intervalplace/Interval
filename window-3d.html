@@ -372,10 +372,13 @@ let charGltf = null, charClips = null
 // pack has medieval knights/rogues/barbarians with Idle/Walk/Run/Attack/
 // Gather-worthy clips: set CLIP_NAMES to match and the crossfader does
 // the rest. The Soldier below is placeholder flesh, not a destiny.
-const CHAR_URL = 'https://threejs.org/examples/models/gltf/Soldier.glb'
+// Xbot: a clean, neutral mannequin: a blank adventurer the key can dye,
+// not a camouflage soldier. Still placeholder flesh; the slot awaits a pack.
+const CHAR_URL = 'https://threejs.org/examples/models/gltf/Xbot.glb'
 const CHAR_SCALE = 0.55
-const CHAR_FACING = Math.PI // this model's sculptor chose -Z as forward
-const CLIP_NAMES = { idle: 'Idle', walk: 'Walk', run: 'Run', fight: 'Run', work: null }
+const CHAR_FACING = 0 // flip to Math.PI if a model moonwalks
+const CLIP_NAMES = { idle: 'idle', walk: 'walk', run: 'run', fight: null, work: null }
+const ARM_BONE = 'mixamorigRightArm' // most humanoid rigs are Mixamo-boned
 try {
   new THREE.GLTFLoader().load(CHAR_URL, (g2) => {
     charGltf = g2.scene
@@ -407,6 +410,7 @@ function beingMesh(kind, id, thing) {
     })
     g.add(body)
     g.userData.rigBody = body
+    g.userData.armBone = body.getObjectByName(ARM_BONE) ?? null
     const mx = new THREE.AnimationMixer(body)
     const acts = {}
     for (const [k2, c2] of Object.entries(charClips)) if (c2) acts[k2] = mx.clipAction(c2)
@@ -603,13 +607,17 @@ function syncBeings(s, prev) {
           if (from2) from2.crossFadeTo(to2, 0.25, false)
           m.userData.mode = want2
         }
-        // procedural overlays until the pack brings true clips:
-        const rb = m.userData.rigBody
-        if (rb) {
-          if (working2) rb.rotation.x = 0.12 + Math.max(0, Math.sin(performance.now() / 420)) * 0.3 // the chop rocks the spine
-          else if (fighting2 && !m.userData.acts.fight) rb.rotation.x = Math.max(0, Math.sin(performance.now() / 300)) * 0.25 // the lunge
-          else rb.rotation.x = 0
-        }
+        // procedural overlays, applied to the ARM BONE after the mixer:
+        // rocking the whole root read as a headbutt. The arm chops; the
+        // spine merely agrees with a small lean.
+        const ab = m.userData.armBone, rb = m.userData.rigBody
+        if (ab && working2) {
+          ab.rotation.x = -2.4 + Math.abs(Math.sin(performance.now() / 420)) * 1.7
+          if (rb) rb.rotation.x = 0.06
+        } else if (ab && fighting2 && !m.userData.acts.fight) {
+          ab.rotation.x = -2.2 + Math.abs(Math.sin(performance.now() / 300)) * 1.9
+          if (rb) rb.rotation.x = 0.04
+        } else if (rb) rb.rotation.x = 0
       }
       if (m.userData.arms) {
         const fighting = thing.action?.type === 'attack' || thing.action?.type === 'attackp'
