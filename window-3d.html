@@ -54,6 +54,9 @@ renderer.setSize(innerWidth, innerHeight)
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
+renderer.outputEncoding = THREE.sRGBEncoding
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = 1.05
 document.body.appendChild(renderer.domElement)
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix()
@@ -102,7 +105,7 @@ function terrainOf(x, y) {
 const TERRAIN_COL = { meadow: 0x3d5a23, trail: 0x8a7449, cobble: 0x7a756b, plaza: 0x6e5f3e,
   scree: 0x5d5a52, cave: 0x22202a, wilds: 0x4a3d2e, sea: 0x2a5f7d, mountain: 0x6e6a60, bridge: 0x8a6a3a }
 
-let groundBuilt = false
+let groundBuilt = false, groundMesh = null
 function buildGround() {
   const geo = new THREE.PlaneGeometry(W, H, W, H)
   geo.rotateX(-Math.PI / 2)
@@ -129,6 +132,7 @@ function buildGround() {
   const mesh = new THREE.Mesh(geo, mat)
   mesh.receiveShadow = true
   scene.add(mesh)
+  groundMesh = mesh
   groundBuilt = true
 }
 const wx = (x) => x - W / 2 + 0.5
@@ -140,10 +144,15 @@ function nodeMesh(n) {
   const g = new THREE.Group()
   const std = (c, r = 0.9) => new THREE.MeshStandardMaterial({ color: c, roughness: r })
   if (n.type === 'tree') {
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 0.7, 6), std(0x5c4023))
-    trunk.position.y = 0.35; trunk.castShadow = true; g.add(trunk)
-    const canopy = new THREE.Mesh(new THREE.IcosahedronGeometry(0.48, 1), std(0x3f7d23))
-    canopy.position.y = 0.95; canopy.castShadow = true; canopy.userData.sway = tileHash(n.x, n.y, 2) % 100
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.14, 0.8, 6), std(0x5c4023))
+    trunk.position.y = 0.4; trunk.castShadow = true; g.add(trunk)
+    const canopy = new THREE.Group() // three blobs, like the painter's two-tone crowns
+    const c1 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.44, 1), std(0x3a7020))
+    const c2 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 1), std(0x4a8a2a))
+    const c3 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 1), std(0x2f5c1a))
+    c1.position.set(0, 1.0, 0); c2.position.set(0.24, 1.2, 0.12); c3.position.set(-0.22, 1.15, -0.1)
+    for (const c of [c1, c2, c3]) { c.castShadow = true; canopy.add(c) }
+    canopy.userData.sway = tileHash(n.x, n.y, 2) % 100
     g.add(canopy); g.userData.canopy = canopy
   } else if (n.type === 'rock' || n.type === 'magic-rock') {
     const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.34, 0),
@@ -170,10 +179,15 @@ function nodeMesh(n) {
     g.add(wmesh); waterMeshes.push(wmesh)
   } else if (n.type === 'bank' || n.type === 'store' || n.type === 'house' || n.type === 'anvil' || n.type === 'smith' || n.type === 'well' || n.type === 'guard') {
     const hues = { bank: 0x8a6a3a, store: 0x7a5a8a, house: 0x6e5f3e, anvil: 0x4a4a52, smith: 0x4a4a52, well: 0x7a756b, guard: 0x5c6e3a }
-    const b = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.9, 0.8), std(hues[n.type] ?? 0x6e5f3e))
-    b.position.y = 0.45; b.castShadow = true; g.add(b)
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(0.68, 0.5, 4), std(0x8a3a2a))
-    roof.position.y = 1.12; roof.rotation.y = Math.PI / 4; roof.castShadow = true; g.add(roof)
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.95, 0.85), std(hues[n.type] ?? 0x6e5f3e))
+    b.position.y = 0.475; b.castShadow = true; g.add(b)
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(0.72, 0.55, 4), std(0x8a3a2a))
+    roof.position.y = 1.22; roof.rotation.y = Math.PI / 4; roof.castShadow = true; g.add(roof)
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.4, 0.03), std(0x3a2a16))
+    door.position.set(0, 0.2, 0.44); g.add(door)
+    const win = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.03),
+      new THREE.MeshStandardMaterial({ color: 0x2a2418, emissive: 0xffb84d, emissiveIntensity: 0 }))
+    win.position.set(0.24, 0.55, 0.44); g.add(win); g.userData.win = win // it glows after dark
   } else if (n.type === 'wall') {
     const wl = new THREE.Mesh(new THREE.BoxGeometry(1, 0.8, 0.35), std(0x7a756b))
     wl.position.y = 0.4; wl.castShadow = true; g.add(wl)
@@ -229,24 +243,89 @@ const MOB_LOOK = { goblin: [0x5c8a3a, 0.5], wolf: [0x6b6b62, 0.55], troll: [0x4a
 function beingMesh(kind, id, thing) {
   const g = new THREE.Group()
   if (kind === 'citizen') {
-    const hue = parseInt(id.slice(0, 6), 16) % 360
-    const tunic = new THREE.Color().setHSL(hue / 360, 0.45, 0.42)
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.6, 8), // r128 has no capsules; a cylinder wears the tunic fine
-      new THREE.MeshStandardMaterial({ color: tunic, roughness: 0.8 }))
-    body.position.y = 0.5; body.castShadow = true; g.add(body)
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8),
-      new THREE.MeshStandardMaterial({ color: 0xd9a877, roughness: 0.7 }))
-    head.position.y = 1.0; head.castShadow = true; g.add(head)
+    const hv = parseInt(id.slice(0, 8), 16)
+    const tunic = new THREE.Color().setHSL((hv % 360) / 360, 0.5, 0.4)
+    const skinC = [0xd9a877, 0xc98a5e, 0x8a5a3a, 0xe8c9a0][hv % 4]
+    const hairC = [0x2a2018, 0x5c4023, 0x8a6a3a, 0x1a1a1a, 0x9e3a1a][(hv >> 4) % 5]
+    const M = (c, r = 0.8) => new THREE.MeshStandardMaterial({ color: c, roughness: r })
+    const cast = (m) => { m.castShadow = true; return m }
+    // torso wears the tunic (or the plate); hips wear trousers
+    const torso = cast(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.2), M(tunic)))
+    torso.position.y = 0.62; g.add(torso); g.userData.torso = torso; g.userData.tunic = tunic
+    const hips = cast(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.16, 0.19), M(0x3a3228)))
+    hips.position.y = 0.38; g.add(hips)
+    // head, face, hair (a helm replaces the hair)
+    const head = cast(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, 0.22), M(skinC, 0.6)))
+    head.position.y = 0.95; g.add(head)
+    const hair = cast(new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.1, 0.24), M(hairC)))
+    hair.position.y = 1.07; g.add(hair); g.userData.hair = hair
+    const helm = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.17, 0.14, 8), M(0xa3743a, 0.4)))
+    helm.position.y = 1.07; helm.visible = false; g.add(helm); g.userData.helm = helm
+    // limbs, hinged at shoulder and hip so they can swing
+    const mkLimb = (w2, l2, c) => {
+      const pivot = new THREE.Group()
+      const seg = cast(new THREE.Mesh(new THREE.BoxGeometry(w2, l2, w2), M(c)))
+      seg.position.y = -l2 / 2; pivot.add(seg)
+      return pivot
+    }
+    const armL = mkLimb(0.09, 0.36, skinC), armR = mkLimb(0.09, 0.36, skinC)
+    armL.position.set(-0.24, 0.78, 0); armR.position.set(0.24, 0.78, 0)
+    g.add(armL); g.add(armR); g.userData.arms = [armL, armR]
+    const legL = mkLimb(0.11, 0.32, 0x3a3228), legR = mkLimb(0.11, 0.32, 0x3a3228)
+    legL.position.set(-0.09, 0.32, 0); legR.position.set(0.09, 0.32, 0)
+    g.add(legL); g.add(legR); g.userData.legs = [legL, legR]
+    // the hand knows its weapon
+    const sword = cast(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.42, 0.02), M(0xc9c2b2, 0.3)))
+    sword.position.set(0, -0.5, 0.06); sword.visible = false; armR.add(sword); g.userData.sword = sword
+    const bow = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.02, 6, 12, Math.PI),
+      M(0x8a5a2a)); bow.rotation.z = Math.PI / 2
+    bow.position.set(0, -0.36, 0.05); bow.visible = false; armR.add(bow); g.userData.bow = bow
+    const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.4, 4), M(0x8a8a82, 0.4))
+    chain.position.set(0, -0.55, 0.04); chain.visible = false; armR.add(chain); g.userData.chain = chain
     g.userData.name = makeName('')
     g.add(g.userData.name)
   } else {
     const [col, sz] = MOB_LOOK[thing.type] ?? [0x8a7449, 0.5]
-    const body = new THREE.Mesh(new THREE.SphereGeometry(sz * 0.5, 10, 8),
-      new THREE.MeshStandardMaterial({ color: col, roughness: 0.85 }))
-    body.position.y = sz * 0.5; body.scale.y = 1.15; body.castShadow = true; g.add(body)
-    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.045), new THREE.MeshBasicMaterial({ color: 0x10100c }))
-    eyeL.position.set(-0.1, sz * 0.62, sz * 0.42); g.add(eyeL)
-    const eyeR = eyeL.clone(); eyeR.position.x = 0.1; g.add(eyeR)
+    const M = (c, r = 0.85) => new THREE.MeshStandardMaterial({ color: c, roughness: r })
+    const cast = (m) => { m.castShadow = true; return m }
+    const biped = thing.type === 'goblin' || thing.type === 'troll'
+    if (biped) {
+      const body = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.6, sz * 0.7, sz * 0.4), M(col)))
+      body.position.y = sz * 0.6; g.add(body)
+      const head = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.42, sz * 0.4, sz * 0.4), M(col)))
+      head.position.y = sz * 1.12; g.add(head)
+      const earL = cast(new THREE.Mesh(new THREE.ConeGeometry(sz * 0.08, sz * 0.25, 4), M(col)))
+      earL.position.set(-sz * 0.24, sz * 1.32, 0); earL.rotation.z = 0.5; g.add(earL)
+      const earR = earL.clone(); earR.position.x = sz * 0.24; earR.rotation.z = -0.5; g.add(earR)
+      for (const sx2 of [-1, 1]) {
+        const leg = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.16, sz * 0.3, sz * 0.16), M(col)))
+        leg.position.set(sx2 * sz * 0.18, sz * 0.15, 0); g.add(leg)
+      }
+      const eyeL = new THREE.Mesh(new THREE.SphereGeometry(sz * 0.05), new THREE.MeshBasicMaterial({ color: thing.type === 'troll' ? 0xff5533 : 0x10100c }))
+      eyeL.position.set(-sz * 0.1, sz * 1.14, sz * 0.21); g.add(eyeL)
+      const eyeR = eyeL.clone(); eyeR.position.x = sz * 0.1; g.add(eyeR)
+    } else { // quadrupeds: wolf, bear
+      const body = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.9, sz * 0.45, sz * 0.4), M(col)))
+      body.position.y = sz * 0.5; g.add(body); g.userData.qbody = body
+      const head = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.34, sz * 0.32, sz * 0.3), M(col)))
+      head.position.set(sz * 0.55, sz * 0.62, 0); g.add(head)
+      const snout = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.18, sz * 0.14, sz * 0.16), M(col)))
+      snout.position.set(sz * 0.74, sz * 0.56, 0); g.add(snout)
+      const earL = cast(new THREE.Mesh(new THREE.ConeGeometry(sz * 0.06, sz * 0.15, 4), M(col)))
+      earL.position.set(sz * 0.48, sz * 0.82, -sz * 0.1); g.add(earL)
+      const earR = earL.clone(); earR.position.z = sz * 0.1; g.add(earR)
+      const tail = cast(new THREE.Mesh(new THREE.CylinderGeometry(sz * 0.04, sz * 0.02, sz * 0.35, 4), M(col)))
+      tail.position.set(-sz * 0.5, sz * 0.62, 0); tail.rotation.z = -0.9; g.add(tail)
+      g.userData.legs4 = []
+      for (const [lx, lz] of [[0.3, 0.14], [0.3, -0.14], [-0.3, 0.14], [-0.3, -0.14]]) {
+        const leg = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.12, sz * 0.32, sz * 0.12), M(col)))
+        leg.position.set(sz * lx, sz * 0.16, sz * lz); g.add(leg); g.userData.legs4.push(leg)
+      }
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(sz * 0.04), new THREE.MeshBasicMaterial({ color: 0x10100c }))
+      eye.position.set(sz * 0.66, sz * 0.68, sz * 0.13); g.add(eye)
+      const eye2 = eye.clone(); eye2.position.z = -sz * 0.13; g.add(eye2)
+      g.rotation.y = Math.PI / 2
+    }
   }
   return g
 }
@@ -268,9 +347,29 @@ function syncBeings(s, prev) {
         m.remove(m.userData.name); m.userData.name = makeName(nm); m.add(m.userData.name)
       }
       const moving = thing.x !== ox || thing.y !== oy
-      m.children[0].position.y = 0.5 + (moving ? Math.abs(Math.sin(performance.now() / 130)) * 0.06 : 0)
-      if (thing.action?.type === 'attack' || thing.action?.type === 'attackp') m.rotation.z = Math.sin(performance.now() / 130) * 0.08
-      else m.rotation.z = 0
+      const ph = Math.sin(performance.now() / 140)
+      if (m.userData.arms) {
+        const fighting = thing.action?.type === 'attack' || thing.action?.type === 'attackp'
+        m.userData.legs[0].rotation.x = moving ? ph * 0.7 : 0
+        m.userData.legs[1].rotation.x = moving ? -ph * 0.7 : 0
+        m.userData.arms[0].rotation.x = moving ? -ph * 0.55 : 0
+        m.userData.arms[1].rotation.x = fighting ? (-1.6 + Math.abs(Math.sin(performance.now() / 300)) * 1.1) : (moving ? ph * 0.55 : 0)
+        const wep = thing.equipment?.weapon?.item
+        m.userData.sword.visible = wep === 'bronze-sword' || wep === 'star-sword'
+        m.userData.sword.material.color.set(wep === 'star-sword' ? 0x8ce0ff : 0xc9c2b2)
+        m.userData.bow.visible = wep === 'wooden-bow'
+        m.userData.chain.visible = wep === 'old-chain'
+        const hd = thing.equipment?.head?.item
+        m.userData.helm.visible = !!hd
+        m.userData.helm.material.color.set(hd === 'star-helm' ? 0x5cb8d9 : 0xa3743a)
+        m.userData.hair.visible = !hd
+        const bd = thing.equipment?.body?.item
+        if (bd === 'star-plate') m.userData.torso.material.color.set(0x5cb8d9)
+        else if (bd === 'bronze-plate') m.userData.torso.material.color.set(0xa3743a)
+        else m.userData.torso.material.color.copy(m.userData.tunic)
+      }
+      if (m.userData.legs4) for (let li = 0; li < 4; li++)
+        m.userData.legs4[li].rotation.x = moving ? Math.sin(performance.now() / 130 + li * Math.PI / 2) * 0.6 : 0
       if (thing.hp <= 0) m.visible = false; else m.visible = true
     } else if (thing.hp <= 0) m.visible = false
     else m.visible = true
@@ -301,24 +400,34 @@ ws.onmessage = (ev) => {
 // ---- click to walk: raycast where the reference window does arithmetic ----
 const ray = new THREE.Raycaster(), mouse = new THREE.Vector2()
 let walkGoal = null
-renderer.domElement.addEventListener('click', (e) => {
-  if (!world || !myId || !world.players[myId]) return
-  mouse.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1)
+
+// raycast the GROUND alone: a dozen citizens' nameplates once formed an
+// invisible wall at spawn that swallowed every tap
+const pick = (cxp, cyp) => {
+  if (!world || !myId || !world.players[myId] || !groundMesh) return
+  mouse.set((cxp / innerWidth) * 2 - 1, -(cyp / innerHeight) * 2 + 1)
   ray.setFromCamera(mouse, camera)
-  const hit = ray.intersectObjects(scene.children, true)[0]
+  const hit = ray.intersectObject(groundMesh)[0]
   if (!hit) return
   const gx = Math.round(hit.point.x + W / 2 - 0.5), gy = Math.round(hit.point.z + H / 2 - 0.5)
   walkGoal = { x: gx, y: gy }
   feed('walking to ' + gx + ',' + gy)
-})
+}
+renderer.domElement.addEventListener('click', (e) => pick(e.clientX, e.clientY))
+renderer.domElement.addEventListener('touchend', (e) => {
+  if (e.changedTouches[0]) pick(e.changedTouches[0].clientX, e.changedTouches[0].clientY)
+}, { passive: true })
 setInterval(() => { // one greedy step per tick: the deluxe window keeps its legs simple
   if (!walkGoal || !world || !myId) return
   const me = world.players[myId]; if (!me) return
   if (me.x === walkGoal.x && me.y === walkGoal.y) { walkGoal = null; return }
   const dx = Math.sign(walkGoal.x - me.x), dy = Math.sign(walkGoal.y - me.y)
-  if (Math.abs(walkGoal.x - me.x) >= Math.abs(walkGoal.y - me.y)) send({ do: 'move', dx, dy: 0 })
-  else send({ do: 'move', dx: 0, dy })
+  const stuck = lastStep && lastStep.x === me.x && lastStep.y === me.y
+  const preferX = Math.abs(walkGoal.x - me.x) >= Math.abs(walkGoal.y - me.y)
+  if ((preferX && !stuck) || (stuck && !lastStep.wasX)) { if (dx) send({ do: 'move', dx, dy: 0 }); else send({ do: 'move', dx: 0, dy }); lastStep = { x: me.x, y: me.y, wasX: true } }
+  else { if (dy) send({ do: 'move', dx: 0, dy }); else send({ do: 'move', dx, dy: 0 }); lastStep = { x: me.x, y: me.y, wasX: false } }
 }, TICK_MS)
+let lastStep = null
 
 // ---- the frame: sun, fires, water, bodies, camera ----
 function animate(now) {
@@ -340,6 +449,8 @@ function animate(now) {
   renderer.setClearColor(scene.fog.color)
   // fires flicker; water breathes; canopies sway
   for (const [, pl] of fireLights) pl.intensity = 1.2 + Math.sin(now / 90 + pl.position.x) * 0.35 + (1 - bright) * 0.8
+  const winGlow = Math.max(0, (0.45 - bright) * 2.2)
+  for (const [, m] of nodeMeshes) if (m.userData.win) m.userData.win.material.emissiveIntensity = winGlow
   for (const wm of waterMeshes) wm.position.y = -0.12 + Math.sin(now / 900 + wm.parent.position.x) * 0.02
   for (const [, m] of nodeMeshes) if (m.userData.canopy) m.userData.canopy.rotation.z = Math.sin(now / 1400 + m.userData.canopy.userData.sway) * 0.05
   for (const [, m] of nodeMeshes) if (m.userData.flame) { m.userData.flame.scale.y = 0.9 + Math.sin(now / 80 + m.position.x) * 0.18 }
