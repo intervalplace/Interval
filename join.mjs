@@ -22,9 +22,28 @@ const NAME = (process.argv[3] || '').toLowerCase().replace(/^--.*/, '')
 const CHOP = process.argv.includes('--chop')
 if (!URL_) { console.log('usage: node join.mjs https://host [name] [--chop]'); process.exit(1) }
 
-// 1. fetch the founding record
-const info = await (await fetch(URL_.replace(/\/$/, '') + '/api/genesis')).json()
+// 1. fetch the founding record: from the pillar if it lives, from our
+// own cache if it does not. A node that needs the pillar to be BORN
+// is sovereign only between restarts.
 const host = new URL(URL_).hostname
+fs.mkdirSync('identities', { recursive: true })
+const G_CACHE = `identities/genesis-${host}.json`
+const P_BOOK = `identities/peers-${host}.json`
+let info
+try {
+  const res = await fetch(URL_.replace(/\/$/, '') + '/api/genesis')
+  info = JSON.parse(await res.text()) // an HTML error page is not a founding
+  fs.writeFileSync(G_CACHE, JSON.stringify(info))
+} catch {
+  try {
+    info = JSON.parse(fs.readFileSync(G_CACHE, 'utf8'))
+    console.log('[join] pillar unreachable: rising from the cached founding')
+  } catch {
+    console.log('pillar unreachable, and no cached founding for ' + host + '.')
+    console.log('join once while it lives; after that, the cache and the peer book carry you.')
+    process.exit(1)
+  }
+}
 const proto = /^\d+\.\d+\.\d+\.\d+$/.test(host) ? 'ip4' : 'dns4' // names resolve via dns4
 const pillarAddr = multiaddr(`/${proto}/${host}/tcp/${info.p2pPort}/p2p/${info.peerId}`)
 console.log(`world ${info.genesis.rulesHash.slice(0, 12)}… · joining as a full peer`)
@@ -39,13 +58,26 @@ if (myRulesHash !== info.genesis.rulesHash) {
 }
 
 // 3. your key IS your character: generated and held HERE, never sent
-fs.mkdirSync('identities', { recursive: true })
 const me = E.loadOrCreateIdentity(fs, `identities/join-${NAME || 'wanderer'}.json`)
 console.log(`your key: ${me.playerId.slice(0, 12)}… (identities/join-${NAME || 'wanderer'}.json: guard it)`)
 
 // 4. own node: sync the world, then march in lockstep
 const node = await new IntervalNode({ peerKeyFile: 'identities/peer-' + (NAME || 'wanderer') + '.json', genesis: info.genesis, buildWorld, name: 'join' }).start()
-await node.dial(pillarAddr)
+
+// the peer book: every door we ever opened, remembered on disk
+let book = []
+try { book = JSON.parse(fs.readFileSync(P_BOOK, 'utf8')) } catch {}
+const remember = (a) => {
+  if (!book.includes(a)) { book.push(a); book = book.slice(-20); fs.writeFileSync(P_BOOK, JSON.stringify(book)) }
+}
+let pillarUp = true
+try { await node.dial(pillarAddr) } catch {
+  pillarUp = false
+  console.log('[join] the pillar is not answering; the book remembers ' + book.length + ' door(s)')
+}
+for (const a of book) {
+  try { await node.dial(multiaddr(a)); console.log('[mesh] reconnected from the book: ' + a) } catch {}
+}
 
 // ---- the mesh, not the star: dial every peer the pillar knows, and keep
 // looking. If the pillar dies, the world keeps talking around the hole.
@@ -68,13 +100,17 @@ async function meshUp() {
       try {
         await node.dial(multiaddr(a))
         console.log('[mesh] peer connected: ' + a)
+        remember(a)
       } catch { dialedPeers.delete(pid2) /* try again next sweep */ }
     }
   } catch { /* pillar unreachable: the mesh we already have carries on */ }
 }
 await meshUp()
 setInterval(meshUp, 60000)
-await node.syncFromPeers([pillarAddr], { allowSingle: true })
+// sync from whoever is actually alive: a dead pillar's address in the
+// list must not crash the resurrection it exists to enable
+const syncSources = (pillarUp ? [pillarAddr] : []).concat(book.map(a => multiaddr(a)))
+await node.syncFromPeers(syncSources, { allowSingle: true })
 console.log(node.log[node.log.length - 1])
 node.startTicking()
 
