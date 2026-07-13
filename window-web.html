@@ -117,7 +117,7 @@
   </div>
 </div>
 <div id="frame">
-  <div id="view"><canvas id="world" width="560" height="400"></canvas></div>
+  <div id="view" style="position:relative"><canvas id="world" width="560" height="400"></canvas></div>
   <div id="panel" class="stone">
     <h2 id="whoami">connecting…</h2>
     <div id="hpbar"><div id="hpfill"></div><div id="hptext"></div></div>
@@ -139,8 +139,12 @@
 // two detail modes, one world: the same states, the same constitution,
 // rendered twice. No window is authoritative: not even ours. (And yes:
 // low detail / high detail. Some of us remember choosing.)
+// High detail is now the ceiling: the painted frame passes through WebGL
+// where fires become real light, bright things bloom, and night is night.
 const HD = (localStorage.getItem('interval-detail') ?? 'high') === 'high'
-const RES = HD ? 2 : 1 // high detail supersamples the whole frame
+let GLON = false, gl = null, glCv = null, glU = {}, glLights = []
+let glNight = 0, glWarm = 0
+const RES = 1 // the shader supersamples now; the painter stays cheap
 const ZOOM = 1.17 // the world, a step closer: sprites read bigger, tiles fewer
 const ZR = ZOOM * RES
 const TILE = 40, VIEW_W = 14 / ZOOM, VIEW_H = 10 / ZOOM
@@ -456,7 +460,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b77'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b78'  // stamp: if your screen says an older build, hard-refresh
 const send = a => {
   if (ws.readyState !== 1) return
   if (ownKey && a.do === 'chat') { signChat(a.text); return }
@@ -2030,14 +2034,34 @@ function drawScene(now) {
     sunDirX = -Math.cos(cyc * Math.PI * 2)
     shadowLen = brightness > 0.45 ? (1 - brightness) * 16 + 1 : 0
   }
+  if (GLON) { // gather the world's lights for the shader
+    glLights.length = 0
+    glNight = darkness / 0.58
+    const push = (wx, wy, r, i2, c2) => {
+      const u = ((wx - cam.x) * TILE + 20) * ZOOM / cv.width
+      const v2 = ((wy - cam.y) * TILE + 16) * ZOOM / cv.height
+      if (u < -0.2 || u > 1.2 || v2 < -0.2 || v2 > 1.2 || glLights.length >= 24) return
+      glLights.push({ u, v: v2, r, i: i2, c: c2 })
+    }
+    for (const n of (s._nodesV ?? Object.values(s.nodes))) {
+      if (n.type === 'campfire' || (n.type === 'fire' && n.expiresAt > s.tick)) push(n.x, n.y, 0.26, 0.75 + glNight * 0.5, [1, 0.62, 0.24])
+      else if (n.type === 'magic-rock' && n.depletedUntil <= s.tick) push(n.x, n.y, 0.13, 0.4, [0.4, 0.85, 1])
+    }
+    for (const p of Object.values(s.players)) {
+      if (p.equipment?.head?.item === 'star-helm' || p.equipment?.body?.item === 'star-plate' || p.equipment?.weapon?.item === 'star-sword')
+        push(p.x, p.y, 0.11, 0.3, [0.55, 0.88, 1])
+    }
+  }
   const duskiness = Math.max(0, 1 - Math.abs(brightness - 0.42) * 6) // the golden hours
-  if (duskiness > 0.02) {
-    // rising light is gold; falling light is violet: the sky knows which
+  {
     const rising = Math.cos(cyc * Math.PI * 2) > 0
-    cx.fillStyle = rising
-      ? 'rgba(224,140,40,' + (duskiness * 0.15) + ')'
-      : 'rgba(120,70,170,' + (duskiness * 0.14) + ')'
-    cx.fillRect(0, 0, cv.width / ZR, cv.height / ZR)
+    glWarm = duskiness * (rising ? 1 : -0.9) // the shader grades the hours
+    if (!GLON && duskiness > 0.02) {
+      cx.fillStyle = rising
+        ? 'rgba(224,140,40,' + (duskiness * 0.15) + ')'
+        : 'rgba(120,70,170,' + (duskiness * 0.14) + ')'
+      cx.fillRect(0, 0, cv.width / ZR, cv.height / ZR)
+    }
   }
   if (darkness > 0.03) {
     // resizing a canvas reallocates it; do that only when the size changed
@@ -2065,7 +2089,7 @@ function drawScene(now) {
       L.fillStyle = grad; L.beginPath(); L.arc(fx, fy, r, 0, 7); L.fill()
     }
     L.globalCompositeOperation = 'source-over'
-    cx.drawImage(lightCv, 0, 0)
+    if (!GLON) cx.drawImage(lightCv, 0, 0)
     // colored halos on top of the cut: warm for flame, cool for the stones
     for (const n of (s._nodesV ?? Object.values(s.nodes))) {
       const isFire = n.type === 'campfire' || n.type === 'fire'
@@ -2084,6 +2108,7 @@ function drawScene(now) {
   }
 
   cx.setTransform(1, 0, 0, 1, 0, 0) // the panel world ends; flat space resumes
+  if (GLON) glComposite(now)
   drawMini(s)
 
   // soft vignette: the old-monitor glow (built once, reused every frame)
@@ -2091,7 +2116,7 @@ function drawScene(now) {
     vignette = cx.createRadialGradient(cv.width/2, cv.height/2, cv.height*0.55, cv.width/2, cv.height/2, cv.height*1.05)
     vignette.addColorStop(0, 'rgba(0,0,0,0)'); vignette.addColorStop(1, 'rgba(10,14,6,.34)')
   }
-  cx.fillStyle = vignette; cx.fillRect(0, 0, cv.width / ZR, cv.height / ZR)
+  if (!GLON) { cx.fillStyle = vignette; cx.fillRect(0, 0, cv.width / ZR, cv.height / ZR) }
 
   const phase = cyc < 0.06 ? 'dawn' : cyc < 0.44 ? 'day' : cyc < 0.56 ? 'dusk'
               : cyc < 0.94 ? 'night' : 'dawn'
@@ -2268,11 +2293,70 @@ function enterWorld() {
 }
 const sndEl = document.getElementById('sndtoggle')
 const sndLabel = () => sndEl.textContent = 'sound: ' + (soundOn ? 'on' : 'off') + ' (tap to toggle)'
-// high detail supersamples: same CSS size, twice the pixels
-if (HD) { cv.width = 560 * RES; cv.height = 400 * RES }
+// ---- the WebGL composite: initialize, or fall back without fuss ----
+if (HD) try {
+  glCv = document.createElement('canvas')
+  glCv.width = 1120; glCv.height = 800
+  glCv.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none'
+  cv.parentNode.appendChild(glCv)
+  gl = glCv.getContext('webgl', { antialias: false })
+  if (gl) {
+    const vsrc = 'attribute vec2 p;varying vec2 v;void main(){v=vec2(p.x*.5+.5,.5-p.y*.5);gl_Position=vec4(p,0.,1.);}'
+    const fsrc = 'precision mediump float;varying vec2 v;uniform sampler2D t;uniform float T,N,W2;uniform vec2 R;' +
+      'uniform vec4 L[24];uniform vec3 C[24];' +
+      'void main(){vec3 b=texture2D(t,v).rgb;float asp=R.x/R.y;vec2 p2=vec2(v.x*asp,v.y);' +
+      'vec3 acc=vec3(0.);for(int i=0;i<24;i++){vec4 l=L[i];if(l.z>0.001){' +
+      'float fl=.86+.14*sin(T*9.+float(i)*7.31);' +
+      'float d=distance(p2,vec2(l.x*asp,l.y));' +
+      'float f=smoothstep(l.z,0.,d)*l.w*fl;acc+=C[i]*f;}}' +
+      'float amb=mix(1.,.30,N);vec3 tint=mix(vec3(1.),vec3(.60,.71,1.28),N*.85);' +
+      'vec3 lit=b*(amb*tint)+b*acc;' +
+      'float lum=dot(b,vec3(.3,.5,.2));' +
+      'vec3 bl=vec3(0.);vec2 o=3.0/R;' +
+      'bl+=max(vec3(0.),texture2D(t,v+vec2(o.x,0.)).rgb-.72);bl+=max(vec3(0.),texture2D(t,v-vec2(o.x,0.)).rgb-.72);' +
+      'bl+=max(vec3(0.),texture2D(t,v+vec2(0.,o.y)).rgb-.72);bl+=max(vec3(0.),texture2D(t,v-vec2(0.,o.y)).rgb-.72);' +
+      'lit+=bl*.4*vec3(1.,.92,.72);' +
+      'lit*=vec3(1.+W2*.16,1.+W2*.05,1.-W2*.13);' +
+      'float vg=smoothstep(.96,.42,distance(v,vec2(.5)));lit*=mix(.80,1.,vg);' +
+      'gl_FragColor=vec4(lit,1.);}'
+    const sh = (ty, src) => { const s2 = gl.createShader(ty); gl.shaderSource(s2, src); gl.compileShader(s2); return s2 }
+    const pr = gl.createProgram()
+    gl.attachShader(pr, sh(gl.VERTEX_SHADER, vsrc)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fsrc))
+    gl.linkProgram(pr); gl.useProgram(pr)
+    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf)
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW)
+    const loc = gl.getAttribLocation(pr, 'p')
+    gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0)
+    const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    glU = { T: gl.getUniformLocation(pr, 'T'), N: gl.getUniformLocation(pr, 'N'), W2: gl.getUniformLocation(pr, 'W2'),
+      R: gl.getUniformLocation(pr, 'R'), L: gl.getUniformLocation(pr, 'L'), C: gl.getUniformLocation(pr, 'C') }
+    gl.viewport(0, 0, glCv.width, glCv.height)
+    GLON = true
+  }
+} catch (e) { GLON = false; if (glCv) glCv.style.display = 'none' }
+
+function glComposite(now) {
+  try {
+    const La = new Float32Array(24 * 4), Ca = new Float32Array(24 * 3)
+    for (let i = 0; i < Math.min(24, glLights.length); i++) {
+      const l = glLights[i]
+      La[i*4] = l.u; La[i*4+1] = l.v; La[i*4+2] = l.r; La[i*4+3] = l.i
+      Ca[i*3] = l.c[0]; Ca[i*3+1] = l.c[1]; Ca[i*3+2] = l.c[2]
+    }
+    gl.uniform1f(glU.T, now / 1000); gl.uniform1f(glU.N, glNight); gl.uniform1f(glU.W2, glWarm)
+    gl.uniform2f(glU.R, glCv.width, glCv.height)
+    gl.uniform4fv(glU.L, La); gl.uniform3fv(glU.C, Ca)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv)
+    gl.drawArrays(gl.TRIANGLES, 0, 3)
+  } catch (e) { GLON = false; glCv.style.display = 'none' }
+}
 {
   const detEl = document.getElementById('gatedetail')
-  const detText = () => 'detail: ' + (HD ? 'high' : 'low') + ' \u25b8 tap to switch (one world, two renderings)'
+  const detText = () => 'detail: ' + (HD ? (GLON ? 'high (webgl)' : 'high (webgl unavailable: low)') : 'low') + ' \u25b8 tap to switch (one world, two renderings)'
   if (detEl) {
     detEl.textContent = detText()
     detEl.onclick = () => { localStorage.setItem('interval-detail', HD ? 'low' : 'high'); location.reload() }
