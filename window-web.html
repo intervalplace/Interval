@@ -460,7 +460,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b78'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b79'  // stamp: if your screen says an older build, hard-refresh
 const send = a => {
   if (ws.readyState !== 1) return
   if (ownKey && a.do === 'chat') { signChat(a.text); return }
@@ -2302,19 +2302,36 @@ if (HD) try {
   gl = glCv.getContext('webgl', { antialias: false })
   if (gl) {
     const vsrc = 'attribute vec2 p;varying vec2 v;void main(){v=vec2(p.x*.5+.5,.5-p.y*.5);gl_Position=vec4(p,0.,1.);}'
-    const fsrc = 'precision mediump float;varying vec2 v;uniform sampler2D t;uniform float T,N,W2;uniform vec2 R;' +
+    const fsrc = 'precision mediump float;varying vec2 v;uniform sampler2D t;uniform float T,N,W2;uniform vec2 R,CAM;' +
       'uniform vec4 L[24];uniform vec3 C[24];' +
-      'void main(){vec3 b=texture2D(t,v).rgb;float asp=R.x/R.y;vec2 p2=vec2(v.x*asp,v.y);' +
+      'float h21(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}' +
+      'float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);' +
+      'return mix(mix(h21(i),h21(i+vec2(1.,0.)),f.x),mix(h21(i+vec2(0.,1.)),h21(i+vec2(1.,1.)),f.x),f.y);}' +
+      'void main(){float asp=R.x/R.y;vec2 p2=vec2(v.x*asp,v.y);' +
+      // heat shimmer: the air above every warm light bends
+      'vec2 uvo=vec2(0.);for(int i=0;i<24;i++){vec4 l=L[i];' +
+      'if(l.z>0.001&&C[i].r>.8&&C[i].b<.5){float d=distance(p2,vec2(l.x*asp,l.y));' +
+      'float ab=smoothstep(.02,-.06,v.y-l.y);' +
+      'uvo.x+=sin(v.y*180.+T*8.)*.0016*smoothstep(l.z*.9,0.,d)*ab;}}' +
+      'vec2 sv=v+uvo;vec3 b=texture2D(t,sv).rgb;' +
+      // the ground gains grain: world-anchored, it does not swim with the camera
+      'vec2 wp=sv*R*.5+CAM;' +
+      'float gn=vn(wp/23.)*.65+vn(wp/8.5)*.35;' +
+      'b*=.90+.17*gn;' +
+      // caustics: light webs dance on anything that reads as water
+      'float wm=smoothstep(.04,.14,b.b-b.r)*smoothstep(.0,.08,b.b-b.g);' +
+      'if(wm>.01){float c1=vn(wp/13.+vec2(T*.55,T*.33));float c2=vn(wp/9.-vec2(T*.4,T*.52));' +
+      'float ca=pow(c1*c2*2.6,2.4);b+=wm*ca*vec3(.30,.50,.55);}' +
+      // the lights
       'vec3 acc=vec3(0.);for(int i=0;i<24;i++){vec4 l=L[i];if(l.z>0.001){' +
       'float fl=.86+.14*sin(T*9.+float(i)*7.31);' +
       'float d=distance(p2,vec2(l.x*asp,l.y));' +
       'float f=smoothstep(l.z,0.,d)*l.w*fl;acc+=C[i]*f;}}' +
       'float amb=mix(1.,.30,N);vec3 tint=mix(vec3(1.),vec3(.60,.71,1.28),N*.85);' +
       'vec3 lit=b*(amb*tint)+b*acc;' +
-      'float lum=dot(b,vec3(.3,.5,.2));' +
       'vec3 bl=vec3(0.);vec2 o=3.0/R;' +
-      'bl+=max(vec3(0.),texture2D(t,v+vec2(o.x,0.)).rgb-.72);bl+=max(vec3(0.),texture2D(t,v-vec2(o.x,0.)).rgb-.72);' +
-      'bl+=max(vec3(0.),texture2D(t,v+vec2(0.,o.y)).rgb-.72);bl+=max(vec3(0.),texture2D(t,v-vec2(0.,o.y)).rgb-.72);' +
+      'bl+=max(vec3(0.),texture2D(t,sv+vec2(o.x,0.)).rgb-.72);bl+=max(vec3(0.),texture2D(t,sv-vec2(o.x,0.)).rgb-.72);' +
+      'bl+=max(vec3(0.),texture2D(t,sv+vec2(0.,o.y)).rgb-.72);bl+=max(vec3(0.),texture2D(t,sv-vec2(0.,o.y)).rgb-.72);' +
       'lit+=bl*.4*vec3(1.,.92,.72);' +
       'lit*=vec3(1.+W2*.16,1.+W2*.05,1.-W2*.13);' +
       'float vg=smoothstep(.96,.42,distance(v,vec2(.5)));lit*=mix(.80,1.,vg);' +
@@ -2330,10 +2347,11 @@ if (HD) try {
     const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST) // crisp:
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST) // pixels are the art
     glU = { T: gl.getUniformLocation(pr, 'T'), N: gl.getUniformLocation(pr, 'N'), W2: gl.getUniformLocation(pr, 'W2'),
-      R: gl.getUniformLocation(pr, 'R'), L: gl.getUniformLocation(pr, 'L'), C: gl.getUniformLocation(pr, 'C') }
+      R: gl.getUniformLocation(pr, 'R'), CAM: gl.getUniformLocation(pr, 'CAM'),
+      L: gl.getUniformLocation(pr, 'L'), C: gl.getUniformLocation(pr, 'C') }
     gl.viewport(0, 0, glCv.width, glCv.height)
     GLON = true
   }
@@ -2349,6 +2367,7 @@ function glComposite(now) {
     }
     gl.uniform1f(glU.T, now / 1000); gl.uniform1f(glU.N, glNight); gl.uniform1f(glU.W2, glWarm)
     gl.uniform2f(glU.R, glCv.width, glCv.height)
+    gl.uniform2f(glU.CAM, (cam?.x ?? 0) * TILE * ZOOM, (cam?.y ?? 0) * TILE * ZOOM)
     gl.uniform4fv(glU.L, La); gl.uniform3fv(glU.C, Ca)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
