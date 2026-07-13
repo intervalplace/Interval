@@ -30,6 +30,7 @@ const P2P_PORT = Number(process.env.INTERVAL_P2P_PORT || 4600)
 // Changed rules → found a NEW world whose genesis imports the citizens.
 const KNOWN_ITEMS = new Set(['seeds', 'grain', 'logs', 'ore', 'raw-fish', 'cooked-fish', 'burnt-fish', 'bones',
   ...Object.keys(E.RECIPES), 'wooden-bow', 'arrows', 'bronze-helm', 'bronze-plate', 'magic-stone', 'sigil'])
+const announced = new Map() // peerId -> { addr, at }: the mesh directory
 let GENESIS, migrated = 0
 const saved = fs.existsSync(WORLD_FILE) ? JSON.parse(fs.readFileSync(WORLD_FILE)) : null
 
@@ -137,14 +138,31 @@ const server = http.createServer((req, res) => {
       awake: Object.values(node.state.players).filter(p => E.isAwake(p, node.state.tick)).length,
       players: Object.keys(node.state.players).length,
       mobs: Object.values(node.state.mobs).filter(m => m.hp > 0).length })
+    if (path === '/api/announce' && req.method === 'POST') {
+      // a peer announces its LISTENING port; we pair it with the address
+      // we OBSERVED it calling from. Self-reported IPs lie; sockets do not.
+      let body = ''
+      req.on('data', (c) => { body += c })
+      req.on('end', () => {
+        try {
+          const { peerId, port } = JSON.parse(body)
+          if (!/^12D3Koo[1-9A-HJ-NP-Za-km-z]+$/.test(peerId ?? '') || !Number.isInteger(port)) { res.writeHead(400); res.end(); return }
+          const ip = (req.socket.remoteAddress ?? '').replace(/^::ffff:/, '')
+          const fam = ip.includes(':') ? 'ip6' : 'ip4'
+          announced.set(peerId, { addr: '/' + fam + '/' + ip + '/tcp/' + port + '/p2p/' + peerId, at: Date.now() })
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true, recorded: announced.get(peerId).addr }))
+        } catch { res.writeHead(400); res.end() }
+      })
+      return
+    }
     if (path === '/api/peers') {
-      // the mesh directory: every reachable node, so joiners dial EVERYONE.
-      // A network where all roads lead to one node is a server with extra steps.
-      const seen = new Set()
-      const peers = node.p2p.getConnections()
-        .map(c => c.remoteAddr?.toString()).filter(Boolean)
-        .filter(a => { if (seen.has(a)) return false; seen.add(a); return true })
-      return json({ peers, count: peers.length })
+      // the mesh directory (v2): ANNOUNCED addresses only. Connection
+      // remoteAddrs were ephemeral outbound ports: dialing one is knocking
+      // on the hole someone drilled outward. Announcements are doors.
+      const fresh = Date.now() - 5 * 60 * 1000
+      for (const [id2, e2] of announced) if (e2.at < fresh) announced.delete(id2)
+      return json({ peers: [...announced.values()].map(e2 => e2.addr), count: announced.size })
     }
     if (path === '/api/hiscores') return json({ tick: node.state.tick, players: hiscores() })
     if (path.startsWith('/api/player/')) {
