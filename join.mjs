@@ -20,6 +20,8 @@ import { buildWorld } from './worldgen.mjs'
 const URL_ = process.argv[2]
 const NAME = (process.argv[3] || '').toLowerCase().replace(/^--.*/, '')
 const CHOP = process.argv.includes('--chop')
+const PORT_ARG = process.argv.find(a => a.startsWith('--port='))
+const P2P_PORT = PORT_ARG ? Number(PORT_ARG.split('=')[1]) : 0 // 0 = random; a FIXED port is easier to open in a firewall
 if (!URL_) { console.log('usage: node join.mjs https://host [name] [--chop]'); process.exit(1) }
 
 // 1. fetch the founding record: from the pillar if it lives, from our
@@ -62,7 +64,8 @@ const me = E.loadOrCreateIdentity(fs, `identities/join-${NAME || 'wanderer'}.jso
 console.log(`your key: ${me.playerId.slice(0, 12)}… (identities/join-${NAME || 'wanderer'}.json: guard it)`)
 
 // 4. own node: sync the world, then march in lockstep
-const node = await new IntervalNode({ peerKeyFile: 'identities/peer-' + (NAME || 'wanderer') + '.json', genesis: info.genesis, buildWorld, name: 'join' }).start()
+const node = await new IntervalNode({ peerKeyFile: 'identities/peer-' + (NAME || 'wanderer') + '.json', genesis: info.genesis, buildWorld, name: 'join', listen: '/ip4/0.0.0.0/tcp/' + P2P_PORT }).start()
+console.log('[join] listening for peers on tcp/' + node.listenPort() + (P2P_PORT ? '' : ' (random; use --port=4601 and open it in your firewall to be dialable)'))
 
 // the peer book: every door we ever opened, remembered on disk
 let book = []
@@ -101,7 +104,10 @@ async function meshUp() {
         await node.dial(multiaddr(a))
         console.log('[mesh] peer connected: ' + a)
         remember(a)
-      } catch { dialedPeers.delete(pid2) /* try again next sweep */ }
+      } catch {
+        dialedPeers.delete(pid2) // try again next sweep
+        console.log('[mesh] could not reach ' + a + ' (firewall? their port must be open inbound)')
+      }
     }
   } catch { /* pillar unreachable: the mesh we already have carries on */ }
 }
