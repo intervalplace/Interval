@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.36';
+const SPEC_VERSION = '0.37';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -38,7 +38,8 @@ const MOB_STATS = {
   wolf:   { maxHp: 8, atk: 2, def: 2, maxHit: 2, respawn: 150,
             drops: [{ item: 'bones' }, { item: 'bones', chance: 96 }] },
   troll:  { maxHp: 20, atk: 4, def: 4, maxHit: 3, respawn: 300,
-            drops: [{ item: 'bones' }, { item: 'ore' }, { item: 'bronze-plate', chance: 24 }] },
+            drops: [{ item: 'bones' }, { item: 'ore' }, { item: 'bronze-plate', chance: 24 },
+                    { item: 'old-chain', chance: 5 }] },
   bear:   { maxHp: 14, atk: 3, def: 3, maxHit: 2, respawn: 220,
             drops: [{ item: 'bones' }, { item: 'bones', chance: 128 }, { item: 'bronze-hatchet', chance: 16 }] },
 };
@@ -48,6 +49,7 @@ const PRICES = {
   'logs': 2, 'ore': 5, 'raw-fish': 3, 'cooked-fish': 6, 'bones': 2, 'arrows': 1,
   'magic-stone': 20, 'bronze-sword': 15, 'bronze-hatchet': 10, 'bronze-pickaxe': 10,
   'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8, 'grain': 4,
+  'star-sword': 120, 'star-helm': 60, 'star-plate': 200,
 };
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 // the Wilds (spec 2g): where citizens may hunt citizens
@@ -67,9 +69,16 @@ const RECIPES = {
   'bronze-pickaxe': { ore: 1, logs: 1 },
   'bronze-helm':    { ore: 1, logs: 1 },
   'bronze-plate':   { ore: 3, logs: 1 },
+  'star-sword':     { 'magic-stone': 3, ore: 2 },
+  'star-helm':      { 'magic-stone': 2, ore: 1 },
+  'star-plate':     { 'magic-stone': 4, ore: 3 },
 };
-const EQUIPPABLE = new Set([...Object.keys(RECIPES), 'wooden-bow']);
-const EQUIP_SLOT = { 'bronze-helm': 'head', 'bronze-plate': 'body' }; // default: weapon
+const EQUIPPABLE = new Set([...Object.keys(RECIPES), 'wooden-bow', 'old-chain']);
+const EQUIP_SLOT = { 'bronze-helm': 'head', 'bronze-plate': 'body', 'star-helm': 'head', 'star-plate': 'body' }; // default: weapon
+// the first level requirements (spec 6q): an unearned hammer strikes nothing
+const SMITH_REQS = { 'star-sword': { smithing: 20, magic: 10 },
+  'star-helm': { smithing: 15, magic: 5 }, 'star-plate': { smithing: 30, magic: 15 } };
+const SOAK = (item) => item?.startsWith('star-') ? 2 : 1; // starmetal turns aside more
 const slotOf = (item) => EQUIP_SLOT[item] ?? 'weapon';
 const TOOL_FOR = { tree: 'bronze-hatchet', rock: 'bronze-pickaxe' };
 const XP_SMITH_PER_ORE = 30;
@@ -355,6 +364,8 @@ function validInput(state, input) {
       const r = RECIPES[input.recipe];
       if (!r) return false;
       if (!Object.values(state.nodes).some(n => n.type === 'anvil' && adjacent(p, n))) return false;
+      const req = SMITH_REQS[input.recipe];
+      if (req && !Object.entries(req).every(([sk, lv]) => effLevel(p.skills[sk]) >= lv)) return false;
       const have = (item) => p.inventory.filter(sl => sl && sl.item === item).length;
       return Object.entries(r).every(([item, qty]) => have(item) >= qty);
     }
@@ -684,7 +695,8 @@ function nextState(state, inputs, beacon) {
             && p.equipment.weapon?.item === 'wooden-bow'
             && p.inventory.some(sl => sl?.item === 'arrows')));
       if (!near) { p.action = null; }
-      else if ((s.tick - (p.action.since ?? 0)) % 2 !== 0) { /* combat breathes (6m) */ }
+      else if (p.equipment.weapon?.item !== 'old-chain'
+        && (s.tick - (p.action.since ?? 0)) % 2 !== 0) { /* combat breathes (6m); the chain does not (6r) */ }
       else {
         const bowDrawn2 = p.equipment.weapon?.item === 'wooden-bow' && !adjacent(p, q);
         let lvl2, tag2;
@@ -699,8 +711,10 @@ function nextState(state, inputs, beacon) {
         const Tp = clamp(128 + 4 * (lvl2 - defL), 16, 240);
         if (roll(beacon, pid, 'atk') < Tp) {
           const maxHit = 1 + Math.floor(lvl2 / (bowDrawn2 ? 12 : 10))
-            + (!bowDrawn2 && p.equipment.weapon?.item === 'bronze-sword' ? 2 : 0);
-          const soak = (q.equipment.head ? 1 : 0) + (q.equipment.body ? 1 : 0);
+            + (!bowDrawn2 ? (p.equipment.weapon?.item === 'bronze-sword' ? 2
+              : p.equipment.weapon?.item === 'star-sword' ? 4
+              : p.equipment.weapon?.item === 'old-chain' ? 1 : 0) : 0);
+          const soak = (q.equipment.head ? SOAK(q.equipment.head.item) : 0) + (q.equipment.body ? SOAK(q.equipment.body.item) : 0);
           const dmg = Math.max(0, 1 + (roll(beacon, pid, 'dmg') % maxHit) - soak);
           q.hp -= dmg;
           p.skills[tag2] += 4 * dmg;
@@ -732,7 +746,9 @@ function nextState(state, inputs, beacon) {
       const bowHeld = p.equipment.weapon?.item === 'wooden-bow'
         && Math.max(Math.abs(p.x - m.x), Math.abs(p.y - m.y)) <= 4;
       if (!adjacent(p, m) && !bowHeld) { p.action = null; continue; }
-      if ((s.tick - (p.action.since ?? 0)) % 2 !== 0) continue; // combat breathes (6m)
+      const chained = p.equipment.weapon?.item === 'old-chain';
+      if (!chained && (s.tick - (p.action.since ?? 0)) % 2 !== 0) continue; // combat breathes (6m); the chain does not (6r)
+      const mobTurn = (s.tick - (p.action.since ?? 0)) % 2 === 0; // the defender keeps the old rhythm
 
       const bowDrawn = p.equipment.weapon?.item === 'wooden-bow' && !adjacent(p, m);
       if (bowDrawn) { // ranged (spec 6j): every draw costs an arrow, hit or miss
@@ -754,7 +770,9 @@ function nextState(state, inputs, beacon) {
       const T = clamp(128 + 4 * (atkLvl - stats.def), 16, 240);
       if (roll(beacon, pid, 'atk') < T) {
         const maxHit = 1 + Math.floor(atkLvl / 10)
-          + (p.equipment.weapon?.item === 'bronze-sword' ? 2 : 0);
+          + (p.equipment.weapon?.item === 'bronze-sword' ? 2
+            : p.equipment.weapon?.item === 'star-sword' ? 4
+            : p.equipment.weapon?.item === 'old-chain' ? 1 : 0);
         const dmg = 1 + (roll(beacon, pid, 'dmg') % maxHit);
         m.hp -= dmg;
         p.skills.attack += 4 * dmg;
@@ -775,9 +793,9 @@ function nextState(state, inputs, beacon) {
         // retaliation (spec §6b.4)
         const defLvl = effLevel(p.skills.defence);
         const Tm = clamp(128 + 4 * (stats.atk - defLvl), 16, 240);
-        if (roll(beacon, pid, 'mobatk') < Tm && !bowDrawn) {
+        if (roll(beacon, pid, 'mobatk') < Tm && !bowDrawn && mobTurn) {
           // armor soaks (spec 6i): each worn piece turns aside 1 damage
-          const soak = (p.equipment.head ? 1 : 0) + (p.equipment.body ? 1 : 0);
+          const soak = (p.equipment.head ? SOAK(p.equipment.head.item) : 0) + (p.equipment.body ? SOAK(p.equipment.body.item) : 0);
           p.hp -= Math.max(0, 1 + (roll(beacon, pid, 'mobdmg') % stats.maxHit) - soak);
           if (p.hp <= 0) {
             // death (spec §6c): respawn, full hp, inventory destroyed

@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.36 ("The Constitution")
+# Interval: Protocol Specification v0.37 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -97,6 +97,27 @@ an inventory item. What gold BUYS is reserved for a future amendment:
 the till is patient.
 
 New inert node type: `store` (with its `keeper`).
+
+## 6q. Starmetal (v0.37): the second use of magic stone
+
+At any anvil, magic stones smith into **starmetal**, and here the
+world gains its first level requirements: some things must be earned
+before they can be made. `star-sword` (3 magic-stone, 2 ore; requires
+smithing 20 AND magic 10; +4 max hit). `star-helm` (2 magic-stone,
+1 ore; smithing 15, magic 5). `star-plate` (4 magic-stone, 3 ore;
+smithing 30, magic 15). Starmetal armor soaks 2 per piece where
+bronze soaks 1. It sells dearly (sword 120, helm 60, plate 200) and
+dies with you like everything else. The requirements are validity,
+not ceremony: an unearned hammer strikes nothing.
+
+## 6r. The chain (v0.37): the one fast weapon
+
+Trolls rarely drop an **old-chain**: iron links, worn smooth; nobody
+remembers what it anchored. Wielded, it grants +1 max hit: and one
+property no other weapon has. Combat breathes (6m), **but the chain
+does not**: its wielder swings every tick. The defender's rhythm is
+unchanged; the chain simply refuses to wait. There is exactly one
+fast weapon in this world, and it must be taken from a troll.
 
 ## 6p. Fletching (v0.35): the fourteenth skill
 

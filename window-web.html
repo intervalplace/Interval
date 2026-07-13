@@ -230,6 +230,28 @@ function itemSprite(item) {
         g.beginPath(); g.moveTo(gx3 + 2, 5 + off); g.lineTo(gx3 + 2, 13 + off); g.stroke()
       }
       break
+    case 'star-sword':
+      pl([[16,3],[20,7],[11,20],[8,17]], '#8ce0ff', '#2a7d9e')
+      g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(14.4, 6.5, 1.6, 6)
+      g.fillStyle = '#8a5a2a'; g.fillRect(6, 19, 9, 3.4)
+      pl([[8,21],[4,27],[7,29],[12,24]], '#5c4023', '#33220f'); break
+    case 'star-helm':
+      pl([[7,20],[7,13],[16,6],[25,13],[25,20]], '#5cb8d9', '#2a7d9e')
+      g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(9, 9.5, 14, 2)
+      g.fillStyle = '#2a7d9e'; g.fillRect(7, 20, 18, 2.6); break
+    case 'star-plate':
+      pl([[9,6],[23,6],[26,12],[24,26],[8,26],[6,12]], '#5cb8d9', '#2a7d9e')
+      g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(15.2, 6, 1.6, 20)
+      g.fillStyle = 'rgba(255,255,255,.3)'; g.fillRect(9, 7.5, 14, 1.6); break
+    case 'old-chain': {
+      g.strokeStyle = '#8a8a82'; g.lineWidth = 2
+      for (let li = 0; li < 5; li++) {
+        const lx = 8 + li * 4.2, ly = 24 - li * 4.2
+        g.beginPath(); g.ellipse(lx, ly, 2.6, 3.4, -0.78, 0, 7); g.stroke()
+      }
+      g.strokeStyle = '#6b6b62'; g.lineWidth = 1
+      g.beginPath(); g.ellipse(8, 24, 2.6, 3.4, -0.78, 0, 7); g.stroke()
+      break }
     case 'gold-coin':
       g.fillStyle = '#8a6415'; g.beginPath(); g.arc(16, 17.4, 10, 0, 7); g.fill()
       g.fillStyle = '#e8b53a'; g.beginPath(); g.arc(16, 16, 10, 0, 7); g.fill()
@@ -426,7 +448,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b72'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b73'  // stamp: if your screen says an older build, hard-refresh
 const send = a => {
   if (ws.readyState !== 1) return
   if (ownKey && a.do === 'chat') { signChat(a.text); return }
@@ -495,7 +517,18 @@ function stepToward(s, me, goal, reach, stampTick) {
 
 function smithBest(me) {
   const have = (item) => me.inventory.filter(sl => sl && sl.item === item).length
-  if (have('ore') >= 2 && have('logs') >= 1) { send({ do: 'smith', recipe: 'bronze-sword' }); feed('You hammer at the anvil\u2026 a bronze sword takes shape.') }
+  const lvl = (sk) => XP_TO_LVL(me.skills[sk])
+  if (have('magic-stone') >= 4 && have('ore') >= 3 && lvl('smithing') >= 30 && lvl('magic') >= 15) {
+    send({ do: 'smith', recipe: 'star-plate' }); feed('The stones sing under the hammer\u2026 a starmetal plate takes shape.') }
+  else if (have('magic-stone') >= 3 && have('ore') >= 2 && lvl('smithing') >= 20 && lvl('magic') >= 10) {
+    send({ do: 'smith', recipe: 'star-sword' }); feed('The stones sing under the hammer\u2026 a starmetal sword takes shape.') }
+  else if (have('magic-stone') >= 2 && have('ore') >= 1 && lvl('smithing') >= 15 && lvl('magic') >= 5) {
+    send({ do: 'smith', recipe: 'star-helm' }); feed('The stones sing under the hammer\u2026 a starmetal helm takes shape.') }
+  else if (have('magic-stone') >= 2 && have('ore') >= 1) {
+    feed('The stones wait for a worthier hand. (Helm: smithing 15 + magic 5. Sword: 20/10. Plate: 30/15.)')
+    if (have('ore') >= 2 && have('logs') >= 1) { send({ do: 'smith', recipe: 'bronze-sword' }) }
+  }
+  else if (have('ore') >= 2 && have('logs') >= 1) { send({ do: 'smith', recipe: 'bronze-sword' }); feed('You hammer at the anvil\u2026 a bronze sword takes shape.') }
   else if (have('ore') >= 1 && have('logs') >= 1) {
     const recipe = XP_TO_LVL(me.skills.woodcutting) <= XP_TO_LVL(me.skills.mining) ? 'bronze-hatchet' : 'bronze-pickaxe'
     send({ do: 'smith', recipe }); feed('You hammer at the anvil\u2026 a ' + recipe.replace('-', ' ') + ' takes shape.')
@@ -1147,6 +1180,27 @@ function drawCitizen(X, Y, o) {
 
   const look = lookOf(o.pid)
   if (o.anim === 'idle') Y += Math.sin(o.now / 800 + X * 0.1) * 0.7
+  if (o.chain && o.anim === 'fight') {
+    // the old chain: links hang from the fist; on the strike they LASH
+    const CF = o.face ?? 1
+    const hx = X + 20 + CF * 8, hy = Y + 16
+    cx.strokeStyle = '#8a8a82'; cx.lineWidth = 1.8
+    cx.beginPath()
+    if (o.exchange && strikeT > 0.15) {
+      const reach = strikeT * 16
+      cx.moveTo(hx, hy)
+      cx.quadraticCurveTo(hx + CF * reach * 0.6, hy - 6 + strikeT * 4, hx + CF * reach, hy + 2)
+    } else {
+      const sway3 = Math.sin(o.now / 350) * 1.5
+      cx.moveTo(hx, hy)
+      cx.quadraticCurveTo(hx + sway3, hy + 6, hx + sway3 * 0.5, hy + 12)
+    }
+    cx.stroke()
+    cx.fillStyle = '#6b6b62'
+    const tipX = o.exchange && strikeT > 0.15 ? hx + CF * strikeT * 16 : hx + Math.sin(o.now / 350) * 0.75
+    const tipY = o.exchange && strikeT > 0.15 ? hy + 2 : hy + 12
+    cx.beginPath(); cx.arc(tipX, tipY, 2.2, 0, 7); cx.fill()
+  }
   if (o.shooting) { // the archer's stance: bow forward, string drawn
     const BF = o.face ?? 1
     const pull = (Math.sin(o.now / 300) + 1) / 2
@@ -1714,7 +1768,9 @@ function drawScene(now) {
       drawCitizen(px(ix), py(iy), {
         now, pid, face: facing[pid] ?? 1, anim, tool, mine: pid === myId,
       exchange: (p.action?.type === 'attack' || p.action?.type === 'attackp')
-        && ((s.tick - (p.action.since ?? 0)) % 2 === 0),
+        && (p.equipment?.weapon?.item === 'old-chain' || (s.tick - (p.action.since ?? 0)) % 2 === 0),
+      chain: p.equipment?.weapon?.item === 'old-chain',
+      starSword: p.equipment?.weapon?.item === 'star-sword',
       cape: capeOf(p),
       bow: p.equipment?.weapon?.item === 'wooden-bow',
       shooting: p.equipment?.weapon?.item === 'wooden-bow' && p.action
