@@ -135,7 +135,8 @@
   </div>
 </div>
 <script>
-const TILE = 40, VIEW_W = 14, VIEW_H = 10
+const ZOOM = 1.17 // the world, a step closer: sprites read bigger, tiles fewer
+const TILE = 40, VIEW_W = 14 / ZOOM, VIEW_H = 10 / ZOOM
 let W = 14, H = 8            // world dims: set from genesis on first state
 let cam = { x: 0, y: 0 }      // top-left tile of the viewport
 const DAY = 2400              // ticks per day: a full day every 24 minutes
@@ -273,7 +274,7 @@ function itemSprite(item) {
 const ICONS = new Proxy({}, { get: (t, item) => typeof item === 'string'
   ? '<img src="' + itemSprite(item).toDataURL() + '" style="width:24px;height:24px;image-rendering:pixelated;vertical-align:middle">'
   : undefined, has: () => true })
-const EQUIPPABLE = new Set(['bronze-sword', 'bronze-hatchet', 'bronze-pickaxe', 'bronze-helm', 'bronze-plate', 'wooden-bow'])
+const EQUIPPABLE = new Set(['bronze-sword', 'bronze-hatchet', 'bronze-pickaxe', 'bronze-helm', 'bronze-plate', 'wooden-bow', 'star-sword', 'star-helm', 'star-plate', 'old-chain'])
 const XP_TABLE = (() => { const t = [0, 0]; let pts = 0
   for (let l = 2; l <= 99; l++) { pts += Math.floor((l-1) + 300 * Math.pow(2, (l-1)/7)); t[l] = Math.floor(pts/4) }
   return t })()
@@ -448,7 +449,7 @@ setInterval(() => {
   }
 }, 5000)
 let lastCancelAt = 0
-const BUILD = 'b73'  // stamp: if your screen says an older build, hard-refresh
+const BUILD = 'b74'  // stamp: if your screen says an older build, hard-refresh
 const send = a => {
   if (ws.readyState !== 1) return
   if (ownKey && a.do === 'chat') { signChat(a.text); return }
@@ -1177,6 +1178,14 @@ function drawCitizen(X, Y, o) {
   // shadow
   cx.fillStyle = 'rgba(0,0,0,.28)'
   cx.beginPath(); cx.ellipse(X + 20, Y + 35, 8, 2.6, 0, 0, 7); cx.fill()
+  // starmetal hums: a soft cyan breath around whoever wears the sky
+  if (o.starHelm || o.starPlate || o.starSword) {
+    const hum = 0.07 + (Math.sin(o.now / 620) + 1) * 0.035
+    const gg = cx.createRadialGradient(X + 20, Y + 18, 4, X + 20, Y + 18, 22)
+    gg.addColorStop(0, 'rgba(140,224,255,' + hum + ')')
+    gg.addColorStop(1, 'rgba(140,224,255,0)')
+    cx.fillStyle = gg; cx.beginPath(); cx.arc(X + 20, Y + 18, 22, 0, 7); cx.fill()
+  }
 
   const look = lookOf(o.pid)
   if (o.anim === 'idle') Y += Math.sin(o.now / 800 + X * 0.1) * 0.7
@@ -1243,9 +1252,9 @@ function drawCitizen(X, Y, o) {
   // tunic (trapezoid, slight lean while working)
   const lean = swing * 1.5 * F
   poly([[X+14+lean, Y+16], [X+26+lean, Y+16], [X+27, Y+29], [X+13, Y+29]], tunic, tunicDk)
-  if (o.plate) { // bronze across the chest: the tunic peeks at the shoulders
-    cx.fillStyle = '#a3743a'; cx.fillRect(X + 13.5, Y + 16.5, 13, 6.5)
-    cx.fillStyle = 'rgba(255,255,255,.18)'; cx.fillRect(X + 13.5, Y + 16.5, 13, 1.4)
+  if (o.plate) { // metal across the chest: the tunic peeks at the shoulders
+    cx.fillStyle = o.starPlate ? '#5cb8d9' : '#a3743a'; cx.fillRect(X + 13.5, Y + 16.5, 13, 6.5)
+    cx.fillStyle = o.starPlate ? 'rgba(224,246,255,.45)' : 'rgba(255,255,255,.18)'; cx.fillRect(X + 13.5, Y + 16.5, 13, 1.4)
     cx.fillStyle = 'rgba(0,0,0,.18)'; cx.fillRect(X + 19.6, Y + 16.5, 0.9, 6.5)
   }
   cx.fillStyle = tunicDk; cx.fillRect(X + 13, Y + 22, 14, 1.6) // belt
@@ -1258,7 +1267,7 @@ function drawCitizen(X, Y, o) {
   cx.translate(ax + 1.5, ay + 1)
   cx.rotate(F * (o.anim === 'gather' ? -0.6 + swing * 0.9 : (o.anim === 'fight' && !o.shooting) ? -0.3 + swing * 1.1 : 0.15))
   cx.fillStyle = skin; cx.fillRect(-1.5, 0, 3, 9)
-  const metal = o.bronzeTool ? '#c9862a' : '#8a8a82'
+  const metal = o.starSword && o.anim === 'fight' ? '#8ce0ff' : o.bronzeTool ? '#c9862a' : '#8a8a82'
   if (o.anim === 'gather' && o.tool === 'rod') { // fishing rod: long, thin, line down
     cx.rotate(F * -0.5)
     cx.fillStyle = '#5c4023'; cx.fillRect(-0.8, 6, 1.6, 15)
@@ -1294,10 +1303,11 @@ function drawCitizen(X, Y, o) {
   }
   // head: skin, hair cap, eye toward facing
   cx.fillStyle = skin; cx.fillRect(X + 15.5, Y + 7, 9, 9)
-  if (o.helm) { // bronze over the brow; the barber weeps
-    cx.fillStyle = '#a3743a'
+  if (o.helm) { // metal over the brow; the barber weeps
+    cx.fillStyle = o.starHelm ? '#5cb8d9' : '#a3743a'
     cx.fillRect(X + 14.5, Y + 5, 11, 4.6)
-    cx.fillStyle = 'rgba(255,255,255,.2)'; cx.fillRect(X + 14.5, Y + 5, 11, 1.2)
+    cx.fillStyle = o.starHelm ? 'rgba(224,246,255,.5)' : 'rgba(255,255,255,.2)'
+    cx.fillRect(X + 14.5, Y + 5, 11, 1.2)
   } else {
     cx.fillStyle = flash ? '#ffffff' : look.hair
     cx.fillRect(X + 15, Y + 5.5, 10, 3.4)
@@ -1318,6 +1328,7 @@ function drawCitizen(X, Y, o) {
 
 function drawScene(now) {
   const s = curState; if (!s || !groundReady) return
+  cx.setTransform(ZOOM, 0, 0, ZOOM, 0, 0) // the whole frame, a step closer
   // render on the tick timeline, one tick behind the newest state: the
   // sprite walks from prevState to curState exactly as the clock crosses
   // that tick, however raggedly the broadcasts arrived
@@ -1778,6 +1789,8 @@ function drawScene(now) {
         && (() => { const t2 = p.action.mobId ? s.mobs[p.action.mobId] : s.players[p.action.targetId]
           return t2 && Math.abs(p.x - t2.x) + Math.abs(p.y - t2.y) > 1 })(),
       helm: !!p.equipment?.head, plate: !!p.equipment?.body,
+      starHelm: p.equipment?.head?.item === 'star-helm',
+      starPlate: p.equipment?.body?.item === 'star-plate',
         sword: wep === 'bronze-sword', wepItem: wep, bronzeTool,
         name: (p.name ?? pid.slice(0, 6)) + ' (lvl '
         + Math.floor((XP_TO_LVL(p.skills.attack) + XP_TO_LVL(p.skills.defence) + XP_TO_LVL(p.skills.hitpoints)) / 3) + ')',
@@ -1953,7 +1966,7 @@ function drawScene(now) {
     cx.fillStyle = rising
       ? 'rgba(224,140,40,' + (duskiness * 0.15) + ')'
       : 'rgba(120,70,170,' + (duskiness * 0.14) + ')'
-    cx.fillRect(0, 0, cv.width, cv.height)
+    cx.fillRect(0, 0, cv.width / ZOOM, cv.height / ZOOM)
   }
   if (darkness > 0.03) {
     // resizing a canvas reallocates it; do that only when the size changed
@@ -1999,6 +2012,7 @@ function drawScene(now) {
     }
   }
 
+  cx.setTransform(1, 0, 0, 1, 0, 0) // the panel world ends; flat space resumes
   drawMini(s)
 
   // soft vignette: the old-monitor glow (built once, reused every frame)
@@ -2006,7 +2020,7 @@ function drawScene(now) {
     vignette = cx.createRadialGradient(cv.width/2, cv.height/2, cv.height*0.55, cv.width/2, cv.height/2, cv.height*1.05)
     vignette.addColorStop(0, 'rgba(0,0,0,0)'); vignette.addColorStop(1, 'rgba(10,14,6,.34)')
   }
-  cx.fillStyle = vignette; cx.fillRect(0, 0, cv.width, cv.height)
+  cx.fillStyle = vignette; cx.fillRect(0, 0, cv.width / ZOOM, cv.height / ZOOM)
 
   const phase = cyc < 0.06 ? 'dawn' : cyc < 0.44 ? 'day' : cyc < 0.56 ? 'dusk'
               : cyc < 0.94 ? 'night' : 'dawn'
@@ -2276,8 +2290,8 @@ document.getElementById('inv').addEventListener('click', (e) => {
 cv.addEventListener('click', (e) => {
   if (!world) return
   const r = cv.getBoundingClientRect()
-  const sx = (e.clientX - r.left) * (cv.width / r.width)
-  const sy = (e.clientY - r.top) * (cv.height / r.height)
+  const sx = (e.clientX - r.left) * (cv.width / r.width) / ZOOM
+  const sy = (e.clientY - r.top) * (cv.height / r.height) / ZOOM
   const x = Math.floor(sx / TILE + cam.x), y = Math.floor(sy / TILE + cam.y)
   if (x < 0 || x >= W || y < 0 || y >= H) return
   const me = world.players[myId]; if (!me) return
