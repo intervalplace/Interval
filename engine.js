@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.39';
+const SPEC_VERSION = '0.40';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -24,11 +24,10 @@ const NODE_YIELD = {
   'fishing-spot': { item: 'raw-fish',    skill: 'fishing',     xp: 30 },
   'magic-rock':   { item: 'magic-stone', skill: 'mining',      xp: 30 },
 };
-// night (spec 6k): the same sky every window paints, now load-bearing
-function isNight(tick) {
-  const phase = (tick % 2400) / 2400;
-  return (Math.sin(phase * Math.PI * 2) + 1) / 2 < 0.42;
-}
+// v0.40: the night gate is repealed. It was constitutional arithmetic
+// (tick % 2400), not wall-clock authority: but its only effect was
+// mandatory waiting, and waiting is the one cost this world rejects.
+// The stones price the sigil; the sky is for the windows to paint.
 const XP_COOK = 30;
 const HEAL_FISH = 3;
 const HP_START_XP = 1154; // hitpoints level 10
@@ -379,8 +378,7 @@ function validInput(state, input) {
       return Object.values(state.nodes).some(n => n.type === 'store' && adjacent(p, n));
     }
     case 'invoke': {
-      // magic begins at night (spec 6k): daylight cannot make a sigil
-      if (!isNight(state.tick)) return false;
+      // three stones, any hour (v0.40): the cost is the mining, not the wait
       return p.inventory.filter(sl => sl?.item === 'magic-stone').length >= 3;
     }
     case 'cast': {
@@ -586,16 +584,14 @@ function nextState(state, inputs, _legacyBeacon) {
         p.inventory[inp.slot] = null;
       }
     } else if (inp.type === 'invoke') {
-      if (isNight(s.tick)) {
-        const slots = [];
-        for (let i2 = 0; i2 < p.inventory.length && slots.length < 3; i2++) {
-          if (p.inventory[i2]?.item === 'magic-stone') slots.push(i2);
-        }
-        if (slots.length === 3) {
-          for (const i2 of slots) p.inventory[i2] = null;
-          p.inventory[slots[0]] = { item: 'sigil', qty: 1 };
-          p.skills.magic += 20;
-        }
+      const slots = [];
+      for (let i2 = 0; i2 < p.inventory.length && slots.length < 3; i2++) {
+        if (p.inventory[i2]?.item === 'magic-stone') slots.push(i2);
+      }
+      if (slots.length === 3) {
+        for (const i2 of slots) p.inventory[i2] = null;
+        p.inventory[slots[0]] = { item: 'sigil', qty: 1 };
+        p.skills.magic += 20;
       }
     } else if (inp.type === 'cast') {
       const si = p.inventory.findIndex(sl => sl?.item === 'sigil');
