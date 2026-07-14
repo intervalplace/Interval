@@ -571,7 +571,7 @@ const hitFlash = {}   // pid -> ms timestamp of last damage taken
 let celebrate = null  // { text, at }: level-up banner + sparks
 const bubbles = {}    // pid -> { text, at } speech bubbles
 const mobFacing = {}  // mobId -> -1 left / 1 right
-const MOB_LEVEL = { goblin: 2, wolf: 5, troll: 9, bear: 7, 'skeleton-knight': 7 } // derived from their stats rows
+const MOB_LEVEL = { goblin: 2, wolf: 5, troll: 9, bear: 7, 'skeleton-knight': 10 } // derived from their stats rows (skeleton: highest atk/def/hit, above the troll)
 const splats = []     // { x, y, amount, at } damage made visible
 const effects = []    // { kind, x, y, at } rites and works made visible
 const layerArr = []   // reused render layer (perf)
@@ -2453,75 +2453,56 @@ if (HD) try {
   }
 } catch (e) { GLON = false; if (glCv) glCv.style.display = 'none' }
 
-// ---- the sun-radar: a round porthole in the upper-right, centred on YOU. The
-// world scrolls beneath as you walk (that's the life in it), with a warm sun-rim
-// and rays that turn and twinkle. Its own overlay canvas, appended last so it
-// rides ABOVE the WebGL layer. ----
-const sunCv = document.createElement('canvas')
-sunCv.style.cssText = 'position:absolute;right:6px;top:6px;pointer-events:none;image-rendering:pixelated'
+// ---- the minimap: a plain square in the upper-right, high-def, framed like
+// the level-up banner. Its own overlay canvas, appended last so it rides ABOVE
+// the WebGL layer — the map high detail never had. ----
+const sunCv = document.createElement("canvas")
+sunCv.style.cssText = "position:absolute;right:8px;top:8px;pointer-events:none"
 cv.parentNode.appendChild(sunCv)
-const sunCtx = sunCv.getContext('2d')
+const sunCtx = sunCv.getContext("2d")
 function drawSunMap(s, now) {
   if (!miniReady && W) buildMini()
   if (!miniReady) return
   const g = sunCtx
-  const D = 192, C = D / 2, R = 82
-  if (sunCv.width !== D) { sunCv.width = D; sunCv.height = D; sunCv.style.width = '96px'; sunCv.style.height = '96px' }
-  const me = s.players[myId]; if (!me) return
-  // smooth scroll: interpolate our position exactly like the main view
-  const o = prevState?.players[myId], tt = renderT(now)
-  const pxr = o ? lerp(o.x, me.x, tt) : me.x
-  const pyr = o ? lerp(o.y, me.y, tt) : me.y
-  const rad = 26, scale = R / rad                    // tiles shown from centre to rim
-  g.setTransform(1, 0, 0, 1, 0, 0)
-  g.clearRect(0, 0, D, D)
-  // clip to the disc, dark void behind (the edge of the world reads as night)
-  g.save(); g.beginPath(); g.arc(C, C, R, 0, 7); g.clip()
-  g.fillStyle = '#0e120b'; g.fillRect(0, 0, D, D)
-  // the world, scaled and offset so YOU sit at the centre
+  const MW = 124, MH = Math.max(46, Math.round(MW * H / W)), SS = 3 // supersample: high-def on retina
+  if (sunCv.width !== MW * SS) {
+    sunCv.width = MW * SS; sunCv.height = MH * SS
+    sunCv.style.width = MW + "px"; sunCv.style.height = MH + "px"
+  }
+  g.setTransform(SS, 0, 0, SS, 0, 0)
   g.imageSmoothingEnabled = false
-  g.drawImage(miniCv, C - pxr * scale, C - pyr * scale, W * scale, H * scale)
-  const at = (wx, wy) => [C + (wx - pxr) * scale, C + (wy - pyr) * scale]
-  const near = (dx, dy) => dx * dx + dy * dy < (R - 2) * (R - 2)
-  // the living dots: skeletons rust-red, other citizens pale
+  g.clearRect(0, 0, MW, MH)
+  // banner-style plate: the same dark fill the level-up banner uses
+  g.fillStyle = "#494034"; g.fillRect(0, 0, MW, MH)
+  const pad = 3, mw = MW - pad * 2, mh = MH - pad * 2
+  g.drawImage(miniCv, pad, pad, mw, mh)
+  const sx = mw / W, sy = mh / H
   for (const m of Object.values(s.mobs)) {
     if (!m || m.hp <= 0) continue
-    const [dx, dy] = at(m.x, m.y); if (!near(dx - C, dy - C)) continue
-    g.fillStyle = m.type === 'skeleton-knight' ? '#e0857a' : 'rgba(205,150,120,.85)'
-    g.fillRect(dx - 1, dy - 1, 2.2, 2.2)
+    g.fillStyle = m.type === "skeleton-knight" ? "#e0857a" : "rgba(205,150,120,.85)"
+    g.fillRect(pad + m.x * sx - 0.6, pad + m.y * sy - 0.6, 1.6, 1.6)
   }
   for (const [pid, p] of Object.entries(s.players)) {
-    if (pid === myId) continue
-    const [dx, dy] = at(p.x, p.y); if (!near(dx - C, dy - C)) continue
-    g.fillStyle = '#e8e0d0'; g.fillRect(dx - 1, dy - 1, 2.4, 2.4)
+    g.fillStyle = pid === myId ? "#ffcc33" : "#e8e0d0"
+    g.fillRect(pad + p.x * sx - 1, pad + p.y * sy - 1, 2.2, 2.2)
   }
-  // soft inner vignette so the porthole fades toward its rim
-  const vg = g.createRadialGradient(C, C, R * 0.5, C, C, R)
-  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(8,10,6,.6)')
-  g.fillStyle = vg; g.fillRect(0, 0, D, D)
-  // YOU: a gold spark at dead centre, softly pulsing
-  const pulse = 2.6 + Math.sin(now / 320) * 0.6
-  g.fillStyle = '#ffcc33'; g.beginPath(); g.arc(C, C, pulse, 0, 7); g.fill()
-  g.strokeStyle = 'rgba(255,204,51,.5)'; g.lineWidth = 1; g.beginPath(); g.arc(C, C, pulse + 2, 0, 7); g.stroke()
-  g.restore()
-  // the sun: a warm rim and a ring of rays that turn and twinkle
-  g.strokeStyle = '#e8c14a'; g.lineWidth = 3
-  g.beginPath(); g.arc(C, C, R, 0, 7); g.stroke()
-  g.strokeStyle = 'rgba(244,208,63,.95)'; g.lineWidth = 2.4; g.lineCap = 'round'
-  const spin = now / 1400
-  for (let a = 0; a < 12; a++) {
-    const ang = (a / 12) * Math.PI * 2 + spin
-    const tw = 4 + Math.sin(now / 300 + a) * 2.5           // the rays twinkle
-    const r1 = R + 3, r2 = R + 3 + tw
-    g.beginPath()
-    g.moveTo(C + Math.cos(ang) * r1, C + Math.sin(ang) * r1)
-    g.lineTo(C + Math.cos(ang) * r2, C + Math.sin(ang) * r2)
-    g.stroke()
-  }
+  // where you are looking
+  g.strokeStyle = "rgba(255,255,255,.55)"; g.lineWidth = 1
+  g.strokeRect(pad + cam.x * sx, pad + cam.y * sy, VIEW_W * sx, VIEW_H * sy)
+  // the gold border, exactly the level-up banner's
+  g.strokeStyle = "#ffcc33"; g.lineWidth = 2; g.strokeRect(1, 1, MW - 2, MH - 2)
 }
 
 function glComposite(now) {
   try {
+    // Match the GL buffer to the actual displayed pixels — no CSS stretch, no
+    // blur. (image-rendering:pixelated only stays crisp at integer scales; on a
+    // phone the fixed 1120x800 was a fractional stretch, hence the softness.)
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5)
+    const dw = Math.round(glCv.clientWidth * dpr), dh = Math.round(glCv.clientHeight * dpr)
+    if (dw > 0 && (glCv.width !== dw || glCv.height !== dh)) {
+      glCv.width = dw; glCv.height = dh; gl.viewport(0, 0, dw, dh)
+    }
     const La = new Float32Array(24 * 4), Ca = new Float32Array(24 * 3)
     for (let i = 0; i < Math.min(24, glLights.length); i++) {
       const l = glLights[i]
