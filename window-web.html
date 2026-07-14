@@ -1421,7 +1421,7 @@ function drawCitizen(X, Y, o) {
   cx.fillRect(X + (F > 0 ? 21.5 : 17), Y + 10, 1.6, 1.6)
 
   // name + hp (your own name reads white so you can find yourself in a crowd)
-  cx.fillStyle = o.mine ? '#ffffff' : '#ffcc33'
+  cx.fillStyle = o.branded ? '#e8452e' : o.mine ? '#ffffff' : '#ffcc33'
   cx.font = 'bold 10px Verdana'; cx.textAlign = 'center'
   cx.fillText(o.name, X + 20, Y + 2)
   if (o.hp < o.maxHp || o.anim === 'fight') {
@@ -2001,8 +2001,25 @@ function drawScene(now) {
         name: (p.name ?? pid.slice(0, 6)) + ' (lvl '
         + Math.floor((XP_TO_LVL(p.skills.attack) + XP_TO_LVL(p.skills.defence) + XP_TO_LVL(p.skills.hitpoints)) / 3) + ')',
       hp: p.hp, maxHp: XP_TO_LVL(p.skills.hitpoints),
-        hitAt: hitFlash[pid],
+        hitAt: hitFlash[pid], branded: (p.brandedUntil ?? 0) > s.tick,
       })
+      if ((p.brandedUntil ?? 0) > s.tick) {
+        // The Brand (spec 6u): a citizen who struck the unprovoked in the Wilds
+        // wears a hot-iron mark. No mechanical weight — the state records it, the
+        // window paints it, the rest of us decide what it means.
+        const bp = 0.5 + Math.sin(now / 300) * 0.5
+        cx.save(); cx.globalAlpha = 0.22 + bp * 0.18 // a red stain at the feet, seen from afar
+        cx.fillStyle = '#c0392b'
+        cx.beginPath(); cx.ellipse(px(ix) + 20, py(iy) + 34, 12, 4.5, 0, 0, 7); cx.fill()
+        cx.restore()
+        cx.save(); cx.translate(px(ix) + 20, py(iy) - 9); cx.globalAlpha = 0.85 + bp * 0.15
+        cx.fillStyle = '#7a1512'; cx.beginPath(); cx.arc(0, 0, 5, 0, 7); cx.fill()       // the burned seal
+        cx.strokeStyle = '#e8452e'; cx.lineWidth = 1.4; cx.lineCap = 'round'             // the mark: a scar
+        cx.beginPath(); cx.moveTo(-2.3, -2.3); cx.lineTo(2.3, 2.3); cx.moveTo(2.3, -2.3); cx.lineTo(-2.3, 2.3); cx.stroke()
+        cx.strokeStyle = 'rgba(232,69,46,' + (0.35 + bp * 0.4) + ')'; cx.lineWidth = 1    // the heat still rising
+        cx.beginPath(); cx.arc(0, 0, 6.5 + bp * 1.6, 0, 7); cx.stroke()
+        cx.restore(); cx.globalAlpha = 1
+      }
       if (!awake) { // dreaming: a little z drifts up and away
         const zt = (now / 1400 + p.x) % 1
         cx.globalAlpha = 0.8 * (1 - zt)
