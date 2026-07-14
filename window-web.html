@@ -2198,7 +2198,7 @@ function drawScene(now) {
 
   cx.setTransform(1, 0, 0, 1, 0, 0) // the panel world ends; flat space resumes
   if (GLON) glComposite(now)
-  drawMini(s)
+  drawSunMap(s, now)
 
   // soft vignette: the old-monitor glow (built once, reused every frame)
   if (!vignette) {
@@ -2393,7 +2393,7 @@ const sndLabel = () => sndEl.textContent = 'sound: ' + (soundOn ? 'on' : 'off') 
 if (HD) try {
   glCv = document.createElement('canvas')
   glCv.width = 1120; glCv.height = 800
-  glCv.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none'
+  glCv.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;image-rendering:pixelated;image-rendering:crisp-edges'
   cv.parentNode.appendChild(glCv)
   gl = glCv.getContext('webgl', { antialias: false })
   if (gl) {
@@ -2452,6 +2452,54 @@ if (HD) try {
     GLON = true
   }
 } catch (e) { GLON = false; if (glCv) glCv.style.display = 'none' }
+
+// ---- the sun-map: a round minimap in the upper-right, the way a child draws
+// a sun in the corner of the page. Its own overlay canvas, appended last so it
+// rides ABOVE the WebGL layer — the minimap high detail never had. ----
+const sunCv = document.createElement('canvas')
+sunCv.width = 176; sunCv.height = 176
+sunCv.style.cssText = 'position:absolute;right:8px;top:8px;width:88px;height:88px;pointer-events:none;image-rendering:pixelated'
+cv.parentNode.appendChild(sunCv)
+const sunCtx = sunCv.getContext('2d')
+function drawSunMap(s, now) {
+  if (!miniReady && W) buildMini()
+  if (!miniReady) return
+  const g = sunCtx, D = sunCv.width, C = D / 2, R = D / 2 - 12
+  g.clearRect(0, 0, D, D)
+  g.save(); g.beginPath(); g.arc(C, C, R, 0, 7); g.clip()
+  g.fillStyle = '#12160e'; g.fillRect(0, 0, D, D)
+  // the whole world, contained in the disc
+  const sc = Math.min((2 * R) / W, (2 * R) / H)
+  const ww = W * sc, wh = H * sc, ox = C - ww / 2, oy = C - wh / 2
+  g.imageSmoothingEnabled = false
+  g.drawImage(miniCv, ox, oy, ww, wh)
+  // the living dots: skeletons rust-red, other citizens pale, you a gold spark
+  for (const m of Object.values(s.mobs)) {
+    if (!m || m.hp <= 0) continue
+    g.fillStyle = m.type === 'skeleton-knight' ? '#d98a7a' : 'rgba(200,150,120,.8)'
+    g.fillRect(ox + m.x * sc - 0.6, oy + m.y * sc - 0.6, 1.6, 1.6)
+  }
+  for (const [pid, p] of Object.entries(s.players)) {
+    g.fillStyle = pid === myId ? '#ffcc33' : '#e8e0d0'
+    g.fillRect(ox + p.x * sc - 1, oy + p.y * sc - 1, 2.6, 2.6)
+  }
+  // where you're looking
+  g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 1
+  g.strokeRect(ox + cam.x * sc, oy + cam.y * sc, VIEW_W * sc, VIEW_H * sc)
+  g.restore()
+  // the sun itself: a warm rim and a ring of little rays
+  g.strokeStyle = '#e8c14a'; g.lineWidth = 3
+  g.beginPath(); g.arc(C, C, R, 0, 7); g.stroke()
+  g.strokeStyle = 'rgba(244,208,63,.92)'; g.lineWidth = 2; g.lineCap = 'round'
+  for (let a = 0; a < 12; a++) {
+    const ang = (a / 12) * Math.PI * 2 + now / 5000
+    const r1 = R + 3, r2 = R + 3 + (a % 2 ? 4 : 7.5)
+    g.beginPath()
+    g.moveTo(C + Math.cos(ang) * r1, C + Math.sin(ang) * r1)
+    g.lineTo(C + Math.cos(ang) * r2, C + Math.sin(ang) * r2)
+    g.stroke()
+  }
+}
 
 function glComposite(now) {
   try {
