@@ -571,7 +571,7 @@ const hitFlash = {}   // pid -> ms timestamp of last damage taken
 let celebrate = null  // { text, at }: level-up banner + sparks
 const bubbles = {}    // pid -> { text, at } speech bubbles
 const mobFacing = {}  // mobId -> -1 left / 1 right
-const MOB_LEVEL = { goblin: 2, wolf: 5, troll: 9, bear: 7 } // derived from their stats rows
+const MOB_LEVEL = { goblin: 2, wolf: 5, troll: 9, bear: 7, 'skeleton-knight': 7 } // derived from their stats rows
 const splats = []     // { x, y, amount, at } damage made visible
 const effects = []    // { kind, x, y, at } rites and works made visible
 const layerArr = []   // reused render layer (perf)
@@ -2453,47 +2453,66 @@ if (HD) try {
   }
 } catch (e) { GLON = false; if (glCv) glCv.style.display = 'none' }
 
-// ---- the sun-map: a round minimap in the upper-right, the way a child draws
-// a sun in the corner of the page. Its own overlay canvas, appended last so it
-// rides ABOVE the WebGL layer — the minimap high detail never had. ----
+// ---- the sun-radar: a round porthole in the upper-right, centred on YOU. The
+// world scrolls beneath as you walk (that's the life in it), with a warm sun-rim
+// and rays that turn and twinkle. Its own overlay canvas, appended last so it
+// rides ABOVE the WebGL layer. ----
 const sunCv = document.createElement('canvas')
-sunCv.width = 176; sunCv.height = 176
-sunCv.style.cssText = 'position:absolute;right:8px;top:8px;width:88px;height:88px;pointer-events:none;image-rendering:pixelated'
+sunCv.style.cssText = 'position:absolute;right:6px;top:6px;pointer-events:none;image-rendering:pixelated'
 cv.parentNode.appendChild(sunCv)
 const sunCtx = sunCv.getContext('2d')
 function drawSunMap(s, now) {
   if (!miniReady && W) buildMini()
   if (!miniReady) return
-  const g = sunCtx, D = sunCv.width, C = D / 2, R = D / 2 - 12
+  const g = sunCtx
+  const D = 192, C = D / 2, R = 82
+  if (sunCv.width !== D) { sunCv.width = D; sunCv.height = D; sunCv.style.width = '96px'; sunCv.style.height = '96px' }
+  const me = s.players[myId]; if (!me) return
+  // smooth scroll: interpolate our position exactly like the main view
+  const o = prevState?.players[myId], tt = renderT(now)
+  const pxr = o ? lerp(o.x, me.x, tt) : me.x
+  const pyr = o ? lerp(o.y, me.y, tt) : me.y
+  const rad = 26, scale = R / rad                    // tiles shown from centre to rim
+  g.setTransform(1, 0, 0, 1, 0, 0)
   g.clearRect(0, 0, D, D)
+  // clip to the disc, dark void behind (the edge of the world reads as night)
   g.save(); g.beginPath(); g.arc(C, C, R, 0, 7); g.clip()
-  g.fillStyle = '#12160e'; g.fillRect(0, 0, D, D)
-  // the whole world, contained in the disc
-  const sc = Math.min((2 * R) / W, (2 * R) / H)
-  const ww = W * sc, wh = H * sc, ox = C - ww / 2, oy = C - wh / 2
+  g.fillStyle = '#0e120b'; g.fillRect(0, 0, D, D)
+  // the world, scaled and offset so YOU sit at the centre
   g.imageSmoothingEnabled = false
-  g.drawImage(miniCv, ox, oy, ww, wh)
-  // the living dots: skeletons rust-red, other citizens pale, you a gold spark
+  g.drawImage(miniCv, C - pxr * scale, C - pyr * scale, W * scale, H * scale)
+  const at = (wx, wy) => [C + (wx - pxr) * scale, C + (wy - pyr) * scale]
+  const near = (dx, dy) => dx * dx + dy * dy < (R - 2) * (R - 2)
+  // the living dots: skeletons rust-red, other citizens pale
   for (const m of Object.values(s.mobs)) {
     if (!m || m.hp <= 0) continue
-    g.fillStyle = m.type === 'skeleton-knight' ? '#d98a7a' : 'rgba(200,150,120,.8)'
-    g.fillRect(ox + m.x * sc - 0.6, oy + m.y * sc - 0.6, 1.6, 1.6)
+    const [dx, dy] = at(m.x, m.y); if (!near(dx - C, dy - C)) continue
+    g.fillStyle = m.type === 'skeleton-knight' ? '#e0857a' : 'rgba(205,150,120,.85)'
+    g.fillRect(dx - 1, dy - 1, 2.2, 2.2)
   }
   for (const [pid, p] of Object.entries(s.players)) {
-    g.fillStyle = pid === myId ? '#ffcc33' : '#e8e0d0'
-    g.fillRect(ox + p.x * sc - 1, oy + p.y * sc - 1, 2.6, 2.6)
+    if (pid === myId) continue
+    const [dx, dy] = at(p.x, p.y); if (!near(dx - C, dy - C)) continue
+    g.fillStyle = '#e8e0d0'; g.fillRect(dx - 1, dy - 1, 2.4, 2.4)
   }
-  // where you're looking
-  g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 1
-  g.strokeRect(ox + cam.x * sc, oy + cam.y * sc, VIEW_W * sc, VIEW_H * sc)
+  // soft inner vignette so the porthole fades toward its rim
+  const vg = g.createRadialGradient(C, C, R * 0.5, C, C, R)
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(8,10,6,.6)')
+  g.fillStyle = vg; g.fillRect(0, 0, D, D)
+  // YOU: a gold spark at dead centre, softly pulsing
+  const pulse = 2.6 + Math.sin(now / 320) * 0.6
+  g.fillStyle = '#ffcc33'; g.beginPath(); g.arc(C, C, pulse, 0, 7); g.fill()
+  g.strokeStyle = 'rgba(255,204,51,.5)'; g.lineWidth = 1; g.beginPath(); g.arc(C, C, pulse + 2, 0, 7); g.stroke()
   g.restore()
-  // the sun itself: a warm rim and a ring of little rays
+  // the sun: a warm rim and a ring of rays that turn and twinkle
   g.strokeStyle = '#e8c14a'; g.lineWidth = 3
   g.beginPath(); g.arc(C, C, R, 0, 7); g.stroke()
-  g.strokeStyle = 'rgba(244,208,63,.92)'; g.lineWidth = 2; g.lineCap = 'round'
+  g.strokeStyle = 'rgba(244,208,63,.95)'; g.lineWidth = 2.4; g.lineCap = 'round'
+  const spin = now / 1400
   for (let a = 0; a < 12; a++) {
-    const ang = (a / 12) * Math.PI * 2 + now / 5000
-    const r1 = R + 3, r2 = R + 3 + (a % 2 ? 4 : 7.5)
+    const ang = (a / 12) * Math.PI * 2 + spin
+    const tw = 4 + Math.sin(now / 300 + a) * 2.5           // the rays twinkle
+    const r1 = R + 3, r2 = R + 3 + tw
     g.beginPath()
     g.moveTo(C + Math.cos(ang) * r1, C + Math.sin(ang) * r1)
     g.lineTo(C + Math.cos(ang) * r2, C + Math.sin(ang) * r2)
