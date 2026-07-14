@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.40 ("The Constitution")
+# Interval: Protocol Specification v0.41 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -16,9 +16,12 @@ happens, happens on one.
    anywhere in consensus-relevant logic.
 3. **Verifiability.** Randomness derives from a public beacon; every drop
    roll can be re-computed and audited by any peer.
-4. **Bot indifference.** The protocol does not attempt to detect bots.
-   Economy and progression must be designed so automation is priced in,
-   not policed (see §8).
+4. **Bot indifference.** The protocol does not attempt to detect bots:
+   because bots are not tolerated guests here, they are load-bearing
+   citizens. Witnesses are bots. The joiners that keep quiet hours alive
+   are bots. Since v0.38 their deeds feed the very randomness beacon.
+   Economy and progression are designed so automation is priced in, not
+   policed (see §8).
 5. **Governance by exit.** The rules cannot be amended, only succeeded.
    A rule change is a new world (see §9); players choose their
    constitution by where they play.
@@ -505,11 +508,18 @@ respawns are processed:
 
 ## 6c. Death (provisional: the most fork-worthy rule in this document)
 
-If a player's HP reaches 0: they respawn at the spawn point at full HP
-with their action cleared and their **entire inventory and equipment
-destroyed**. Skills, XP, name, and **bank** survive. Destroyed items leave the world: death
-is the deepest sink. This severity is explicitly provisional; softer
-death rules are an expected and legitimate fork.
+If a player's HP reaches 0, the body lies where it fell for **5 ticks**
+(v0.41): during them the dead act on nothing and cannot be acted upon.
+The world holds its breath; windows may grieve. At the fifth tick the
+citizen returns to the spawn point at full HP with their action cleared
+and their **entire inventory and equipment destroyed** (in the Wilds,
+spilled where they fell: spec 2g). Skills, XP, name, and **bank**
+survive. Destroyed items leave the world: death is the deepest sink.
+
+This severity is explicitly provisional. No sentence in this document
+can declare a fork legitimate or illegitimate: legitimacy is adoption,
+and adoption belongs to whoever shows up. Softer death rules are simply
+expected.
 
 ## 6d. Smithing (the ore sink)
 
@@ -620,6 +630,25 @@ one message per tick per key: the interval applies to speech too.
 Clients may mute any key locally. The world does not remember what was
 said; only who said it.
 
+## 6u. Earned strength, open doors (v0.41)
+
+- **Wield requirements.** star-sword: attack 20. old-chain: attack 30.
+  star-helm: defence 15. star-plate: defence 30. Bronze has no
+  requirement: the door is open; the tower is climbed.
+- **Magic-rock mining floor.** Gathering a magic-rock requires mining
+  level 10: the vein refuses an unpracticed pick.
+- **`mend` (magic 20).** The sigil's second use: `cast {spell:"mend"}`
+  consumes one sigil and restores the caster to full HP. 40 magic XP.
+  The same three stones, a deeper word.
+- **The Brand.** A citizen who initiates `attackp` against a target not
+  currently striking them wears `brandedUntil = tick + 1500`. The state
+  is law; the windows choose the paint. The Brand carries no mechanical
+  penalty (v0.41): it is reputation, made legible.
+- **Gold trades.** `offer_trade` may name `wantGold` instead of
+  `wantItem`: coin settles like any item, atomically, adjacent.
+- **The store sells.** `buy {item}` adjacent to a store: currently
+  `seeds` at 15 gold. Farming no longer waits on goblin luck.
+
 ## 7. Verifiable randomness: the drawing of lots (v0.38)
 
 Each tick carries a **beacon** in the state itself: 32 bytes drawn
@@ -684,13 +713,24 @@ The pan counts; it does not gamble.
 
 ## 8. Bot indifference (design doctrine)
 
-- No rule may depend on "is this player human."
+Bots are not a problem this protocol tolerates: they are infrastructure
+it depends on. Every witness node is a bot: they replay every tick,
+verify every signature, and hold every checkpoint: **bots enforce the
+rules.** Every scripted citizen chopping through the night keeps the
+world's pulse and, since v0.38, feeds its randomness: their deeds are
+entropy. A world with no bots is a world with no witnesses.
+
+The rules therefore never ask "is this player human," and never need to:
+
 - Resource nodes deplete and are shared → automation increases supply,
   which markets price in, rather than granting private infinite yield.
-- Rare value should come from **scarcity mechanisms** (depletion timers,
-  per-region caps), not from per-player RNG lottery that bots can farm
-  in parallel for free.
-- Future economy work (v0.2+): sink-heavy design, decay, region caps.
+- Rare value comes from **scarcity mechanisms** (depletion timers,
+  per-region caps), not per-player RNG lotteries that bots could farm
+  in parallel for free: and since v0.39, instant actions carry no RNG
+  at all.
+- The clock may work, but it may never gate (v0.40): a bot's patience
+  is infinite, so rules that tax patience tax only humans. There are
+  none.
 
 ## 9. Worlds, versions, and forks
 

@@ -14,7 +14,7 @@ const ed = require('@noble/ed25519');
 ed.hashes.sha512 = sha512;
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.40';
+const SPEC_VERSION = '0.41';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 const DEPLETE_TICKS = 8;
@@ -28,6 +28,16 @@ const NODE_YIELD = {
 // (tick % 2400), not wall-clock authority: but its only effect was
 // mandatory waiting, and waiting is the one cost this world rejects.
 // The stones price the sigil; the sky is for the windows to paint.
+// v0.41: strength must be earned before it is worn. Smithing gated the
+// forge; nothing gated the arm. Bronze stays free: the door is open.
+const WIELD_REQS = {
+  'star-sword': { attack: 20 }, 'old-chain': { attack: 30 },
+  'star-helm': { defence: 15 }, 'star-plate': { defence: 30 },
+};
+const STORE_SELLS = { seeds: 15 }; // farming no longer waits on goblin luck
+const MAGIC_ROCK_MINING = 10; // the vein refuses an unpracticed pick
+const DEATH_TICKS = 5; // the world holds its breath; windows may grieve
+const BRAND_TICKS = 1500; // strike first in the Wilds, wear it 15 minutes
 const XP_COOK = 30;
 const HEAL_FISH = 3;
 const HP_START_XP = 1154; // hitpoints level 10
@@ -300,6 +310,7 @@ function validInput(state, input) {
   const p = state.players[input.playerId];
   if (input.type === 'spawn') return !p; // §5b: the only input for unknown ids
   if (!p) return false;
+  if (p.hp <= 0) return false; // the dead act on nothing (v0.41)
   switch (input.type) {
     case 'move': {
       const { dx, dy } = input;
@@ -312,7 +323,9 @@ function validInput(state, input) {
     }
     case 'gather': {
       const n = state.nodes[input.nodeId];
-      return !!n && (n.type in NODE_YIELD) && n.depletedUntil <= state.tick && adjacent(p, n);
+      if (!n || !(n.type in NODE_YIELD) || n.depletedUntil > state.tick || !adjacent(p, n)) return false;
+      if (n.type === 'magic-rock' && effLevel(p.skills.mining) < MAGIC_ROCK_MINING) return false;
+      return true;
     }
     case 'cook': {
       const slot = p.inventory[input.slot];
@@ -333,16 +346,24 @@ function validInput(state, input) {
       const t = state.players[input.to];
       if (!t || input.to === input.playerId) return false;
       if (!Number.isInteger(input.giveSlot) || !p.inventory[input.giveSlot]) return false;
-      return typeof input.wantItem === 'string';
+      // v0.41: gold is tradeable: want an item, or want coin
+      if (typeof input.wantItem === 'string') return true;
+      return Number.isInteger(input.wantGold) && input.wantGold > 0;
     }
     case 'accept_trade': {
       const o = state.players[input.from];
       if (!o || !o.trade || o.trade.to !== input.playerId) return false;
       if (!adjacent(p, o)) return false;
+      if (o.trade.wantGold) return (p.gold ?? 0) >= o.trade.wantGold;
       return p.inventory.some(s => s && s.item === o.trade.wantItem);
     }
     case 'cancel_trade':
       return p.trade !== null;
+    case 'buy': {
+      if (!(input.item in STORE_SELLS)) return false;
+      if ((p.gold ?? 0) < STORE_SELLS[input.item] || firstFreeSlot(p.inventory) === -1) return false;
+      return Object.values(state.nodes).some(n => n.type === 'store' && adjacent(p, n));
+    }
     case 'attack': {
       const m = state.mobs[input.mobId];
       if (!m || m.hp <= 0) return false;
@@ -382,8 +403,10 @@ function validInput(state, input) {
       return p.inventory.filter(sl => sl?.item === 'magic-stone').length >= 3;
     }
     case 'cast': {
-      if (input.spell !== 'anchor') return false;
-      return p.inventory.some(sl => sl?.item === 'sigil');
+      if (input.spell === 'anchor') return p.inventory.some(sl => sl?.item === 'sigil');
+      if (input.spell === 'mend') // v0.41: the same sigil, a deeper use
+        return effLevel(p.skills.magic) >= 20 && p.inventory.some(sl => sl?.item === 'sigil');
+      return false;
     }
     case 'fletch': {
       const sl = p.inventory[input.slot];
@@ -402,7 +425,11 @@ function validInput(state, input) {
     }
     case 'wield': {
       const sl = p.inventory[input.slot];
-      return Number.isInteger(input.slot) && !!sl && EQUIPPABLE.has(sl.item);
+      if (!Number.isInteger(input.slot) || !sl || !EQUIPPABLE.has(sl.item)) return false;
+      const req = WIELD_REQS[sl.item];
+      if (req) for (const [sk, lv] of Object.entries(req))
+        if (effLevel(p.skills[sk]) < lv) return false; // earned, then worn (v0.41)
+      return true;
     }
     case 'unwield': {
       const g = ['weapon', 'head', 'body'].includes(input.gear) ? input.gear : 'weapon';
@@ -453,6 +480,15 @@ function nextState(state, inputs, _legacyBeacon) {
   if (!s.beacon) s.beacon = beaconValue(state.genesis.genesisSeed, state.tick).toString('hex');
   const beacon = Buffer.from(s.beacon, 'hex');
 
+  // the dead return (spec §6c, v0.41): processed at tick start
+  for (const pl2 of Object.values(s.players)) {
+    if (pl2.hp <= 0 && pl2.deadUntil !== undefined && s.tick >= pl2.deadUntil) {
+      const sp2 = spawnOf(s.genesis);
+      pl2.x = sp2.x; pl2.y = sp2.y;
+      pl2.hp = effLevel(pl2.skills.hitpoints);
+      delete pl2.deadUntil;
+    }
+  }
   // mob respawns (spec §3.3): processed at tick start
   for (const m of Object.values(s.mobs)) {
     if (m.hp <= 0 && m.respawnAt <= s.tick) {
@@ -507,7 +543,7 @@ function nextState(state, inputs, _legacyBeacon) {
     } else if (inp.type === 'stop') {
       p.action = null;
     } else if (inp.type === 'offer_trade') {
-      p.trade = { to: inp.to, giveSlot: inp.giveSlot, wantItem: inp.wantItem };
+      p.trade = { to: inp.to, giveSlot: inp.giveSlot, wantItem: inp.wantItem, wantGold: inp.wantGold }; // coin or kind (v0.41)
     } else if (inp.type === 'cancel_trade') {
       p.trade = null;
     } else if (inp.type === 'accept_trade') {
@@ -515,12 +551,25 @@ function nextState(state, inputs, _legacyBeacon) {
       const o = s.players[inp.from];
       if (o && o.trade && o.trade.to === pid && adjacent(p, o)) {
         const giveItem = o.inventory[o.trade.giveSlot];
-        const j = p.inventory.findIndex(sl => sl && sl.item === o.trade.wantItem);
-        if (giveItem && j !== -1) {
-          const wantSlotItem = p.inventory[j];
-          o.inventory[o.trade.giveSlot] = wantSlotItem;
-          p.inventory[j] = giveItem;
-          o.trade = null;
+        if (o.trade.wantGold) { // v0.41: coin settles like any item
+          if (giveItem && (p.gold ?? 0) >= o.trade.wantGold) {
+            const fs3 = firstFreeSlot(p.inventory);
+            if (fs3 !== -1) {
+              p.gold -= o.trade.wantGold;
+              o.gold = (o.gold ?? 0) + o.trade.wantGold;
+              p.inventory[fs3] = giveItem;
+              o.inventory[o.trade.giveSlot] = null;
+              o.trade = null;
+            }
+          }
+        } else {
+          const j = p.inventory.findIndex(sl => sl && sl.item === o.trade.wantItem);
+          if (giveItem && j !== -1) {
+            const wantSlotItem = p.inventory[j];
+            o.inventory[o.trade.giveSlot] = wantSlotItem;
+            p.inventory[j] = giveItem;
+            o.trade = null;
+          }
         }
       }
     } else if (inp.type === 'attack') {
@@ -548,10 +597,23 @@ function nextState(state, inputs, _legacyBeacon) {
         p.equipment[g] = sl;
         p.inventory[inp.slot] = cur;
       }
+    } else if (inp.type === 'buy') {
+      const price = STORE_SELLS[inp.item];
+      const nearStore = Object.values(s.nodes).some(n => n.type === 'store' && adjacent(p, n));
+      const fs2 = firstFreeSlot(p.inventory);
+      if (price && nearStore && (p.gold ?? 0) >= price && fs2 !== -1) {
+        p.gold -= price;
+        p.inventory[fs2] = { item: inp.item, qty: 1 };
+      }
     } else if (inp.type === 'attackp') {
       const q = s.players[inp.targetId];
       if (q && q.hp > 0 && inWilds(p.x, p.y) && inWilds(q.x, q.y)) {
         p.action = { type: 'attackp', targetId: inp.targetId, since: s.tick };
+        // the Brand (v0.41): striking one who was not striking you is
+        // worn openly. Windows paint it as they wish; the state is law.
+        const q3 = s.players[inp.targetId];
+        if (q3 && !(q3.action?.type === 'attackp' && q3.action.targetId === pid))
+          p.brandedUntil = s.tick + BRAND_TICKS;
       }
     } else if (inp.type === 'plant') {
       const sl = p.inventory[inp.slot];
@@ -595,7 +657,11 @@ function nextState(state, inputs, _legacyBeacon) {
       }
     } else if (inp.type === 'cast') {
       const si = p.inventory.findIndex(sl => sl?.item === 'sigil');
-      if (inp.spell === 'anchor' && si !== -1) {
+      if (inp.spell === 'mend' && si !== -1) {
+        p.inventory[si] = null;
+        p.hp = effLevel(p.skills.hitpoints); // made whole (v0.41)
+        p.skills.magic += 40;
+      } else if (inp.spell === 'anchor' && si !== -1) {
         p.inventory[si] = null;
         const cx2 = Math.floor(s.genesis.worldW / 2);
         p.x = cx2; p.y = 7; // the plaza beside the well: the fixed point
@@ -756,17 +822,16 @@ function nextState(state, inputs, _legacyBeacon) {
             q.action = { type: 'attackp', targetId: pid, since: s.tick + 1 }; // struck: strikes back
           }
           if (q.hp <= 0) {
-            // slain in the Wilds (spec 2g): the pack spills where they fall
+            // slain in the Wilds (spec 2g): the pack spills where they fall,
+            // and the body lies beside it awhile (v0.41)
             for (const sl of q.inventory) if (sl) {
               s.ground['g' + s.tick + '-' + Object.keys(s.ground).length] =
                 { item: sl.item, qty: sl.qty ?? 1, x: q.x, y: q.y, expiresAt: s.tick + 100 };
             }
             q.inventory = q.inventory.map(() => null);
             q.equipment = { weapon: null, head: null, body: null };
-            const sp = spawnOf(s.genesis);
-            q.x = sp.x; q.y = sp.y;
-            q.hp = effLevel(q.skills.hitpoints);
             q.action = null; q.trade = null;
+            q.deadUntil = s.tick + DEATH_TICKS;
           }
         }
       }
@@ -831,14 +896,13 @@ function nextState(state, inputs, _legacyBeacon) {
           const soak = (p.equipment.head ? SOAK(p.equipment.head.item) : 0) + (p.equipment.body ? SOAK(p.equipment.body.item) : 0);
           p.hp -= Math.max(0, 1 + (roll(beacon, pid, 'mobdmg') % stats.maxHit) - soak);
           if (p.hp <= 0) {
-            // death (spec §6c): respawn, full hp, inventory destroyed
-            const sp = spawnOf(s.genesis);
-            p.x = sp.x; p.y = sp.y;
-            p.hp = effLevel(p.skills.hitpoints);
+            // death (spec §6c, v0.41): the body lies where it fell for
+            // DEATH_TICKS: the world holds its breath, windows may grieve.
             p.inventory = Array(INV_SLOTS).fill(null);
             p.equipment = { weapon: null, head: null, body: null }; // the sink spares nothing (§5d)
             p.action = null;
             p.trade = null;
+            p.deadUntil = s.tick + DEATH_TICKS;
           }
         } else {
           p.skills.defence += 4;
