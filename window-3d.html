@@ -52,7 +52,20 @@
      on aurora nights the sky faintly rings. At the waterline: a coast
      the sea never had, sand darkening where the water reaches, and a
      line of foam along every shore, each segment lapping to its own
-     clock. -->
+     clock.
+
+     Then the town got its carpentry, and the window learned honesty.
+     Every building now draws its character from its own hash: jettied
+     second storeys on bracket beams, corner posts, diagonal braces,
+     roofs that sag and kick their eaves the way old rafters spread,
+     mullioned windows on sills (the houses hang flower boxes), planked
+     and hinged doors over worn stone steps, trade signs swinging on
+     their brackets in the wind, a forge mouth breathing orange, and
+     windows that light household by household as the dusk deepens.
+     Six lanterns stand the perimeter — true lights on fine machines.
+     And when a browser cannot sign (insecure origin, walled storage),
+     the window now SAYS SO in a banner instead of silently spectating;
+     blocked storage no longer costs the key, only its persistence. -->
 <html>
 <head>
 <meta charset="utf-8">
@@ -411,21 +424,33 @@ function canonicalJS(obj) {
 }
 const toHex = (buf) => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('')
 const fromHex = (h) => new Uint8Array(h.match(/../g).map(x => parseInt(x, 16)))
+let signErr = '' // when the window cannot sign, it SAYS SO, and says why
 async function ownIdentity() {
-  if (!crypto?.subtle) return null
+  if (!crypto?.subtle) { signErr = 'no WebCrypto: browsers only allow signing on https:// or localhost'; return null }
+  let saved = null
+  try { saved = localStorage.getItem('interval-ownkey') } catch {} // storage may be walled off: survive it
   try {
-    const saved = localStorage.getItem('interval-ownkey') // the SAME key /play holds
     if (saved) {
       const { pk8, pub } = JSON.parse(saved)
       const priv = await crypto.subtle.importKey('pkcs8', fromHex(pk8), { name: 'Ed25519' }, true, ['sign'])
       return { priv, pub }
     }
+  } catch {} // a corrupt or foreign key: fall through and mint anew
+  try {
     const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify'])
     const pub = toHex(await crypto.subtle.exportKey('raw', kp.publicKey))
     const pk8 = toHex(await crypto.subtle.exportKey('pkcs8', kp.privateKey))
-    localStorage.setItem('interval-ownkey', JSON.stringify({ pk8, pub }))
+    try { localStorage.setItem('interval-ownkey', JSON.stringify({ pk8, pub })) } catch {} // no storage? the key lives for the session
     return { priv: kp.privateKey, pub }
-  } catch { return null }
+  } catch (e) { signErr = 'this browser cannot sign Ed25519 (' + (e?.message ?? 'unsupported') + ')'; return null }
+}
+function signBanner() { // a spectator should KNOW they are spectating
+  if (document.getElementById('signwarn')) return
+  const d = document.createElement('div')
+  d.id = 'signwarn'
+  d.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:99;background:rgba(60,20,16,.92);color:#ffd9c9;border:1px solid #a0523a;padding:8px 14px;font:12px monospace;border-radius:6px;max-width:86vw;text-align:center'
+  d.textContent = '⚠ spectating: ' + (signErr || 'cannot sign inputs') + ' — movement is disabled until this window can sign'
+  document.body.appendChild(d)
 }
 const allocTick = () => {
   const t2 = Math.max((world?.tick ?? 0) + 1, lastStamped + 1)
@@ -832,6 +857,7 @@ const foamMat = new THREE.ShaderMaterial({
 let shoreXZ = [] // foam midpoints, kept for the ear: the shore is heard by proximity
 let auroraAmtG = 0 // the sky's felt amount, read by the ambient bed
 let fireNear = null // the nearest living fire, for crackle and pops
+const lanterns = [] // the town's posts, lit at dusk
 const V3A = new THREE.Vector3(), V3B = new THREE.Vector3(), V3C = new THREE.Vector3() // audio scratch
 
 // ---- the darkroom assembled: bloom for fire and sun, FXAA for the
@@ -1467,6 +1493,38 @@ function buildGround(s0) {
     scene.add(crags)
   }
 
+  // ---- the lanterns: six posts stand the town's perimeter and light
+  // at dusk. On fine machines each carries a true (shadowless) point
+  // light; elsewhere the glass alone glows and the eye believes it. ----
+  {
+    const cx3 = Math.floor(W / 2)
+    const spots = [[cx3 - 8, 2], [cx3 + 8, 2], [cx3 - 8, 10], [cx3 + 8, 10], [cx3, 1], [cx3, 11]]
+    const postM = new THREE.MeshStandardMaterial({ color: 0x2e2620, roughness: 0.9 })
+    const ironM = new THREE.MeshStandardMaterial({ color: 0x26262b, roughness: 0.5, metalness: 0.5 })
+    for (const [lx2, ly2] of spots) {
+      const lg = new THREE.Group()
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 1.15, 6), postM)
+      post.position.y = 0.575; post.castShadow = true; lg.add(post)
+      const arm2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.24), ironM)
+      arm2.position.set(0, 1.12, 0.1); lg.add(arm2)
+      const cage = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.13, 0.09), ironM)
+      cage.position.set(0, 1.02, 0.2); lg.add(cage)
+      const glass = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.095, 0.065),
+        new THREE.MeshStandardMaterial({ color: 0x1a140c, emissive: 0xffc06a, emissiveIntensity: 0 }))
+      glass.position.copy(cage.position); lg.add(glass)
+      const cap2 = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.06, 4), ironM)
+      cap2.position.set(0, 1.1, 0.2); cap2.rotation.y = Math.PI / 4; lg.add(cap2)
+      let pl2 = null
+      if (FINE) { // light without the shadow bill
+        pl2 = new THREE.PointLight(0xffb060, 0, 4.5)
+        pl2.position.copy(cage.position); pl2.castShadow = false; lg.add(pl2)
+      }
+      lg.position.set(wx(lx2), Math.max(0, groundYAt(lx2, ly2)), wz(ly2))
+      scene.add(lg)
+      lanterns.push({ glass, pl: pl2, seed: (tileHash(lx2, ly2, 63) % 628) / 100 })
+    }
+  }
+
   // ---- the foam itself: one merged strip of quads along every edge
   // where a water tile meets land. v runs 0 at the land edge to 1 in
   // the water; each segment carries a hashed phase so no two laps agree.
@@ -1658,6 +1716,7 @@ function mkSmoke(parent, x, y0, z, scale, pace, dark) {
 function nodeMesh(n) {
   const g = new THREE.Group()
   const std = (c, r = 0.9) => new THREE.MeshStandardMaterial({ color: c, roughness: r })
+  const metalN = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.35, metalness: 0.7 })
   const cast = (m) => { m.castShadow = true; return m }
   if (n.type === 'tree') {
     const hv = tileHash(n.x, n.y, 6)
@@ -1759,33 +1818,133 @@ function nodeMesh(n) {
     rise.rotation.x = -Math.PI / 2; rise.position.y = -0.08
     g.add(rise); g.userData.rise = rise
   } else if (n.type === 'bank' || n.type === 'store' || n.type === 'house' || n.type === 'anvil' || n.type === 'smith' || n.type === 'well' || n.type === 'guard') {
+    // ---- the town, given its carpentry: every building draws its
+    // character from its own tile hash — wall height, jetty, sag,
+    // braces, dormers — so the row reads as a street, not a barracks ----
     const hues = { bank: 0x9a7a44, store: 0x84618f, house: 0x7d6c47, anvil: 0x565662, smith: 0x565662, well: 0x84806f, guard: 0x66783f }
     const wallC = hues[n.type] ?? 0x7d6c47
+    const hv2 = tileHash(n.x, n.y, 57)
+    const beamM = std(0x3a2c1a, 1)
+    const twoStorey = n.type === 'bank' || n.type === 'store' || (n.type === 'house' && hv2 % 3 === 0)
+    const wallH = 0.56 + (hv2 % 5) / 40
     const base = cast(new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.34, 0.92), std(0x67635a)))
     base.position.y = 0.17; g.add(base) // stone footing
-    const b = cast(new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.64, 0.84), std(wallC)))
-    b.position.y = 0.66; g.add(b) // plastered upper
-    // timber: dark beams cross the face, the medieval signature
-    const beamM = std(0x3a2c1a, 1)
-    for (const [bx2, by2, bw2, bh2] of [[-0.38, 0.66, 0.05, 0.64], [0.38, 0.66, 0.05, 0.64], [0, 0.95, 0.82, 0.05], [0, 0.38, 0.82, 0.05]]) {
-      const beam = new THREE.Mesh(new THREE.BoxGeometry(bw2, bh2, 0.03), beamM)
-      beam.position.set(bx2, by2, 0.435); g.add(beam)
+    const b = cast(new THREE.Mesh(new THREE.BoxGeometry(0.84, wallH, 0.84), std(wallC)))
+    b.position.y = 0.34 + wallH / 2; g.add(b) // plastered ground floor
+    let topY = 0.34 + wallH // where the roof will land
+    if (twoStorey) { // the upper floor JETTIES out over the street
+      const up = cast(new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.42, 0.94), std(wallC)))
+      up.position.y = topY + 0.21; g.add(up)
+      const jetty = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.05, 0.96), beamM)
+      jetty.position.y = topY + 0.005; g.add(jetty) // the sill beam carries the overhang
+      for (const [jx, jz] of [[-0.42, 0.47], [0.42, 0.47], [-0.42, -0.47], [0.42, -0.47]]) {
+        const brk = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, 0.05), beamM)
+        brk.position.set(jx, topY - 0.07, jz * 0.94); brk.rotation.x = jz > 0 ? 0.5 : -0.5; g.add(brk)
+      }
+      topY += 0.42
     }
+    // corner posts on all four corners, ground to eaves
+    for (const [px4, pz4] of [[-0.4, 0.4], [0.4, 0.4], [-0.4, -0.4], [0.4, -0.4]]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, topY - 0.3, 0.06), beamM)
+      post.position.set(px4, 0.34 + (topY - 0.34) / 2, pz4); g.add(post)
+    }
+    // face timber: top and bottom rails, and two diagonal braces
+    for (const [by2, bw2] of [[topY - 0.03, 0.82], [0.38, 0.82]]) {
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(bw2, 0.05, 0.03), beamM)
+      beam.position.set(0, by2, 0.435); g.add(beam)
+    }
+    for (const sx5 of [-1, 1]) { // the diagonals: the medieval signature
+      const brace = new THREE.Mesh(new THREE.BoxGeometry(0.04, wallH * 0.8, 0.028), beamM)
+      brace.position.set(sx5 * 0.3, 0.34 + wallH / 2, 0.432)
+      brace.rotation.z = sx5 * 0.55; g.add(brace)
+    }
+    // ---- the roof: a hip that SAGS, its eaves kicked outward the way
+    // old rafters spread. Cone with height segments, displaced: mid
+    // rings bow out and down, the ridge dips by the building's age ----
     const roofC = { bank: 0x8a5a2a, store: 0x5a3a6b, smith: 0x3f3f4a, anvil: 0x3f3f4a }[n.type] ?? 0x8a3a2a
-    const roof = cast(new THREE.Mesh(new THREE.ConeGeometry(0.78, 0.58, 4), std(roofC, 0.95)))
-    roof.position.y = 1.26; roof.rotation.y = Math.PI / 4; g.add(roof)
-    const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.3, 0.12), std(0x5a564e))
-    chimney.position.set(0.24, 1.36, -0.18); g.add(chimney)
-    chimneySmokes.push(mkSmoke(g, 0.24, 1.55, -0.18, 0.35, 0.5, true))
+    const sag = 0.03 + (hv2 % 7) / 160
+    const roofGeo = new THREE.ConeGeometry(0.72, 0.55, 4, 3)
+    { const rp = roofGeo.attributes.position
+      for (let vi2 = 0; vi2 < rp.count; vi2++) {
+        const vy = rp.getY(vi2), t5 = vy / 0.55 + 0.5 // 0 eave .. 1 ridge
+        if (t5 > 0.05 && t5 < 0.95) { // the mid rings: bow out, settle down
+          const kick = 1 + (1 - t5) * 0.16
+          rp.setX(vi2, rp.getX(vi2) * kick); rp.setZ(vi2, rp.getZ(vi2) * kick)
+          rp.setY(vi2, vy - Math.sin(t5 * Math.PI) * sag)
+        } else if (t5 >= 0.95) rp.setY(vi2, vy - sag * 0.8) // even the ridge gave a little
+      }
+      roofGeo.computeVertexNormals() }
+    const roof = cast(new THREE.Mesh(roofGeo, std(roofC, 0.95)))
+    roof.scale.setScalar(twoStorey ? 1.18 : 1.12)
+    roof.position.y = topY + 0.26; roof.rotation.y = Math.PI / 4; g.add(roof)
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), beamM)
+    finial.position.y = topY + 0.5; g.add(finial)
+    const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.34, 0.12), std(0x5a564e))
+    const chx = (hv2 % 2) ? 0.24 : -0.22
+    chimney.position.set(chx, topY + 0.42, -0.18); g.add(chimney)
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.09, 6), std(0x6b4a3a))
+    pot.position.set(chx, topY + 0.62, -0.18); g.add(pot) // the clay pot cap
+    chimneySmokes.push(mkSmoke(g, chx, topY + 0.68, -0.18, 0.35, 0.5, true))
+    // the door: planked, hinged, with a stone step worn in the middle
     const door = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.4, 0.03), std(0x33220f))
     door.position.set(0, 0.54, 0.44); g.add(door)
+    for (const dx5 of [-0.055, 0.02]) { // plank seams
+      const seam = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.38, 0.032), std(0x241708, 1))
+      seam.position.set(dx5, 0.54, 0.441); g.add(seam)
+    }
+    for (const hy2 of [0.44, 0.64]) { // iron hinge straps
+      const hinge = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.034), std(0x2e2e33, 0.5))
+      hinge.position.set(-0.03, hy2, 0.442); g.add(hinge)
+    }
+    const step = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.14), std(0x76726a))
+    step.position.set(0, 0.31, 0.5); g.add(step)
     const lintel = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.045, 0.04), beamM)
     lintel.position.set(0, 0.76, 0.445); g.add(lintel)
-    for (const wx2 of [-0.26, 0.26]) { // it glows after dark, both panes
+    // windows: mullioned panes on a sill, each building keeping its own
+    // hour for lighting them — and the houses hang flower boxes
+    g.userData.winOff = (tileHash(n.x, n.y, 61) % 100) / 100
+    for (const wx2 of [-0.26, 0.26]) {
       const win = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.03),
         new THREE.MeshStandardMaterial({ color: 0x2a2418, emissive: 0xffb84d, emissiveIntensity: 0 }))
       win.position.set(wx2, 0.68, 0.44); g.add(win)
+      const mulV = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.14, 0.032), beamM)
+      mulV.position.set(0, 0, 0.002); win.add(mulV)
+      const mulH = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.014, 0.032), beamM)
+      mulH.position.set(0, 0, 0.002); win.add(mulH)
+      const sill = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.025, 0.05), std(0x76726a))
+      sill.position.set(wx2, 0.6, 0.445); g.add(sill)
+      if (n.type === 'house') { // the flower box: domesticity itself
+        const box2 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.035, 0.045), std(0x4a3419))
+        box2.position.set(wx2, 0.585, 0.462); g.add(box2)
+        for (let fi = 0; fi < 3; fi++) {
+          const fl = new THREE.Mesh(new THREE.SphereGeometry(0.016, 5, 4),
+            std([0xc0392b, 0xd9a13a, 0xb05a9e][(hv2 + fi) % 3], 0.6))
+          fl.position.set(wx2 - 0.045 + fi * 0.045, 0.615, 0.465); g.add(fl)
+        }
+      }
       if (!g.userData.win) g.userData.win = win; else g.userData.win2 = win
+    }
+    if (n.type === 'bank' || n.type === 'store' || n.type === 'smith') { // the trade, hung out over the street
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.26), beamM)
+      arm.position.set(0.38, 0.98, 0.5); g.add(arm)
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.02),
+        std(n.type === 'bank' ? 0xc9a24a : n.type === 'store' ? 0x8a5a9e : 0x4a4a52, 0.8))
+      sign.position.set(0, -0.11, 0.1) // hangs from the arm's end
+      arm.add(sign); g.userData.sign = sign
+      const emblem = new THREE.Mesh(n.type === 'smith' ? new THREE.BoxGeometry(0.08, 0.05, 0.025) : new THREE.SphereGeometry(0.035, 8, 6),
+        n.type === 'bank' ? metalN(0xffd970) : n.type === 'store' ? std(0xd9d3c0) : metalN(0x8a8a92))
+      emblem.position.z = 0.02; sign.add(emblem)
+    }
+    if (n.type === 'guard') { // a banner, not a shingle
+      const pole2 = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5, 5), beamM)
+      pole2.position.set(0.38, topY + 0.2, 0.3); pole2.rotation.z = -0.3; g.add(pole2)
+      const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.3, 0.16), std(0x4a6b2f, 0.9))
+      cloth.position.set(0.45, topY + 0.12, 0.3); g.add(cloth); g.userData.sign = cloth
+    }
+    if (n.type === 'smith' || n.type === 'anvil') { // the forge mouth glows all hours
+      const forge = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.04),
+        new THREE.MeshStandardMaterial({ color: 0x1a1210, emissive: 0xff7020, emissiveIntensity: 0.8 }))
+      forge.position.set(-0.26, 0.46, 0.435); g.add(forge); g.userData.forge = forge
     }
   } else if (n.type === 'signpost') {
     const pole = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.9, 6), std(0x5c4023)))
@@ -2552,7 +2711,7 @@ ws.onopen = async () => {
     ws.send(JSON.stringify({ type: 'adopt', pub: ownKey.pub }))
     const kEl = document.getElementById('gate3dkey')
     if (kEl) kEl.textContent = 'your key: ' + ownKey.pub.slice(0, 12) + '… (held by this browser, shared with /play)'
-  } else feed('this browser cannot sign (no Ed25519): spectating')
+  } else { feed('this window cannot sign: spectating'); signBanner() }
 }
 // ---- sound: synthesized from nothing, in /play's tradition ----
 let AC3 = null
@@ -2648,6 +2807,12 @@ function snd(kind, pos, flavor) {
 document.getElementById('gate3dbtn').addEventListener('click', () => {
   entered = true
   try { AC3 = new (window.AudioContext ?? window.webkitAudioContext)(); initAmbient() } catch {}
+  if (!ownKey) ownIdentity().then((k) => { // one more knock at the door
+    if (!k) { signBanner(); return }
+    ownKey = k; myId = k.pub
+    if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'adopt', pub: k.pub }))
+    document.getElementById('signwarn')?.remove()
+  })
   document.getElementById('gate3d').style.display = 'none'
 })
 ws.onmessage = async (ev) => {
@@ -3131,10 +3296,22 @@ function animate(now) {
     sm.sp.scale.setScalar(sm.scale * (0.5 + f * 1.8))
   }
   for (const cr of glowCrystals) cr.material.emissiveIntensity = 1.1 + Math.sin(now / 400 + cr.position.x * 3) * 0.5 + night * 0.5
+  for (const ln of lanterns) { // the lamplighter makes his round
+    const flick = Math.sin(now / 170 + ln.seed * 9) * 0.06 + Math.sin(now / 47 + ln.seed) * 0.03
+    const amt = clamp01((0.55 - day) * 3)
+    ln.glass.material.emissiveIntensity = amt * (1.8 + flick * 4)
+    if (ln.pl) ln.pl.intensity = amt * (1.05 + flick)
+  }
   const winGlow = Math.max(0, (0.5 - day) * 2.4)
   for (const [, m] of nodeMeshes) {
-    if (m.userData.win) m.userData.win.material.emissiveIntensity = winGlow
-    if (m.userData.win2) m.userData.win2.material.emissiveIntensity = winGlow * 0.8
+    if (m.userData.win) { // each household keeps its own hour: the town
+      // lights up window by window as the dusk deepens
+      const wOn = clamp01((winGlow - m.userData.winOff * 0.9) * 3)
+      m.userData.win.material.emissiveIntensity = wOn * 2.2
+      if (m.userData.win2) m.userData.win2.material.emissiveIntensity = wOn * 1.7
+    }
+    if (m.userData.sign) m.userData.sign.rotation.x = Math.sin(now / 850 + m.position.x * 1.7) * 0.1 * (0.35 + curW.wind) // the shingle swings on its bracket
+    if (m.userData.forge) m.userData.forge.material.emissiveIntensity = 0.65 + Math.sin(now / 260 + m.position.x) * 0.2 + Math.sin(now / 91) * 0.08 // the coals breathe
     if (m.userData.canopy) m.userData.canopy.rotation.z = Math.sin(now / 1400 + m.userData.canopy.userData.sway) * 0.05
     if (m.userData.halo) m.userData.halo.material.opacity = 0.25 + night * 0.25 + Math.sin(now / 500 + m.position.x) * 0.08
     if (m.userData.rise) {
