@@ -65,7 +65,20 @@
      Six lanterns stand the perimeter — true lights on fine machines.
      And when a browser cannot sign (insecure origin, walled storage),
      the window now SAYS SO in a banner instead of silently spectating;
-     blocked storage no longer costs the key, only its persistence. -->
+     blocked storage no longer costs the key, only its persistence.
+
+     Then the fights learned to land, and the world learned to be read.
+     Every blow flashes white through the struck body and knocks it a
+     flinch backward; close blows shudder the camera; blades whoosh and
+     leave an arc of light on the whip; bowstrings twang and their
+     arrows actually FLY, arcing from archer to mark; death is a fall
+     held a moment, not a switch. A minimap rides the corner, painted
+     once from the same pure terrain functions every window shares,
+     with living dots for beasts, fires, and neighbors, your own gold
+     mark and its facing — and tapping the map walks the world. The
+     grade was mended too: grain moved after gamma and out of the
+     shadows, fringe pushed to the rim, a true dither against banding —
+     the rainbow confetti of dark half-resolution nights is gone. -->
 <html>
 <head>
 <meta charset="utf-8">
@@ -858,6 +871,8 @@ let shoreXZ = [] // foam midpoints, kept for the ear: the shore is heard by prox
 let auroraAmtG = 0 // the sky's felt amount, read by the ambient bed
 let fireNear = null // the nearest living fire, for crackle and pops
 const lanterns = [] // the town's posts, lit at dusk
+let camShake = 0 // the blow reaches the eye, then lets go
+const arrowPool = [], arrowFlights = [] // arrows actually FLY now
 const V3A = new THREE.Vector3(), V3B = new THREE.Vector3(), V3C = new THREE.Vector3() // audio scratch
 
 // ---- the darkroom assembled: bloom for fire and sun, FXAA for the
@@ -874,7 +889,7 @@ const GradeShader = {
     void main() {
       vec2 q = vUv - 0.5;
       float r2 = dot(q, q);
-      vec2 ca = q * r2 * 0.020;                            // the lens admits a whisper of fringe
+      vec2 ca = q * r2 * r2 * 0.055;                       // fringe only at the very rim now
       vec3 c;
       c.r = texture2D(tDiffuse, vUv + ca).r;
       c.g = texture2D(tDiffuse, vUv).g;
@@ -885,9 +900,14 @@ const GradeShader = {
       c = mix(c, c * vec3(0.80, 0.90, 1.14), uNight * 0.40); // moonlit steel
       c *= mix(vec3(1.0), vec3(1.07, 0.98, 0.89), uWarm * 0.85); // the golden hour, honoured
       c *= 1.0 - r2 * uVig * 2.0;
-      float gn = fract(sin(dot(vUv + fract(uTime), vec2(12.9898, 78.233))) * 43758.5453);
-      c += (gn - 0.5) * 0.014;                            // film grain: the frame breathes
       c = pow(max(c, vec3(0.0)), vec3(0.4545)); // linear leaves; the screen receives
+      // grain AFTER gamma, and it keeps out of the shadows: the old way
+      // amplified into rainbow confetti on dark nights at half resolution
+      float gn = fract(sin(dot(vUv + fract(uTime), vec2(12.9898, 78.233))) * 43758.5453);
+      float l2 = dot(c, vec3(0.299, 0.587, 0.114));
+      c += (gn - 0.5) * 0.009 * (0.25 + 0.75 * smoothstep(0.0, 0.4, l2));
+      float dth = fract(sin(dot(vUv * 1.7 + fract(uTime * 0.37), vec2(41.31, 289.7))) * 33758.545);
+      c += (dth - 0.5) * (2.0 / 255.0);                   // and a true dither, against the banding
       gl_FragColor = vec4(c, 1.0);
     }`
 }
@@ -2003,6 +2023,84 @@ function syncNodes(s) {
 // ---- citizens and beasts: bodies with real shadows ----
 const beings = new Map()
 const splats = []
+// ---- the minimap: the world drawn once from the same pure functions
+// every window shares, then living dots painted over it. Tap the map,
+// walk the world. ----
+let miniCv = null, miniCtx = null, miniTerrain = null, miniAt = 0
+function buildMinimap() {
+  miniTerrain = document.createElement('canvas'); miniTerrain.width = W; miniTerrain.height = H
+  const mg = miniTerrain.getContext('2d')
+  const mc = new THREE.Color()
+  for (let gy = 0; gy < H; gy++) for (let gx = 0; gx < W; gx++) {
+    mc.set(TERRAIN_COL[terrainOf(gx, gy)] ?? 0x3d5a23)
+    mg.fillStyle = '#' + mc.getHexString()
+    mg.fillRect(gx, gy, 1, 1)
+  }
+  if (miniCv) return
+  const wrap = document.createElement('div')
+  wrap.id = 'mini3d'
+  wrap.style.cssText = 'position:fixed;top:64px;right:10px;z-index:20;border:2px solid #6b5d43;border-radius:8px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.5);opacity:.92;background:#0a0c08'
+  miniCv = document.createElement('canvas')
+  miniCv.width = W; miniCv.height = H
+  miniCv.style.cssText = 'width:168px;height:84px;display:block;image-rendering:pixelated'
+  wrap.appendChild(miniCv)
+  document.body.appendChild(wrap)
+  miniCtx = miniCv.getContext('2d')
+  miniCv.addEventListener('pointerdown', (e) => { // tap the map, walk the world
+    e.stopPropagation(); e.preventDefault()
+    if (!world || !myId || !world.players[myId]) return
+    const r = miniCv.getBoundingClientRect()
+    const gx = Math.max(0, Math.min(W - 1, Math.floor((e.clientX - r.left) / r.width * W)))
+    const gy = Math.max(0, Math.min(H - 1, Math.floor((e.clientY - r.top) / r.height * H)))
+    walkGoal = { x: gx, y: gy }; huntTarget = null; workTarget = null
+    goalRing.material.color.set(0xffe83a)
+    goalRing.position.set(wx(gx), 0.03, wz(gy)); goalRing.visible = true
+  })
+}
+function paintMinimap(s, now) {
+  if (!miniCtx || now - miniAt < 160) return
+  miniAt = now
+  miniCtx.drawImage(miniTerrain, 0, 0)
+  miniCtx.fillStyle = '#3a6ba8' // the waters
+  for (const nd of Object.values(s.nodes)) if (nd.type === 'fishing-spot') miniCtx.fillRect(nd.x, nd.y, 1, 1)
+  miniCtx.fillStyle = '#ff8830' // the fires
+  for (const nd of Object.values(s.nodes)) {
+    if (nd.type !== 'campfire' && nd.type !== 'fire') continue
+    if (nd.type === 'fire' && nd.expiresAt <= s.tick) continue
+    miniCtx.fillRect(nd.x, nd.y - 1, 2, 2)
+  }
+  miniCtx.fillStyle = '#d94a3a' // the beasts
+  for (const mb of Object.values(s.mobs)) if (mb.hp > 0) miniCtx.fillRect(mb.x - 1, mb.y - 1, 2, 2)
+  miniCtx.fillStyle = '#e8e4d8' // the others
+  for (const [pid, p] of Object.entries(s.players)) if (pid !== myId && p.hp > 0) miniCtx.fillRect(p.x - 1, p.y - 1, 2, 2)
+  if (walkGoal) { miniCtx.strokeStyle = '#ffe83a'; miniCtx.lineWidth = 1; miniCtx.strokeRect(walkGoal.x - 1.5, walkGoal.y - 1.5, 4, 4) }
+  const meP = s.players[myId]
+  if (meP) { // you, and the way you face
+    miniCtx.fillStyle = '#ffcc33'
+    miniCtx.fillRect(meP.x - 1, meP.y - 1, 3, 3)
+    const meM = beings.get(myId)
+    if (meM) {
+      miniCtx.strokeStyle = '#ffcc33'; miniCtx.lineWidth = 1
+      miniCtx.beginPath(); miniCtx.moveTo(meP.x + 0.5, meP.y + 0.5)
+      miniCtx.lineTo(meP.x + 0.5 + Math.sin(meM.rotation.y) * 5, meP.y + 0.5 + Math.cos(meM.rotation.y) * 5)
+      miniCtx.stroke()
+    }
+  }
+}
+function spawnArrow(from, to) { // the shot, made visible
+  let a = arrowPool.pop()
+  if (!a) {
+    a = new THREE.Group()
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.34, 4), new THREE.MeshBasicMaterial({ color: 0x8a6a3a }))
+    shaft.rotation.x = Math.PI / 2; a.add(shaft)
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.06, 4), new THREE.MeshBasicMaterial({ color: 0xd9d3c0 }))
+    tip.rotation.x = Math.PI / 2; tip.position.z = 0.2; a.add(tip)
+    const fl = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.002, 0.05), new THREE.MeshBasicMaterial({ color: 0xc0392b }))
+    fl.position.z = -0.16; a.add(fl)
+  }
+  scene.add(a)
+  arrowFlights.push({ a, from: from.clone(), to: to.clone(), t0: performance.now(), dur: 260 })
+}
 function spawnSplat(pos, dmg) {
   const c = document.createElement('canvas'); c.width = 64; c.height = 64
   const g2 = c.getContext('2d')
@@ -2348,6 +2446,11 @@ function beingMesh(kind, id, thing) {
         chain.add(link)
       } }
     chain.visible = false; hand.add(chain); g.userData.chain = chain
+    // the swing leaves its light: an arc that flares with the whip
+    const trail = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.46, 12, 1, -0.4, 1.9),
+      new THREE.MeshBasicMaterial({ color: 0xfff2d9, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }))
+    trail.position.set(0.2, 0.75, 0.1); trail.rotation.y = Math.PI / 2
+    g.add(trail); g.userData.trail = trail
     g.userData.name = makeName('')
     g.add(g.userData.name)
     g.userData.hpbar = makeHpBar(); g.userData.hpbar.position.y = 1.36; g.add(g.userData.hpbar)
@@ -2362,6 +2465,7 @@ function beingMesh(kind, id, thing) {
       const hunch = new THREE.Group(); hunch.rotation.x = 0.32; g.add(hunch) // it LOOMS
       const body = cast(new THREE.Mesh(new THREE.SphereGeometry(sz * 0.42, 10, 8), new THREE.MeshStandardMaterial({ color: dcol, roughness: 1 })))
       body.position.y = sz * 0.62; body.scale.set(1, 1.2, 0.85); hunch.add(body)
+      g.userData.bod = body // the flash needs a body to run through
       const head = cast(new THREE.Mesh(new THREE.SphereGeometry(sz * 0.26, 10, 8), new THREE.MeshStandardMaterial({ color: dcol, roughness: 1 })))
       head.position.set(0, sz * 1.12, sz * 0.16); head.scale.set(1, 0.9, 1.05); hunch.add(head)
       const jaw = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.34, sz * 0.12, sz * 0.22), new THREE.MeshStandardMaterial({ color: dcol, roughness: 1 })))
@@ -2396,7 +2500,7 @@ function beingMesh(kind, id, thing) {
       g.userData.hunch = hunch
     } else { // quadrupeds: wolf, bear
       const body = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.9, sz * 0.45, sz * 0.4), M(col)))
-      body.position.y = sz * 0.5; g.add(body); g.userData.qbody = body
+      body.position.y = sz * 0.5; g.add(body); g.userData.qbody = body; g.userData.bod = body
       const head = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.34, sz * 0.32, sz * 0.3), M(col)))
       head.position.set(sz * 0.55, sz * 0.62, 0); g.add(head)
       const snout = cast(new THREE.Mesh(new THREE.BoxGeometry(sz * 0.2, sz * 0.13, sz * 0.15), M(col)))
@@ -2458,7 +2562,7 @@ function syncBeings(s, prev) {
     let faceTarget = null
     if (kind === 'citizen' && (thing.action?.type === 'attack' || thing.action?.type === 'attackp')) {
       const foe = thing.action.mobId ? s.mobs[thing.action.mobId] : s.players[thing.action.targetId]
-      if (foe) faceTarget = Math.atan2(foe.x - thing.x, foe.y - thing.y)
+      if (foe) { faceTarget = Math.atan2(foe.x - thing.x, foe.y - thing.y); m.userData.foePos = { x: foe.x, y: foe.y } }
     } else if (kind === 'citizen' && thing.action?.type === 'gather') {
       const nd3 = s.nodes[thing.action.nodeId]
       if (nd3) faceTarget = Math.atan2(nd3.x - thing.x, nd3.y - thing.y) // face the work
@@ -2541,6 +2645,21 @@ function syncBeings(s, prev) {
           else { const u = (t2 - 0.6) / 0.4; strikeA = 0.4 - u * u * (3 - 2 * u) * 1.5 }
           strikeT2 = Math.max(0, Math.sin(Math.min(1, Math.max(0, (t2 - 0.3) / 0.5)) * Math.PI))
         }
+        const wep0 = thing.equipment?.weapon?.item
+        if (m.userData.trail) { // the arc of the whip, drawn in light
+          const whipK = exch && wep0 !== 'wooden-bow'
+            ? Math.max(0, Math.sin(Math.min(1, Math.max(0, (t2 - 0.42) / 0.33)) * Math.PI)) : 0
+          m.userData.trail.material.opacity = whipK * 0.45
+          m.userData.trail.rotation.x = -0.7 + t2 * 1.5 // it travels with the blade
+        }
+        if (exch && t2 > 0.45 && an.shotTick !== s.tick) { // once per exchange, at the whip
+          an.shotTick = s.tick
+          if (wep0 === 'wooden-bow' && m.userData.foePos) {
+            spawnArrow(V3A.set(m.position.x, m.position.y + 0.85, m.position.z),
+              V3B.set(wx(m.userData.foePos.x), m.position.y + 0.55, wz(m.userData.foePos.y)))
+            snd('twang', m.position)
+          } else snd('whoosh', m.position)
+        }
         // ---- the chop: rise slowly, drop fast, land with weight the
         // knees feel. The impact rings exactly when the bit bites. ----
         const ct = ((nowMs / 840) + an.seed) % 1
@@ -2563,6 +2682,16 @@ function syncBeings(s, prev) {
         if (m.userData.blob) m.userData.blob.rotation.x = -Math.PI / 2 - an.lean // the shadow stays flat on the earth
         m.userData.torso.rotation.x = an.lean * 0.6
         m.userData.torso.rotation.z = an.roll + Math.sin(nowMs / 2600 + an.seed) * 0.015 * (1 - mvA) // idle weight shift
+        // the blow, felt in the body: a white flash through the torso
+        // and a flinch backward, both gone inside a sixth of a second
+        const hitK = Math.max(0, 1 - (nowMs - (m.userData.flashAt ?? -1e9)) / 160)
+        m.userData.torso.material.emissive.setScalar(hitK * 0.55)
+        if (hitK > 0) {
+          const fl2 = hitK * 0.09 * (0.5 + (m.userData.flinch ?? 0.5))
+          m.position.x -= Math.sin(m.rotation.y) * fl2
+          m.position.z -= Math.cos(m.rotation.y) * fl2
+          m.rotation.x -= hitK * 0.1 // the head snaps back a hair
+        }
         m.position.y += Math.abs(Math.cos(an.ph)) * 0.045 * mvA - imp * 0.03
         // legs: thighs counter the lean so the feet stay planted; knees
         // bend on the back-swing and straighten to plant on the front
@@ -2644,15 +2773,29 @@ function syncBeings(s, prev) {
         const fighting3 = thing.action?.type === 'attack' || thing.action?.type === 'attackp'
         const fr = thing.hp / Math.max(1, Math.min(99, effHp(thing)))
         if (m.userData.lastHp !== undefined && thing.hp < m.userData.lastHp) {
-          spawnSplat(m.position, m.userData.lastHp - thing.hp) // the blow, seen
+          const dmg2 = m.userData.lastHp - thing.hp
+          spawnSplat(m.position, dmg2) // the blow, seen
           hitFlash(m.position)
           snd('thud', m.position)
+          m.userData.flashAt = performance.now() // and FELT: flash, flinch,
+          m.userData.flinch = Math.min(1, dmg2 / 4) // and, close by, the camera shudders
+          camShake = Math.min(1, camShake + (id === myId ? 0.4 + dmg2 * 0.08
+            : Math.max(0, 0.22 - camera.position.distanceTo(m.position) * 0.03)))
           if (thing.hp <= 0 && id === myId) snd('gong', m.position)
         }
         if (m.userData.lastHp !== thing.hp) { m.userData.lastHp = thing.hp; paintHp(m.userData.hpbar, Math.max(0, Math.min(1, fr))) }
         m.userData.hpbar.visible = fighting3 || thing.hp < effHp(thing)
       }
-      if (thing.hp <= 0) m.visible = false; else m.visible = true
+      // death is a fall, not a switch: the body crumples, holds a
+      // moment on the ground, and only then does the world let it go
+      if (thing.hp <= 0) {
+        if (!m.userData.dieAt) m.userData.dieAt = performance.now()
+        const dk = Math.min(1, (performance.now() - m.userData.dieAt) / 450)
+        const de = dk * dk * (3 - 2 * dk)
+        m.rotation.x = de * -1.45
+        m.position.y -= de * 0.12
+        m.visible = performance.now() - m.userData.dieAt < 1500
+      } else { m.userData.dieAt = 0; m.visible = true }
     } else {
       const moving = thing.x !== ox || thing.y !== oy
       const an = m.userData.an
@@ -2679,17 +2822,32 @@ function syncBeings(s, prev) {
         m.position.y += Math.abs(Math.cos(an.ph)) * 0.035 * mvA
       }
       if (m.userData.hunch) m.userData.hunch.rotation.x = 0.32 + mvA * 0.1 + Math.sin(nowMs / 700 + m.position.x) * 0.04 // it breathes, and it LOOMS harder on the move
+      const hitK2 = Math.max(0, 1 - (nowMs - (m.userData.flashAt ?? -1e9)) / 160)
+      if (m.userData.bod) m.userData.bod.material.emissive.setScalar(hitK2 * 0.6)
+      if (hitK2 > 0) {
+        m.position.x -= Math.sin(m.rotation.y) * hitK2 * 0.1
+        m.position.z -= Math.cos(m.rotation.y) * hitK2 * 0.1
+      }
       if (m.userData.hpbar) {
         m.userData.maxHp = Math.max(m.userData.maxHp ?? thing.hp, thing.hp)
         if (m.userData.lastHp !== undefined && thing.hp < m.userData.lastHp) {
           spawnSplat(m.position, m.userData.lastHp - thing.hp)
           hitFlash(m.position)
           snd('thud', m.position)
+          m.userData.flashAt = performance.now()
+          camShake = Math.min(1, camShake + Math.max(0, 0.2 - camera.position.distanceTo(m.position) * 0.03))
         }
         if (m.userData.lastHp !== thing.hp) { m.userData.lastHp = thing.hp; paintHp(m.userData.hpbar, thing.hp / m.userData.maxHp) }
         m.userData.hpbar.visible = thing.hp < m.userData.maxHp
       }
-      if (thing.hp <= 0) m.visible = false
+      if (thing.hp <= 0) {
+        if (!m.userData.dieAt) m.userData.dieAt = performance.now()
+        const dk2 = Math.min(1, (performance.now() - m.userData.dieAt) / 450)
+        const de2 = dk2 * dk2 * (3 - 2 * dk2)
+        m.rotation.z = de2 * 1.35 // beasts topple sideways
+        m.position.y -= de2 * 0.1
+        m.visible = performance.now() - m.userData.dieAt < 1500
+      } else if (m.userData.dieAt) { m.userData.dieAt = 0; m.rotation.z = 0 }
       else m.visible = true
     }
   }
@@ -2794,6 +2952,19 @@ function snd(kind, pos, flavor) {
       o.start(t0); o.stop(t0 + 0.06)
       if (hard) burst(950, 'bandpass', 0.045, 0.09)
       else burst(330, 'lowpass', 0.06, 0.07)
+    } else if (kind === 'whoosh') { // the blade takes its breath of air
+      o.type = 'sine'; o.frequency.setValueAtTime(180, t0)
+      o.frequency.exponentialRampToValueAtTime(60, t0 + 0.16)
+      g2.gain.setValueAtTime(0.0001, t0); g2.gain.linearRampToValueAtTime(0.05, t0 + 0.05)
+      g2.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18)
+      o.start(t0); o.stop(t0 + 0.2)
+      burst(1400, 'bandpass', 0.16, 0.08)
+    } else if (kind === 'twang') { // the string speaks once
+      o.type = 'triangle'; o.frequency.setValueAtTime(320, t0)
+      o.frequency.exponentialRampToValueAtTime(130, t0 + 0.09)
+      g2.gain.setValueAtTime(0.16, t0); g2.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12)
+      o.start(t0); o.stop(t0 + 0.13)
+      burst(2000, 'highpass', 0.05, 0.1)
     } else if (kind === 'splash') { // the water, briefly interested
       o.type = 'sine'; o.frequency.setValueAtTime(300, t0)
       o.frequency.exponentialRampToValueAtTime(90, t0 + 0.18)
@@ -2829,6 +3000,7 @@ ws.onmessage = async (ev) => {
     if (!groundBuilt) {
       W = m.state.genesis.worldW; H = m.state.genesis.worldH
       buildGround(m.state)
+      buildMinimap()
       document.getElementById('wid').textContent = 'world ' + (m.worldId ?? '').slice(0, 12) + '…'
     }
     syncNodes(m.state)
@@ -3002,6 +3174,15 @@ function animate(now) {
   const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now
   uT.value = now / 1000
   for (const mx of mixers.values()) mx.update(dt)
+  for (let i = arrowFlights.length - 1; i >= 0; i--) { // the arrows, mid-air
+    const f = arrowFlights[i], k = (now - f.t0) / f.dur
+    if (k >= 1) { scene.remove(f.a); arrowPool.push(f.a); arrowFlights.splice(i, 1); continue }
+    f.a.position.lerpVectors(f.from, f.to, k)
+    f.a.position.y += Math.sin(k * Math.PI) * 0.35 // the arc gravity asks for
+    const k2 = Math.min(1, k + 0.06)
+    V3A.lerpVectors(f.from, f.to, k2); V3A.y += Math.sin(k2 * Math.PI) * 0.35
+    f.a.lookAt(V3A)
+  }
   for (let i = splats.length - 1; i >= 0; i--) {
     const s2 = splats[i], age = (performance.now() - s2.at) / 750
     if (age >= 1) { scene.remove(s2.sp); splats.splice(i, 1); continue }
@@ -3011,6 +3192,7 @@ function animate(now) {
   if (!world) return
   const s = world
   syncBeings(s, prevWorld)
+  paintMinimap(s, now)
   const t2 = Math.min(1, Math.max(0, (now - clock.at) / TICK_MS))
   const cyc = (((s.tick + t2) % DAY) / DAY)
   const bright = (Math.sin(cyc * Math.PI * 2) + 1) / 2
@@ -3333,6 +3515,11 @@ function animate(now) {
     camDesired.y = Math.max(camDesired.y, 0.8)
   }
   camera.position.lerp(camDesired, 0.28)
+  if (camShake > 0.002) { // the blow reaches the eye, then lets go
+    camera.position.x += (Math.random() - 0.5) * camShake * 0.12
+    camera.position.y += (Math.random() - 0.5) * camShake * 0.08
+    camShake *= Math.exp(-dt * 9)
+  } else camShake = 0
   camera.lookAt(fx, 0.6, fz)
   // ---- LOD + footstep dust: distant folk shed shadows and nameplates,
   // and a scuff of dust rises where the near ones tread ----
