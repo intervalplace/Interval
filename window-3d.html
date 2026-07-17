@@ -115,7 +115,27 @@
      into the snow and dark ones into the wet sand by the water, rain
      leaves standing puddles on the trails that wear the sky's color
      until the sun takes them back, and on cold nights every citizen's
-     breath shows. -->
+     breath shows.
+
+     The confetti was flowers. The rainbow noise that haunted every
+     high camera at dusk was the meadow's own vanity — hundreds of far
+     saturated flower heads against the fogged gray, blooming into
+     colored smears at half resolution. Each flower now shrinks with
+     distance and withdraws entirely past thirty paces. The grazing sun
+     yields to the sky before its shadow frustum can print a hard box
+     around the player, and the night motes burn a little lower.
+
+     Then the door learned it was a door. The threshold no longer hides
+     the world behind a wall of dark: a thin dusk, an ornate card, and
+     the LIVE world turning behind it — it does not wait for you.
+     Embers rise past the title. Inside, every building's door now
+     swings on a working hinge as a walker nears, creaking, spilling
+     hearth-light onto the step after dark. Dropped things stand on the
+     ground as their own icons, bobbing, tappable — the walker goes,
+     stands on the very tile (the engine insists), and takes them. And
+     the world can SPEAK: words bubble over the head that said them,
+     four seconds and gone, and the say button signs each message with
+     the same key that signs every step. -->
 <html>
 <head>
 <meta charset="utf-8">
@@ -125,22 +145,47 @@
   body { margin: 0; background: #0a0c12; overflow: hidden; font-family: Verdana, sans-serif;
     overscroll-behavior: none; touch-action: none; }
   canvas { display: block; touch-action: none; }
+  /* the threshold: a thin dusk through which the LIVE world shows —
+     the renderer runs behind this door, and the door knows it */
   #gate3d { position: fixed; inset: 0; z-index: 20;
-    background: radial-gradient(ellipse at 50% 30%, rgba(28,26,38,.94), rgba(6,8,13,.97));
-    backdrop-filter: blur(3px);
+    background: radial-gradient(ellipse at 50% 38%, rgba(10,12,18,.30), rgba(4,5,9,.78) 85%);
+    backdrop-filter: blur(1.5px);
     display: flex; align-items: center; justify-content: center; flex-direction: column; color: #d9d3c0; }
-  #gate3d h1 { color: #ffcc33; letter-spacing: 8px; margin: 0 0 6px; font-size: 34px;
-    text-shadow: 0 0 22px rgba(255,190,60,.35), 0 2px 2px #000; }
-  #gate3d .s { color: #948d7b; font-size: 12px; margin-bottom: 24px; text-align: center;
-    max-width: 520px; padding: 0 16px; line-height: 1.7; }
-  #gate3d button { background: linear-gradient(#544936, #3e352a); color: #ffcc33;
-    border: 2px solid #7d6c4d; padding: 13px 38px; border-radius: 3px;
-    font-family: Verdana; font-size: 15px; letter-spacing: 2px; cursor: pointer;
-    box-shadow: 0 4px 18px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,220,140,.15);
+  #gate3d .card { position: relative; text-align: center; padding: 34px 40px 26px; border-radius: 14px;
+    background: linear-gradient(rgba(34,28,19,.88), rgba(14,12,8,.92));
+    border: 3px double #b09a63; box-shadow: 0 0 46px rgba(255,190,60,.14), 0 10px 40px rgba(0,0,0,.6),
+      inset 0 1px 0 rgba(255,220,140,.12); max-width: 86vw; }
+  #gate3d .card::before, #gate3d .card::after { content: ''; position: absolute; width: 18px; height: 18px;
+    border: 2px solid #ffcc33; opacity: .7; }
+  #gate3d .card::before { top: 7px; left: 7px; border-right: 0; border-bottom: 0; border-radius: 4px 0 0 0; }
+  #gate3d .card::after { bottom: 7px; right: 7px; border-left: 0; border-top: 0; border-radius: 0 0 4px 0; }
+  #gate3d .orn { color: #b09a63; font-size: 12px; letter-spacing: 6px; margin-bottom: 8px; }
+  #gate3d h1 { margin: 0 0 8px; font-size: 40px; letter-spacing: 10px; font-weight: bold;
+    background: linear-gradient(180deg, #ffe9a8 0%, #ffcc33 45%, #b07d1f 78%, #ffe27a 100%);
+    background-size: 100% 220%; -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 18px rgba(255,190,60,.35)) drop-shadow(0 2px 2px #000);
+    animation: gatesheen 5s ease-in-out infinite; }
+  @keyframes gatesheen { 0%,100% { background-position: 0 0 } 50% { background-position: 0 60% } }
+  #gate3d .s { color: #a89f8a; font-size: 12px; margin-bottom: 22px; text-align: center;
+    max-width: 460px; line-height: 1.7; }
+  #gate3d button { background: linear-gradient(#5c5039, #3e352a 55%, #2e2820); color: #ffcc33;
+    border: 3px double #b09a63; padding: 14px 46px; border-radius: 8px;
+    font-family: Verdana; font-size: 16px; letter-spacing: 3px; cursor: pointer;
+    text-shadow: 0 0 10px rgba(255,204,51,.6);
+    box-shadow: 0 4px 18px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,220,140,.18);
+    animation: gatepulse 2.8s ease-in-out infinite;
     transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; }
-  #gate3d button:hover { transform: translateY(-1px); border-color: #b09a63;
-    box-shadow: 0 6px 24px rgba(255,190,60,.18), inset 0 1px 0 rgba(255,220,140,.2); }
-  #gate3d .k { color: #5c564a; font-size: 10px; margin-top: 16px; }
+  @keyframes gatepulse { 0%,100% { box-shadow: 0 4px 18px rgba(0,0,0,.55), 0 0 14px rgba(255,190,60,.10), inset 0 1px 0 rgba(255,220,140,.18) }
+    50% { box-shadow: 0 4px 18px rgba(0,0,0,.55), 0 0 30px rgba(255,190,60,.28), inset 0 1px 0 rgba(255,220,140,.24) } }
+  #gate3d button:hover { transform: translateY(-2px); border-color: #ffcc33; }
+  #gate3d button:active { transform: translateY(0); }
+  #gate3d .k { color: #6e6656; font-size: 10px; margin-top: 16px; }
+  #gate3d .ember { position: absolute; bottom: -6px; width: 4px; height: 4px; border-radius: 50%;
+    background: radial-gradient(circle, #ffd88a, rgba(255,150,40,0)); filter: blur(.5px);
+    animation: emberrise linear infinite; pointer-events: none; }
+  @keyframes emberrise { 0% { transform: translateY(0) translateX(0); opacity: 0 }
+    12% { opacity: .85 } 80% { opacity: .5 }
+    100% { transform: translateY(-52vh) translateX(14px); opacity: 0 } }
   #hud { position: fixed; top: 0; left: 0; right: 0; padding: 9px 14px 14px; color: #d9d3c0;
     background: linear-gradient(rgba(6,8,13,.82), rgba(6,8,13,0)); font-size: 12px;
     pointer-events: none; z-index: 5; text-shadow: 0 1px 3px #000; }
@@ -154,11 +199,20 @@
 </head>
 <body>
 <div id="gate3d">
-  <h1>INTERVAL</h1>
-  <div class="s">the <b>deluxe window</b>: the same world as <a href="/play" style="color:#8a8474">/play</a>,
-  built in geometry instead of pixels.<br>Same ticks, same citizens, same key. No window is authoritative.</div>
-  <button id="gate3dbtn">enter the world</button>
-  <div class="k" id="gate3dkey"></div>
+  <div class="card">
+    <div class="orn">&#9876; &middot; &#10022; &middot; &#9876;</div>
+    <h1>INTERVAL</h1>
+    <div class="s">the <b style="color:#d9cfa8">deluxe window</b>: the same world as <a href="/play" style="color:#8a8474">/play</a>,
+    built in geometry instead of pixels.<br>Same ticks, same citizens, same key. No window is authoritative.<br>
+    <span style="color:#6e6656;font-size:10px">the world turns behind this door &mdash; it does not wait for you</span></div>
+    <button id="gate3dbtn">enter the world</button>
+    <div class="k" id="gate3dkey"></div>
+    <div class="ember" style="left:12%;animation-duration:5.2s;animation-delay:0s"></div>
+    <div class="ember" style="left:28%;animation-duration:6.8s;animation-delay:1.4s"></div>
+    <div class="ember" style="left:52%;animation-duration:5.8s;animation-delay:.7s"></div>
+    <div class="ember" style="left:71%;animation-duration:7.4s;animation-delay:2.2s"></div>
+    <div class="ember" style="left:88%;animation-duration:6.1s;animation-delay:3.1s"></div>
+  </div>
 </div>
 <div id="hud">
   <b>INTERVAL</b> · the deluxe window · <span id="wid">connecting&hellip;</span>
@@ -527,6 +581,7 @@ const BRIDGE = (a) =>
   : a.do === 'plant' ? { type: 'plant', slot: a.slot }
   : a.do === 'sell' ? { type: 'sell', slot: a.slot }
   : a.do === 'deposit' ? { type: 'deposit', slot: a.slot }
+  : a.do === 'pickup' ? { type: 'pickup', groundId: a.groundId }
   : null
 // must match engine.js SIG_DOMAINS.input to the byte (fix brief §2.3)
 const DOMAIN_INPUT = 'INTERVAL_INPUT_V1|'
@@ -1813,6 +1868,20 @@ function buildGround(s0) {
   // flowers: the meadow keeps a little vanity
   const flowerGeo = new THREE.SphereGeometry(0.028, 6, 4)
   const flowerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 })
+  // the confetti bug, solved at its root: from a high camera at dusk,
+  // hundreds of saturated far flowers read as rainbow noise against the
+  // fogged meadow. So each flower SHRINKS with distance — full vanity
+  // near the walker, nothing at all past thirty paces. No transparency,
+  // no sorting: geometry simply withdraws.
+  flowerMat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>',
+      `#include <begin_vertex>
+      #ifdef USE_INSTANCING
+        vec4 fo = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+        float fd = distance((modelMatrix * fo).xyz, cameraPosition);
+        transformed *= smoothstep(32.0, 17.0, fd);
+      #endif`)
+  }
   const FLOWER_N = FINE ? 1400 : 900
   const flowers = new THREE.InstancedMesh(flowerGeo, flowerMat, FLOWER_N)
   const FLOWER_COLS = [0xf0e8f8, 0xe8c53a, 0xd46a9e, 0x8ab8e8, 0xe86a4a]
@@ -2072,17 +2141,29 @@ function nodeMesh(n) {
     const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.09, 6), std(0x6b4a3a))
     pot.position.set(chx, topY + 0.62, -0.18); g.add(pot) // the clay pot cap
     chimneySmokes.push(mkSmoke(g, chx, topY + 0.68, -0.18, 0.35, 0.5, true))
-    // the door: planked, hinged, with a stone step worn in the middle
+    // the door: planked, hinged — and the hinge WORKS. It swings open
+    // as a walker nears, and at night the hearth-light spills through
+    // onto the step.
+    const doorGrp = new THREE.Group()
+    doorGrp.position.set(-0.11, 0, 0.44) // the hinge lives at the jamb
+    g.add(doorGrp); g.userData.doorGrp = doorGrp; g.userData.doorOpen = 0
     const door = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.4, 0.03), std(0x33220f))
-    door.position.set(0, 0.54, 0.44); g.add(door)
-    for (const dx5 of [-0.055, 0.02]) { // plank seams
+    door.position.set(0.11, 0.54, 0); doorGrp.add(door)
+    for (const dx5 of [-0.055, 0.02]) { // plank seams ride the door
       const seam = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.38, 0.032), std(0x241708, 1))
-      seam.position.set(dx5, 0.54, 0.441); g.add(seam)
+      seam.position.set(0.11 + dx5, 0.54, 0.001); doorGrp.add(seam)
     }
     for (const hy2 of [0.44, 0.64]) { // iron hinge straps
       const hinge = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.034), std(0x2e2e33, 0.5))
-      hinge.position.set(-0.03, hy2, 0.442); g.add(hinge)
+      hinge.position.set(0.08, hy2, 0.002); doorGrp.add(hinge)
     }
+    const dark = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.4), // the interior, glimpsed
+      new THREE.MeshBasicMaterial({ color: 0x0c0804 }))
+    dark.position.set(0, 0.54, 0.428); g.add(dark)
+    const spill = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.55),
+      new THREE.MeshBasicMaterial({ color: 0xffb84d, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }))
+    spill.rotation.x = -Math.PI / 2
+    spill.position.set(0, 0.025, 0.72); g.add(spill); g.userData.spill = spill
     const step = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.14), std(0x76726a))
     step.position.set(0, 0.31, 0.5); g.add(step)
     const lintel = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.045, 0.04), beamM)
@@ -2160,6 +2241,69 @@ function nodeMesh(n) {
   }
   g.position.set(wx(n.x), 0, wz(n.y))
   return g
+}
+// ---- chat: words appear over the head that spoke them, in a rounded
+// bubble that holds four seconds and lets go. The say button signs the
+// message with the same key that signs every step. ----
+function showBubble(pid, text) {
+  const m = beings.get(pid)
+  if (!m) return
+  if (m.userData.bubble) { m.remove(m.userData.bubble); m.userData.bubble = null }
+  const c = document.createElement('canvas'); c.width = 256; c.height = 72
+  const g2 = c.getContext('2d')
+  g2.font = '17px Verdana'; g2.textAlign = 'center'
+  const words = String(text).slice(0, 60).split(' ')
+  const lines = ['']
+  for (const w of words) {
+    if ((lines[lines.length - 1] + ' ' + w).trim().length > 24 && lines.length < 2) lines.push(w)
+    else lines[lines.length - 1] = (lines[lines.length - 1] + ' ' + w).trim()
+  }
+  const bw = Math.min(244, Math.max(...lines.map(l => g2.measureText(l).width)) + 24)
+  const bh = 18 + lines.length * 21
+  const bx = 128 - bw / 2, by = 60 - bh
+  g2.fillStyle = 'rgba(20,16,10,.88)'
+  g2.strokeStyle = '#b09a63'; g2.lineWidth = 2
+  g2.beginPath(); g2.roundRect(bx, by, bw, bh, 9); g2.fill(); g2.stroke()
+  g2.beginPath(); g2.moveTo(120, 58 + 1); g2.lineTo(136, 58 + 1); g2.lineTo(128, 70); g2.closePath(); g2.fill()
+  g2.fillStyle = '#f2ecd8'
+  lines.forEach((l, i) => g2.fillText(l, 128, by + 21 + i * 21))
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }))
+  sp.scale.set(1.9, 0.53, 1)
+  sp.position.y = 1.85
+  m.add(sp)
+  m.userData.bubble = sp
+  sp.userData.at = performance.now()
+}
+async function sendChat(text) {
+  if (!ownKey || !curWorldId || !text) return
+  const msg = { type: 'chat', worldId: curWorldId, playerId: ownKey.pub, tick: world?.tick ?? 0, text: String(text).slice(0, 80) }
+  const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode('INTERVAL_CHAT_V1|' + canonicalJS(msg))))
+  ws.send(JSON.stringify({ type: 'rawsay', msg: { ...msg, sig } }))
+}
+// ---- the ground remembers what was dropped: every ground entry gets
+// a bobbing item sprite you can tap; the walker goes and takes it ----
+const groundMeshes = new Map()
+let pickTarget = null
+function syncGround(s) {
+  const seen2 = new Set()
+  for (const [gid, gitem] of Object.entries(s.ground ?? {})) {
+    if (gitem.expiresAt <= s.tick) continue
+    seen2.add(gid)
+    if (!groundMeshes.has(gid)) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(itemSprite(gitem.item)), transparent: true, depthWrite: false }))
+      sp.material.map.magFilter = THREE.NearestFilter
+      sp.scale.set(0.34, 0.34, 1)
+      sp.position.set(wx(gitem.x), 0, wz(gitem.y))
+      sp.userData.seed = (tileHash(gitem.x, gitem.y, 95) % 628) / 100
+      sp.userData.gx = gitem.x; sp.userData.gy = gitem.y
+      scene.add(sp)
+      groundMeshes.set(gid, sp)
+    }
+  }
+  for (const [gid, sp] of groundMeshes) {
+    if (!seen2.has(gid)) { scene.remove(sp); groundMeshes.delete(gid); if (pickTarget === gid) pickTarget = null }
+  }
 }
 function syncNodes(s) {
   for (const [id, n] of Object.entries(s.nodes)) {
@@ -2323,6 +2467,15 @@ function buildSkillsUI() {
     p.style.display = open2 ? 'none' : 'block'
     if (!open2 && world && myId && world.players[myId]) renderSkills(world.players[myId])
   })
+  const sb = document.createElement('button')
+  sb.id = 'saybtn'; sb.textContent = '\ud83d\udcac say'
+  sb.style.cssText = 'position:fixed;top:64px;left:96px;z-index:21;background:linear-gradient(#544936,#3e352a);' +
+    'color:#ffcc33;border:2px solid #7d6c4d;border-radius:6px;padding:6px 12px;font:bold 12px Verdana;cursor:pointer'
+  sb.addEventListener('click', () => {
+    const t4 = prompt('say:')
+    if (t4 && t4.trim()) sendChat(t4.trim())
+  })
+  document.body.appendChild(sb)
 }
 function renderSkills(me2) {
   const p = document.getElementById('skillpanel')
@@ -3244,6 +3397,13 @@ function snd(kind, pos, flavor) {
       g2.gain.setValueAtTime(0.16, t0); g2.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12)
       o.start(t0); o.stop(t0 + 0.13)
       burst(2000, 'highpass', 0.05, 0.1)
+    } else if (kind === 'creak') { // old hinges have opinions
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(180, t0)
+      o.frequency.linearRampToValueAtTime(260, t0 + 0.22)
+      g2.gain.setValueAtTime(0.0001, t0); g2.gain.linearRampToValueAtTime(0.035, t0 + 0.04)
+      g2.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.26)
+      o.start(t0); o.stop(t0 + 0.28)
+      burst(700, 'bandpass', 0.2, 0.03)
     } else if (kind === 'splash') { // the water, briefly interested
       o.type = 'sine'; o.frequency.setValueAtTime(300, t0)
       o.frequency.exponentialRampToValueAtTime(90, t0 + 0.18)
@@ -3305,6 +3465,12 @@ ws.onmessage = async (ev) => {
       document.getElementById('wid').textContent = 'world ' + (m.worldId ?? '').slice(0, 12) + '…'
     }
     syncNodes(m.state)
+    syncGround(m.state)
+  }
+  if (m.type === 'chat') { // a voice in the world
+    showBubble(m.playerId, m.text)
+    feed('<b style="color:#f2ecd8">' + String(m.name ?? 'someone').replace(/</g, '&lt;') + ':</b> ' + String(m.text).replace(/</g, '&lt;'))
+    if (m.playerId !== myId) snd('pluck')
   }
 }
 
@@ -3363,6 +3529,12 @@ function nearestTapTarget(cxp, cyp) {
     const d = Math.hypot(v3.x - ndc.x, v3.y - ndc.y)
     if (d < bd) { bd = d; best = { kind: 'node', id: m.userData.nodeId } }
   }
+  for (const [gid, sp] of groundMeshes) { // dropped things are taps too
+    v3.copy(sp.position); v3.project(camera)
+    if (v3.z > 1) continue
+    const d = Math.hypot(v3.x - ndc.x, v3.y - ndc.y)
+    if (d < bd) { bd = d; best = { kind: 'ground', id: gid } }
+  }
   return best
 }
 const pick = (cxp, cyp) => {
@@ -3372,20 +3544,21 @@ const pick = (cxp, cyp) => {
   // targets first: a tap near a beast means a fight; near a tree, work
   const tgt = nearestTapTarget(cxp, cyp)
   if (tgt) {
-    walkGoal = null; huntTarget = null; workTarget = null
+    walkGoal = null; huntTarget = null; workTarget = null; pickTarget = null
     if (tgt.kind === 'mob') { huntTarget = tgt.id; feed('you go for it') }
+    else if (tgt.kind === 'ground') { pickTarget = tgt.id; feed('you go to take it') }
     else { workTarget = tgt.id; feed('you make for it') }
     goalRing.material.color.set(0xe86e3a) // ember means acting
     goalRing.visible = true
     tapBurst.material.color.set(0xe86e3a)
-    const src = tgt.kind === 'mob' ? beings.get(tgt.id) : nodeMeshes.get(tgt.id)
+    const src = tgt.kind === 'mob' ? beings.get(tgt.id) : tgt.kind === 'ground' ? groundMeshes.get(tgt.id) : nodeMeshes.get(tgt.id)
     if (src) { tapBurst.position.copy(src.position); tapBurst.position.y = 0.04; burstAt = performance.now() }
     return
   }
   const hit = ray.intersectObject(groundMesh)[0]
   if (!hit) return
   const gx = Math.round(hit.point.x + W / 2 - 0.5), gy = Math.round(hit.point.z + H / 2 - 0.5)
-  walkGoal = { x: gx, y: gy }; huntTarget = null
+  walkGoal = { x: gx, y: gy }; huntTarget = null; pickTarget = null
   goalRing.material.color.set(0xffe83a); tapBurst.material.color.set(0xffe83a)
   goalRing.position.set(wx(gx), 0.03, wz(gy)); goalRing.visible = true
   tapBurst.position.set(wx(gx), 0.04, wz(gy)); burstAt = performance.now()
@@ -3438,6 +3611,16 @@ setInterval(() => { // one greedy step per tick: the deluxe window keeps its leg
     else if (dy3) send({ do: 'move', dx: 0, dy: dy3 })
     return
   }
+  if (pickTarget) { // the taking: walk to it, then take it
+    const gd = world.ground?.[pickTarget]
+    if (!gd || gd.expiresAt <= world.tick) { pickTarget = null; goalRing.visible = false; return }
+    goalRing.position.set(wx(gd.x), 0.03, wz(gd.y))
+    if (me.x === gd.x && me.y === gd.y) { // the engine demands you STAND on it
+      send({ do: 'pickup', groundId: pickTarget })
+      return
+    }
+    walkGoal = { x: gd.x, y: gd.y }
+  }
   if (workTarget) { // the work: stand beside, then gather until it yields
     const nd = world.nodes[workTarget]
     if (!nd || (nd.depletedUntil > world.tick)) { workTarget = null; goalRing.visible = false; return }
@@ -3480,6 +3663,15 @@ function animate(now) {
   const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now
   uT.value = now / 1000
   for (const mx of mixers.values()) mx.update(dt)
+  for (const bm of beings.values()) { // spoken words hold four seconds, then let go
+    const bb = bm.userData.bubble
+    if (!bb) continue
+    const age2 = (now - bb.userData.at) / 4200
+    if (age2 >= 1) { bm.remove(bb); bm.userData.bubble = null }
+    else bb.material.opacity = age2 < 0.85 ? 1 : (1 - age2) / 0.15
+  }
+  for (const sp of groundMeshes.values()) // dropped things glint and breathe
+    sp.position.y = Math.max(0, groundYAt(sp.userData.gx, sp.userData.gy)) + 0.24 + Math.sin(now / 600 + sp.userData.seed) * 0.035
   for (let i = arrowFlights.length - 1; i >= 0; i--) { // the arrows, mid-air
     const f = arrowFlights[i], k = (now - f.t0) / f.dur
     if (k >= 1) { scene.remove(f.a); arrowPool.push(f.a); arrowFlights.splice(i, 1); continue }
@@ -3526,10 +3718,14 @@ function animate(now) {
   const sunLift = Math.max(0.12, sunH)
   sun.position.set(fx + sunDirV.x * 34, sunLift * 40 + 4, fz + sunDirV.z * 34)
   sun.target.position.set(fx, 0, fz)
-  sun.intensity = 0.06 + day * 1.15
+  // at grazing sun the shadow frustum's straight edge was reading as a
+  // hard box around the player from above: the direct light now yields
+  // to the sky as the sun touches the horizon
+  const graze = clamp01((sunH - 0.015) / 0.11)
+  sun.intensity = (0.06 + day * 1.15) * (0.25 + graze * 0.75)
   sun.color.setHSL(0.075 + day * 0.045, 0.55 - day * 0.22, 0.48 + day * 0.34)
-  ambient.intensity = 0.055 + day * 0.30
-  hemi.intensity = 0.16 + day * 0.42
+  ambient.intensity = 0.055 + day * 0.30 + dusk * 0.05
+  hemi.intensity = 0.16 + day * 0.42 + dusk * 0.10
   hemi.color.setHSL(0.6, 0.35, 0.25 + day * 0.45)
   fillLight.intensity = 0.05 + day * 0.12
   moonLight.intensity = night * 0.30
@@ -3817,6 +4013,23 @@ function animate(now) {
       m.userData.win.material.emissiveIntensity = wOn * 2.2
       if (m.userData.win2) m.userData.win2.material.emissiveIntensity = wOn * 1.7
     }
+    if (m.userData.doorGrp) { // the door answers the approach
+      let nd4 = 1e9
+      for (const bm of beings.values()) {
+        if (bm.userData.beingKind !== 'citizen' || !bm.visible) continue
+        const ddx = bm.position.x - m.position.x, ddz = bm.position.z - m.position.z
+        const dd2 = ddx * ddx + ddz * ddz
+        if (dd2 < nd4) nd4 = dd2
+      }
+      const wantOpen = nd4 < 1.9 ? 1 : 0
+      const was = m.userData.doorOpen
+      m.userData.doorOpen = lerp(m.userData.doorOpen, wantOpen, 1 - Math.exp(-dt * 5))
+      if (was < 0.5 && m.userData.doorOpen >= 0.5) snd('creak', m.position)
+      m.userData.doorGrp.rotation.y = -m.userData.doorOpen * 1.85
+      if (m.userData.spill) { // hearth-light on the step, strongest through an open door
+        m.userData.spill.material.opacity = winGlow * (0.10 + m.userData.doorOpen * 0.45) * (0.9 + Math.sin(now / 260 + m.position.x) * 0.1)
+      }
+    }
     if (m.userData.sign) m.userData.sign.rotation.x = Math.sin(now / 850 + m.position.x * 1.7) * 0.1 * (0.35 + curW.wind) // the shingle swings on its bracket
     if (m.userData.forge) m.userData.forge.material.emissiveIntensity = 0.65 + Math.sin(now / 260 + m.position.x) * 0.2 + Math.sin(now / 91) * 0.08 // the coals breathe
     if (m.userData.canopy) m.userData.canopy.rotation.z = Math.sin(now / 1400 + m.userData.canopy.userData.sway) * 0.05
@@ -3875,8 +4088,8 @@ function animate(now) {
     motes.rotation.y = now / 40000
     const nighty = day < 0.35
     motes.material.color.set(nighty ? 0xffc966 : 0xfff4c0) // fireflies after dark
-    motes.material.size = nighty ? 0.085 : 0.055
-    motes.material.opacity = (nighty ? 0.85 : 0.4) * (0.8 + Math.sin(now / 700) * 0.2)
+    motes.material.size = nighty ? 0.075 : 0.055
+    motes.material.opacity = (nighty ? 0.55 : 0.35) * (0.8 + Math.sin(now / 700) * 0.2)
   }
   // the mood in the darkroom: the night blooms harder and cools the grade
   if (bloomPass) bloomPass.strength = 0.28 + night * 0.24 + dusk * 0.08
