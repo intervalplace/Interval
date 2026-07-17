@@ -11,7 +11,19 @@
      blush, water with fresnel and sun-glints, wind through instanced
      grass, embers and smoke above every fire, bloom and grading over
      the whole frame. Same wire. Same key. Same ticks. Only the light
-     got ambitious. -->
+     got ambitious.
+
+     And then more ambitious still. This pass adds the air between
+     things: crepuscular shafts raking out of the sun, cloud shadows
+     crawling over the meadow, snow that SETTLES and whitens the world,
+     a rainbow when the rain lets up, moonlight glinting off the water,
+     lens flare for whoever stares at the sun, film grain and a touch
+     of chromatic fringe in the grade, contact shadows under every
+     body, birds crossing the noon sky, butterflies over the flowers,
+     leaves falling from the autumn trees, and rain that splashes where
+     it lands. Every last one derives from the same tick, obeys the
+     same adaptive-quality governor, and degrades gracefully to the
+     frame that shipped before it. -->
 <html>
 <head>
 <meta charset="utf-8">
@@ -257,12 +269,15 @@ const BRIDGE = (a) =>
   : a.do === 'drop' ? { type: 'drop', slot: a.slot }
   : a.do === 'wield' ? { type: 'wield', slot: a.slot }
   : null
+// must match engine.js SIG_DOMAINS.input to the byte (fix brief §2.3)
+const DOMAIN_INPUT = 'INTERVAL_INPUT_V1|'
+let curWorldId = ''
 async function send(a) {
-  if (ws.readyState !== 1 || !ownKey) return
+  if (ws.readyState !== 1 || !ownKey || !curWorldId) return
   const f = BRIDGE(a); if (!f) return
   const tk = allocTick(); if (tk === null) return
-  const input = { tick: tk, playerId: ownKey.pub, ...f }
-  const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode(canonicalJS(input))))
+  const input = { worldId: curWorldId, tick: tk, playerId: ownKey.pub, ...f }
+  const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode(DOMAIN_INPUT + canonicalJS(input))))
   ws.send(JSON.stringify({ type: 'raw', input: { ...input, sig } }))
 }
 
@@ -279,14 +294,19 @@ renderer.outputEncoding = THREE.sRGBEncoding
 renderer.toneMapping = THREE.ACESFilmicToneMapping
 renderer.toneMappingExposure = 0.92
 document.body.appendChild(renderer.domElement)
+// a fine pointer and a wide screen: the machine can afford the luxuries
+const FINE = matchMedia && matchMedia('(pointer: fine)').matches && innerWidth > 900
 
 // ---- the shared clock the shaders breathe by ----
 const uT = { value: 0 }
+// scalar dials the ground shader reads: cloud shadow strength, settled snow
+const uCloudAmt = { value: 0 }
+const uSnowAmt = { value: 0 }
 
 // ---- lights: a sun that follows the citizen so the shadows stay sharp ----
 const sun = new THREE.DirectionalLight(0xfff2dd, 1)
 sun.castShadow = true
-sun.shadow.mapSize.set(1536, 1536)
+sun.shadow.mapSize.set(FINE ? 2048 : 1536, FINE ? 2048 : 1536)
 sun.shadow.camera.left = -26; sun.shadow.camera.right = 26
 sun.shadow.camera.top = 26; sun.shadow.camera.bottom = -26
 sun.shadow.camera.far = 90
@@ -314,6 +334,45 @@ function softTex(inner, mid) {
   return new THREE.CanvasTexture(c)
 }
 const GLOW_TEX = softTex()
+// the inverse of the glow: a soft dark disc, the contact shadow every
+// body drags along the ground when the real shadow map loses interest
+function darkTex() {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64
+  const g2 = c.getContext('2d')
+  const gr = g2.createRadialGradient(32, 32, 0, 32, 32, 32)
+  gr.addColorStop(0, 'rgba(0,0,0,.85)'); gr.addColorStop(0.55, 'rgba(0,0,0,.4)'); gr.addColorStop(1, 'rgba(0,0,0,0)')
+  g2.fillStyle = gr; g2.fillRect(0, 0, 64, 64)
+  return new THREE.CanvasTexture(c)
+}
+const DARK_TEX = darkTex()
+const blobMat = new THREE.MeshBasicMaterial({ map: DARK_TEX, transparent: true, opacity: 0.3, depthWrite: false })
+const BLOB_GEO = new THREE.CircleGeometry(0.5, 16)
+function addBlob(g, r) {
+  const b = new THREE.Mesh(BLOB_GEO, blobMat)
+  b.rotation.x = -Math.PI / 2; b.position.y = 0.015; b.scale.setScalar(r)
+  g.add(b); return b
+}
+// a seamless mottle for the cloud shadows that crawl over the ground:
+// summed soft discs on a wrapping canvas, cheap and endless
+function cloudNoiseTex() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256
+  const g2 = c.getContext('2d')
+  g2.fillStyle = '#000'; g2.fillRect(0, 0, 256, 256)
+  const rnd = (i, s) => ((i * 9301 + s * 49297) % 233280) / 233280
+  g2.globalCompositeOperation = 'lighter'
+  for (let i = 0; i < 60; i++) {
+    const cx = rnd(i, 7) * 256, cy = rnd(i, 13) * 256, r = 18 + rnd(i, 29) * 52
+    for (const [ox, oy] of [[0, 0], [256, 0], [-256, 0], [0, 256], [0, -256], [256, 256], [-256, -256], [256, -256], [-256, 256]]) {
+      const gr = g2.createRadialGradient(cx + ox, cy + oy, 0, cx + ox, cy + oy, r)
+      gr.addColorStop(0, 'rgba(255,255,255,.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)')
+      g2.fillStyle = gr; g2.beginPath(); g2.arc(cx + ox, cy + oy, r, 0, 7); g2.fill()
+    }
+  }
+  const t = new THREE.CanvasTexture(c)
+  t.wrapS = t.wrapT = THREE.RepeatWrapping
+  return t
+}
+const CLOUD_NOISE = cloudNoiseTex()
 function cloudTex(seed) {
   const c = document.createElement('canvas'); c.width = 256; c.height = 128
   const g2 = c.getContext('2d')
@@ -370,7 +429,10 @@ const skyMat = new THREE.ShaderMaterial({
       col += vec3(1.0, 0.86, 0.62) * pow(sd, 520.0) * 2.4;                    // the disc: tighter, less blinding
       col += vec3(0.95, 0.85, 0.72) * pow(sd, 140.0) * 0.30 * (0.25 + uDay);  // a modest corona
       col += vec3(1.0, 0.66, 0.36) * pow(sd, 20.0) * (0.04 + 0.16 * uDusk);   // a restrained warm haze
+      col = mix(col, hor * 1.05, pow(1.0 - h, 6.0) * 0.45 * uDay);            // a milky haze pools at the horizon
       col = min(col, vec3(2.2));                                              // ceiling: nothing nukes the frame
+      float dn = fract(sin(dot(d.xy, vec2(12.9898, 78.233))) * 43758.5453);   // dither: gradients without staircases
+      col += (dn - 0.5) * 0.012;
       gl_FragColor = vec4(col, 1.0);
     }`
 })
@@ -385,6 +447,10 @@ scene.add(celestial)
 const moonSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: moonTex(), transparent: true, opacity: 0, fog: false, depthWrite: false }))
 moonSprite.scale.set(14, 14, 1)
 celestial.add(moonSprite)
+const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW_TEX, color: 0x9db8e8,
+  transparent: true, opacity: 0, fog: false, depthWrite: false, blending: THREE.AdditiveBlending }))
+moonHalo.scale.set(36, 36, 1) // the cold ring around the moon on a clear night
+celestial.add(moonHalo)
 const clouds = []
 for (let i = 0; i < 14; i++) {
   const cm = new THREE.SpriteMaterial({ map: cloudTex(i * 17 + 3), transparent: true, opacity: 0.5, depthWrite: false, fog: false })
@@ -394,44 +460,15 @@ for (let i = 0; i < 14; i++) {
   sp.scale.set(26 + (i * 11 % 22), 12 + (i * 7 % 9), 1)
   celestial.add(sp); clouds.push(sp)
 }
-// distant mountains: not the sharp 5-sided pyramids of before, but rounder,
-// jagged, snow-capped peaks in three depth bands that overlap into a range
-const ridgeMat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true })
+const ridgeMat = new THREE.MeshBasicMaterial({ color: 0x232b3a }) // fog does the painting
 const ridges = []
-const rockC = new THREE.Color(0x3a4356), snowC = new THREE.Color(0xd8dee8)
-function mountain(baseR, hgt, sides, seed) {
-  const geo = new THREE.ConeGeometry(baseR, hgt, sides, 4)
-  const pos = geo.attributes.position, col = []
-  const v = new THREE.Vector3()
-  for (let k = 0; k < pos.count; k++) {
-    v.fromBufferAttribute(pos, k)
-    const hf = (v.y + hgt / 2) / hgt                 // 0 at the base, 1 at the peak
-    const ang = Math.atan2(v.z, v.x)
-    // ridges and gullies: layered sines around the axis, deeper up high
-    const n = Math.sin(ang * 3 + seed) * 0.5 + Math.sin(ang * 7 + seed * 2) * 0.3 + Math.sin(v.y * 1.6 + seed) * 0.2
-    if (hf < 0.995) {
-      const jag = n * baseR * 0.2 * (0.35 + hf * 0.65)
-      v.x += Math.cos(ang) * jag; v.z += Math.sin(ang) * jag
-    }
-    pos.setXYZ(k, v.x, v.y, v.z)
-    const snow = Math.max(0, (hf - 0.58) / 0.42)      // snow gathers on the tops
-    const c = rockC.clone().lerp(snowC, snow * snow)
-    col.push(c.r, c.g, c.b)
-  }
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
-  return new THREE.Mesh(geo, ridgeMat)
-}
-for (let i = 0; i < 30; i++) {
-  const a = (i / 30) * Math.PI * 2 + (i % 7) * 0.05
-  const band = i % 3
-  const r = [70, 88, 104][band] + (i * 29 % 14)
-  const hgt = [10, 16, 23][band] + (i * 17 % 8)
-  const baseR = [12, 15, 19][band] + (i * 13 % 6)
-  const m = mountain(baseR, hgt, 7 + (i % 3), i * 1.7)
-  m.position.set(Math.cos(a) * r, hgt / 2 - 3, Math.sin(a) * r)
-  m.rotation.y = i * 0.9
-  m.scale.x = 1 + (i % 5) * 0.14        // asymmetric, so peaks lean into ridgelines
-  celestial.add(m); ridges.push(m)
+for (let i = 0; i < 26; i++) {
+  const a = (i / 26) * Math.PI * 2 + (i % 5) * 0.13
+  const r = 78 + (i * 29 % 20), hgt = 9 + (i * 17 % 12)
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(10 + (i * 13 % 9), hgt, 5), ridgeMat)
+  cone.position.set(Math.cos(a) * r, hgt / 2 - 2.5, Math.sin(a) * r)
+  cone.rotation.y = i
+  celestial.add(cone); ridges.push(cone)
 }
 const meteor = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW_TEX, color: 0xdfeaff, transparent: true, opacity: 0, fog: false, depthWrite: false, blending: THREE.AdditiveBlending }))
 meteor.scale.set(3.2, 0.5, 1)
@@ -445,7 +482,10 @@ const waterMat = new THREE.ShaderMaterial({
   uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
     uTime: { value: 0 },
     uSunDir: { value: new THREE.Vector3(0.4, 0.8, 0.3) },
+    uMoonDir: { value: new THREE.Vector3(-0.4, 0.6, -0.3) },
     uSun: { value: 1 },
+    uMoon: { value: 0 },
+    uSky: { value: new THREE.Color(0x8aa8c0) },
     uDeep: { value: new THREE.Color(0x0c2c44) },
     uShallow: { value: new THREE.Color(0x2e7ba0) },
   }]),
@@ -455,7 +495,8 @@ const waterMat = new THREE.ShaderMaterial({
     #include <fog_pars_vertex>
     void main() {
       vec4 wp = modelMatrix * vec4(position, 1.0);
-      wp.y += sin(uTime * 1.4 + wp.x * 1.9) * 0.018 + cos(uTime * 1.1 + wp.z * 1.5) * 0.018;
+      wp.y += sin(uTime * 1.4 + wp.x * 1.9) * 0.018 + cos(uTime * 1.1 + wp.z * 1.5) * 0.018
+            + sin(uTime * 2.6 + wp.x * 3.7 + wp.z * 1.3) * 0.007; // a chop over the swell
       vWorld = wp.xyz;
       vec4 mvPosition = viewMatrix * wp;
       gl_Position = projectionMatrix * mvPosition;
@@ -463,6 +504,7 @@ const waterMat = new THREE.ShaderMaterial({
     }`,
   fragmentShader: `
     uniform float uTime; uniform vec3 uSunDir; uniform float uSun;
+    uniform vec3 uMoonDir; uniform float uMoon; uniform vec3 uSky;
     uniform vec3 uDeep; uniform vec3 uShallow;
     varying vec3 vWorld;
     #include <fog_pars_fragment>
@@ -475,9 +517,13 @@ const waterMat = new THREE.ShaderMaterial({
       float fres = pow(1.0 - max(dot(view, nv), 0.0), 3.0);
       float band = sin(vWorld.x * 1.9 + vWorld.z * 1.5 + uTime * 0.9) * 0.5 + 0.5;
       vec3 col = mix(uDeep, uShallow, band * 0.35 + fres * 0.45);
+      col = mix(col, uSky * 0.9, fres * 0.55);                 // the water carries the true sky
       vec3 hr = reflect(-normalize(uSunDir), nv);
       float spec = pow(max(dot(hr, view), 0.0), 90.0) * uSun;
       col += vec3(1.0, 0.9, 0.7) * spec * 0.9;
+      vec3 mr = reflect(-normalize(uMoonDir), nv);             // and, at night, the moon's road
+      float mspec = pow(max(dot(mr, view), 0.0), 120.0) * uMoon;
+      col += vec3(0.72, 0.84, 1.0) * mspec * 0.75;
       float sparkle = pow(max(sin(vWorld.x * 23.0 + uTime * 3.1) * sin(vWorld.z * 19.0 - uTime * 2.3), 0.0), 16.0) * 0.22 * uSun;
       col += sparkle;
       col += uShallow * (0.10 - uSun * 0.06); // the night keeps a memory of blue
@@ -488,23 +534,75 @@ const waterMat = new THREE.ShaderMaterial({
 
 // ---- the darkroom assembled: bloom for fire and sun, FXAA for the
 // edges, a grade for the mood. Missing scripts degrade gracefully. ----
-let composer = null, bloomPass = null, gradePass = null, fxaaPass = null
+let composer = null, bloomPass = null, gradePass = null, fxaaPass = null, shaftPass = null
 const GradeShader = {
-  uniforms: { tDiffuse: { value: null }, uSat: { value: 1.14 }, uVig: { value: 0.36 }, uNight: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, uSat: { value: 1.14 }, uVig: { value: 0.36 }, uNight: { value: 0 },
+    uWarm: { value: 0 }, uTime: { value: 0 } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform float uSat; uniform float uVig; uniform float uNight;
+    uniform float uWarm; uniform float uTime;
     varying vec2 vUv;
     void main() {
-      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      vec2 q = vUv - 0.5;
+      float r2 = dot(q, q);
+      vec2 ca = q * r2 * 0.020;                            // the lens admits a whisper of fringe
+      vec3 c;
+      c.r = texture2D(tDiffuse, vUv + ca).r;
+      c.g = texture2D(tDiffuse, vUv).g;
+      c.b = texture2D(tDiffuse, vUv - ca).b;
       float l = dot(c, vec3(0.299, 0.587, 0.114));
       c = mix(vec3(l), c, uSat);
       c = (c - 0.5) * 1.10 + 0.5;                         // a little contrast, against the haze
       c = mix(c, c * vec3(0.80, 0.90, 1.14), uNight * 0.40); // moonlit steel
-      vec2 q = vUv - 0.5;
-      c *= 1.0 - dot(q, q) * uVig * 2.0;
+      c *= mix(vec3(1.0), vec3(1.07, 0.98, 0.89), uWarm * 0.85); // the golden hour, honoured
+      c *= 1.0 - r2 * uVig * 2.0;
+      float gn = fract(sin(dot(vUv + fract(uTime), vec2(12.9898, 78.233))) * 43758.5453);
+      c += (gn - 0.5) * 0.014;                            // film grain: the frame breathes
       c = pow(max(c, vec3(0.0)), vec3(0.4545)); // linear leaves; the screen receives
       gl_FragColor = vec4(c, 1.0);
+    }`
+}
+// crepuscular rays, screen-space: march each pixel toward the sun and
+// gather whatever burns along the way. The clouds occlude, so the light
+// breaks into fingers exactly where it should. Three faint ghosts ride
+// the same axis: a lens flare for whoever stares at the sun.
+const SunShaftShader = {
+  uniforms: { tDiffuse: { value: null }, uLightPos: { value: new THREE.Vector2(0.5, 0.5) },
+    uIntensity: { value: 0 }, uFlare: { value: 0 }, uAspect: { value: 1 },
+    uTint: { value: new THREE.Color(1.0, 0.86, 0.62) } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform vec2 uLightPos; uniform float uIntensity;
+    uniform float uFlare; uniform float uAspect; uniform vec3 uTint;
+    varying vec2 vUv;
+    void main() {
+      vec4 base = texture2D(tDiffuse, vUv);
+      vec3 col = base.rgb;
+      if (uIntensity > 0.001) {
+        vec2 delta = (uLightPos - vUv) * (1.0 / 30.0);
+        vec2 uv = vUv; float illum = 1.0; vec3 acc = vec3(0.0);
+        for (int i = 0; i < 30; i++) {
+          uv += delta;
+          vec3 s = texture2D(tDiffuse, uv).rgb;
+          float lum = max(0.0, dot(s, vec3(0.3333)) - 0.70); // only what truly burns
+          acc += s * lum * illum;
+          illum *= 0.93;
+        }
+        col += acc * uTint * (uIntensity * 0.055);
+      }
+      if (uFlare > 0.001) {
+        vec2 v = vUv - 0.5; v.x *= uAspect;
+        vec2 L = uLightPos - 0.5; L.x *= uAspect;
+        for (int k = 0; k < 3; k++) {
+          float t = float(k) * 0.55 - 0.35;
+          vec2 gp = L * t;
+          float r = 0.022 + float(k) * 0.03;
+          float d = length(v - gp);
+          col += uTint * uFlare * 0.045 * smoothstep(r, r * 0.35, d) / (1.0 + float(k));
+        }
+      }
+      gl_FragColor = vec4(col, base.a);
     }`
 }
 function buildComposer() {
@@ -515,6 +613,8 @@ function buildComposer() {
   composer.addPass(new THREE.RenderPass(scene, camera))
   bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.4, 0.85)
   composer.addPass(bloomPass)
+  shaftPass = new THREE.ShaderPass(SunShaftShader) // after bloom: the rays inherit the halo
+  composer.addPass(shaftPass)
   gradePass = new THREE.ShaderPass(GradeShader)
   composer.addPass(gradePass)
   fxaaPass = new THREE.ShaderPass(THREE.FXAAShader)
@@ -669,6 +769,88 @@ function makePool(n, color, blending) {
 const dustPool = makePool(48, 0xbdb096, THREE.NormalBlending)
 const flashPool = makePool(24, 0xffffff, THREE.AdditiveBlending)
 const sparkPool = makePool(80, 0xffdc7a, THREE.AdditiveBlending)
+const leafPool = makePool(36, 0xc9862a, THREE.NormalBlending) // the autumn trees shed
+
+// ---- birds: three far flocks that cross the daytime sky in slow rings ----
+const birdFlocks = []
+{
+  const wingGeo = new THREE.PlaneGeometry(0.55, 0.16)
+  for (let f = 0; f < 3; f++) {
+    const bmat = new THREE.MeshBasicMaterial({ color: 0x232830, transparent: true, opacity: 0, side: THREE.DoubleSide })
+    const flock = new THREE.Group()
+    const members = []
+    for (let b = 0; b < 5; b++) {
+      const bird = new THREE.Group()
+      bird.rotation.x = -Math.PI / 2 // wings flat against the sky, seen from below
+      const pivL = new THREE.Group(), pivR = new THREE.Group()
+      const wl = new THREE.Mesh(wingGeo, bmat); wl.position.x = -0.27; pivL.add(wl)
+      const wr = new THREE.Mesh(wingGeo, bmat); wr.position.x = 0.27; pivR.add(wr)
+      bird.add(pivL); bird.add(pivR)
+      bird.position.set((b - 2) * 0.9, -Math.abs(b - 2) * 0.2, Math.abs(b - 2) * 0.75) // the V
+      flock.add(bird)
+      members.push({ pivL, pivR, ph: b * 0.7 + f * 2.3 })
+    }
+    scene.add(flock)
+    birdFlocks.push({ flock, members, mat: bmat, r: 24 + f * 13, h: 16 + f * 4,
+      sp: 0.000020 + f * 0.000007, ph: f * 2.1 })
+  }
+}
+
+// ---- butterflies: they own the meadow air on clear days ----
+function butterflyTex(hue) {
+  const c = document.createElement('canvas'); c.width = 16; c.height = 16
+  const g2 = c.getContext('2d')
+  g2.fillStyle = 'hsl(' + hue + ', 65%, 62%)'
+  g2.beginPath(); g2.ellipse(5, 6, 4, 5, -0.4, 0, 7); g2.fill()
+  g2.beginPath(); g2.ellipse(11, 6, 4, 5, 0.4, 0, 7); g2.fill()
+  g2.fillStyle = 'hsl(' + hue + ', 55%, 45%)'
+  g2.beginPath(); g2.ellipse(5, 11, 2.6, 3.2, -0.3, 0, 7); g2.fill()
+  g2.beginPath(); g2.ellipse(11, 11, 2.6, 3.2, 0.3, 0, 7); g2.fill()
+  g2.fillStyle = '#2a2018'; g2.fillRect(7.4, 3, 1.2, 11)
+  return new THREE.CanvasTexture(c)
+}
+const flutters = []
+for (let i = 0; i < 10; i++) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: butterflyTex([28, 205, 340, 48, 12][i % 5]),
+    transparent: true, opacity: 0, depthWrite: false }))
+  const base = 0.13 + (i % 3) * 0.03
+  sp.scale.set(base, base, 1)
+  scene.add(sp)
+  flutters.push({ sp, base, r: 3 + (i * 1.3) % 8, sp2: 0.15 + (i % 4) * 0.06, seed: i * 1.7 })
+}
+
+// ---- rain splashes: flat rings where the drops land near the walker ----
+const splashRings = []
+{
+  const sgeo = new THREE.RingGeometry(0.05, 0.09, 10)
+  for (let i = 0; i < 24; i++) {
+    const m = new THREE.Mesh(sgeo, new THREE.MeshBasicMaterial({ color: 0xcfe0f0, transparent: true,
+      opacity: 0, side: THREE.DoubleSide, depthWrite: false }))
+    m.rotation.x = -Math.PI / 2; m.visible = false
+    scene.add(m)
+    splashRings.push({ m, t0: -1e9 })
+  }
+}
+let splashCur = 0
+
+// ---- the rainbow: it stands opposite the sun when the rain lets up ----
+function rainbowTex() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256
+  const g2 = c.getContext('2d')
+  const cols = ['rgba(230,60,60,.30)', 'rgba(235,150,60,.28)', 'rgba(235,220,80,.26)',
+    'rgba(110,200,90,.24)', 'rgba(90,160,230,.24)', 'rgba(110,90,210,.22)', 'rgba(170,90,210,.18)']
+  for (let i = 0; i < cols.length; i++) {
+    g2.strokeStyle = cols[i]; g2.lineWidth = 7
+    g2.beginPath(); g2.arc(256, 268, 236 - i * 7, Math.PI, Math.PI * 2); g2.stroke()
+  }
+  return new THREE.CanvasTexture(c)
+}
+const rainbow = new THREE.Mesh(new THREE.PlaneGeometry(130, 65),
+  new THREE.MeshBasicMaterial({ map: rainbowTex(), transparent: true, opacity: 0, fog: false, depthWrite: false }))
+rainbow.visible = false
+scene.add(rainbow)
+// the standing world remembers its autumn trees, so the leaves know where to fall
+const autumnTrees = []
 // the sea's mirror, built in buildGround if the Reflector script arrived.
 // It re-renders the whole scene, so it's a desktop luxury; phones keep the
 // cheap fresnel wave-sea, which is what kept the frame smooth before.
@@ -779,7 +961,8 @@ const TERRAIN_COL = { meadow: 0x3d5a23, trail: 0x8a7449, cobble: 0x7a756b, plaza
 const wx = (x) => x - W / 2 + 0.5
 const wz = (y) => y - H / 2 + 0.5
 
-let groundBuilt = false, groundMesh = null, stars = null, starsFar = null, motes = null
+let groundBuilt = false, groundMesh = null, stars = null, starsFar = null, motes = null, skirtMat = null
+const SKIRT_BASE = new THREE.Color(0x33481f), SNOW_C = new THREE.Color(0xdfe4ea)
 
 // a two-octave whisper of noise: the ground refuses to be a billiard table
 const noise2 = (x, y) => ((tileHash(Math.floor(x * 2), Math.floor(y * 2), 21) % 100) / 100
@@ -847,8 +1030,8 @@ function buildGround(s0) {
   geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
   geo.computeVertexNormals()
   // the horizon skirt: beyond the founding, misty land instead of void
-  const skirt = new THREE.Mesh(new THREE.CircleGeometry(400, 40),
-    new THREE.MeshStandardMaterial({ color: 0x33481f, roughness: 1 }))
+  skirtMat = new THREE.MeshStandardMaterial({ color: 0x33481f, roughness: 1 })
+  const skirt = new THREE.Mesh(new THREE.CircleGeometry(400, 40), skirtMat)
   skirt.rotation.x = -Math.PI / 2; skirt.position.y = -0.6 // BELOW the water beds: it once smothered every lake
   scene.add(skirt)
   // the earth textured: procedural grass mottling under the vertex colors
@@ -875,6 +1058,25 @@ function buildGround(s0) {
   gtex.repeat.set(W / 3, H / 3)
   gtex.anisotropy = renderer.capabilities.getMaxAnisotropy?.() ?? 1
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, map: gtex, roughness: 0.96, metalness: 0 })
+  // the ground learns two more truths: clouds pass over it, and snow
+  // settles on it. Both are one texture sample and two lerps.
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTimeG = uT
+    sh.uniforms.uCloudTex = { value: CLOUD_NOISE }
+    sh.uniforms.uCloudAmt = uCloudAmt
+    sh.uniforms.uSnowAmt = uSnowAmt
+    sh.vertexShader = 'varying vec3 vWorld3;\n' + sh.vertexShader.replace('#include <begin_vertex>',
+      `#include <begin_vertex>
+      vWorld3 = (modelMatrix * vec4(position, 1.0)).xyz;`)
+    sh.fragmentShader = 'uniform float uTimeG; uniform sampler2D uCloudTex; uniform float uCloudAmt; uniform float uSnowAmt;\nvarying vec3 vWorld3;\n'
+      + sh.fragmentShader.replace('#include <color_fragment>',
+      `#include <color_fragment>
+      float cs = texture2D(uCloudTex, vWorld3.xz * 0.013 + vec2(uTimeG * 0.0062, uTimeG * 0.0024)).r;
+      cs = smoothstep(0.30, 0.75, cs);
+      diffuseColor.rgb *= mix(1.0, 0.68 + 0.32 * cs, uCloudAmt);            // the clouds crawl over the meadow
+      float sm = smoothstep(-0.08, 0.04, vWorld3.y) * uSnowAmt;             // beds stay dark under the water
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.89, 0.94), sm * 0.85); // the world whitens`)
+  }
   const mesh = new THREE.Mesh(geo, mat)
   mesh.receiveShadow = true
   scene.add(mesh)
@@ -921,11 +1123,12 @@ function buildGround(s0) {
         transformed.z += (sway * 0.05 + uWind * 0.05) * position.y * gust;
       #endif`)
   }
-  const tufts = new THREE.InstancedMesh(tuftGeo, tuftMat, 9000)
+  const TUFT_N = FINE ? 15000 : 9000 // an RPG is mostly grass; a desktop can afford more of it
+  const tufts = new THREE.InstancedMesh(tuftGeo, tuftMat, TUFT_N)
   const dummy = new THREE.Object3D()
   const gc = new THREE.Color()
   let ti = 0
-  for (let i = 0; i < 70000 && ti < 9000; i++) {
+  for (let i = 0; i < 120000 && ti < TUFT_N; i++) {
     const gx = tileHash(i, 7, 40) % W, gy = tileHash(i, 11, 41) % H
     if (terrainOf(gx, gy) !== 'meadow') continue
     dummy.position.set(wx(gx) + ((tileHash(i, 3, 42) % 80) - 40) / 100, 0, wz(gy) + ((tileHash(i, 5, 43) % 80) - 40) / 100)
@@ -941,10 +1144,11 @@ function buildGround(s0) {
   // flowers: the meadow keeps a little vanity
   const flowerGeo = new THREE.SphereGeometry(0.028, 6, 4)
   const flowerMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 })
-  const flowers = new THREE.InstancedMesh(flowerGeo, flowerMat, 900)
+  const FLOWER_N = FINE ? 1400 : 900
+  const flowers = new THREE.InstancedMesh(flowerGeo, flowerMat, FLOWER_N)
   const FLOWER_COLS = [0xf0e8f8, 0xe8c53a, 0xd46a9e, 0x8ab8e8, 0xe86a4a]
   let fi = 0
-  for (let i = 0; i < 24000 && fi < 900; i++) {
+  for (let i = 0; i < 40000 && fi < FLOWER_N; i++) {
     const gx = tileHash(i, 19, 48) % W, gy = tileHash(i, 23, 49) % H
     if (terrainOf(gx, gy) !== 'meadow') continue
     if (tileHash(gx, gy, 55) % 7 !== 0) continue
@@ -1054,6 +1258,7 @@ function nodeMesh(n) {
     blob(0.20, 0x54983a, -0.10, 1.30, 0.16)
     canopy.userData.sway = tileHash(n.x, n.y, 2) % 100
     g.add(canopy); g.userData.canopy = canopy
+    if (autumn) autumnTrees.push({ x: wx(n.x), z: wz(n.y) }) // it will shed all day
   } else if (n.type === 'rock' || n.type === 'magic-rock') {
     if (n.type === 'magic-rock') {
       // a crystal cluster: the ore that dreams
@@ -1319,145 +1524,108 @@ function beingMesh(kind, id, thing) {
     g.userData.name = makeName('')
     g.add(g.userData.name)
     g.userData.hpbar = makeHpBar(); g.userData.hpbar.position.y = 1.36; g.add(g.userData.hpbar)
+    addBlob(g, 0.75) // the contact shadow: feet that touch the ground
     return g
   }
   if (kind === 'citizen') {
     const hv = parseInt(id.slice(0, 8), 16)
-    const bit = (shift, mod) => (hv >>> shift) % mod
     // the key becomes a person: worn dyes, a heraldic accent, a cloak,
-    // a skin, a hair, an eye, a build — all derived, none random
+    // a skin, a hair, an eye — all derived, none random, all from the key
     const tunic = new THREE.Color().setHSL((hv % 360) / 360, 0.42, 0.34)
-    const accent = new THREE.Color().setHSL((bit(10, 360)) / 360, 0.55, 0.44) // tabard & trim
+    const accent = new THREE.Color().setHSL(((hv >> 10) % 360) / 360, 0.55, 0.44) // tabard & trim
     const accentHi = accent.clone().offsetHSL(0, 0, 0.16)
-    const cloakC = new THREE.Color().setHSL((bit(8, 360)) / 360, 0.30, 0.18)
+    const cloakC = new THREE.Color().setHSL(((hv >> 8) % 360) / 360, 0.30, 0.18)
     const skinC = [0xe8c9a0, 0xd9a877, 0xc98a5e, 0xa8724a, 0x8a5a3a, 0x6b4428][hv % 6]
-    const hairC = [0x2a2018, 0x4a3420, 0x6b4a2a, 0x8a6a3a, 0x1a1a1a, 0x9e3a1a, 0xb8b0a0][bit(4, 7)]
-    const eyeC = [0x3a2a1a, 0x2a4a6a, 0x3a5a3a, 0x5a4a2a][bit(7, 4)]
-    const leatherC = 0x5a4023, furC = 0x8a8076
+    const hairC = [0x2a2018, 0x4a3420, 0x6b4a2a, 0x8a6a3a, 0x1a1a1a, 0x9e3a1a, 0xb8b0a0][(hv >> 4) % 7]
+    const eyeC = [0x3a2a1a, 0x2a4a6a, 0x3a5a3a, 0x5a4a2a][(hv >> 7) % 4]
     const M = (c, r = 0.75) => new THREE.MeshStandardMaterial({ color: c, roughness: r })
-    const cloth = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.88 })
-    const skin = (c = skinC) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.5 })
     const metal = (c, r = 0.35, m = 0.7) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m })
     const cast = (m) => { m.castShadow = true; return m }
     const detail = []; g.userData.detail = detail   // fine parts, hidden at distance
     const D = (m) => { detail.push(m); return m }
-    // build variety: some tall, some broad, some hooded, some packed
-    const tall = 0.97 + bit(13, 9) / 100        // 0.97 .. 1.05
-    const girth = 0.92 + bit(16, 16) / 100       // 0.92 .. 1.07
-    const hasHood = bit(17, 5) === 0
-    const hasPack = bit(18, 3) === 0
 
-    // ---- torso: a smooth revolved profile, chest tapering to a waist ----
+    // ---- torso: a smooth revolved profile, chest tapering to waist ----
     const prof = [[0.02, -0.34], [0.13, -0.30], [0.145, -0.16], [0.135, -0.04],
       [0.165, 0.10], [0.155, 0.22], [0.10, 0.30], [0.03, 0.34]].map(p => new THREE.Vector2(p[0], p[1]))
-    const torso = cast(new THREE.Mesh(new THREE.LatheGeometry(prof, 18), cloth(tunic)))
-    torso.position.y = 0.62; torso.scale.set(girth, 1, girth); g.add(torso)
-    g.userData.torso = torso; g.userData.tunic = tunic
-    // surcoat front and back, with a heraldic emblem and a hem
+    const torso = cast(new THREE.Mesh(new THREE.LatheGeometry(prof, 16), M(tunic)))
+    torso.position.y = 0.62; g.add(torso); g.userData.torso = torso; g.userData.tunic = tunic
+    // a surcoat front and back, with a heraldic emblem
     for (const tz of [0.135, -0.135]) {
-      const tab = D(cast(new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.5, 0.02), cloth(accent))))
+      const tab = D(cast(new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.5, 0.02), M(accent, 0.7))))
       tab.position.set(0, 0.55, tz); g.add(tab)
     }
     const emblem = D(new THREE.Mesh(new THREE.CircleGeometry(0.05, 4),
       new THREE.MeshStandardMaterial({ color: accentHi, roughness: 0.5, metalness: 0.2, side: THREE.DoubleSide })))
-    emblem.position.set(0, 0.62, 0.153); g.add(emblem)
-    const hem = D(cast(new THREE.Mesh(new THREE.TorusGeometry(0.145, 0.016, 6, 18), cloth(accent))))
-    hem.position.y = 0.30; hem.rotation.x = Math.PI / 2; hem.scale.set(girth, girth, 1); g.add(hem)
-    const collar = D(cast(new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.02, 6, 14), cloth(accent))))
+    emblem.position.set(0, 0.62, 0.152); g.add(emblem)
+    const collar = D(cast(new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.02, 6, 14), M(accent, 0.6))))
     collar.position.set(0, 0.9, 0); collar.rotation.x = Math.PI / 2; g.add(collar)
-    for (const [lz, ly] of [[0.03, 0.84], [-0.03, 0.84]]) { // a V of laces at the throat
-      const lace = D(new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.12, 0.006), M(0x2a2018, 0.7)))
-      lace.position.set(lz, ly, 0.14); lace.rotation.z = lz > 0 ? 0.22 : -0.22; g.add(lace)
-    }
-    const belt = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.15, 0.05, 16), M(0x2a1c10, 0.6)))
-    belt.position.y = 0.44; belt.scale.set(girth, 1, girth); g.add(belt)
+    const belt = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.15, 0.05, 14), M(0x2a1c10, 0.6)))
+    belt.position.y = 0.44; g.add(belt)
     const buckle = D(cast(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.02), metal(0xc9a24a, 0.3, 0.85))))
-    buckle.position.set(0, 0.44, 0.152 * girth); g.add(buckle)
-    const strap = D(new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.1, 0.012), M(leatherC, 0.7))) // hanging belt end
-    strap.position.set(0.04, 0.37, 0.15 * girth); g.add(strap)
-    const pouch = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), M(leatherC, 0.8)))) // a hip pouch
-    pouch.position.set(-0.14 * girth, 0.42, 0.05); pouch.scale.set(1, 0.9, 0.7); g.add(pouch)
+    buckle.position.set(0, 0.44, 0.152); g.add(buckle)
     const hips = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.12, 0.14, 12), M(0x2f2820)))
-    hips.position.y = 0.36; hips.scale.set(girth, 1, girth); g.add(hips)
-    // shoulders carry the dye (they swap to plate); metal caps and a fur collar
-    const shoulders = cast(new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 8), cloth(tunic)))
-    shoulders.position.y = 0.88; shoulders.scale.set(1.3 * girth, 0.5, 0.85 * girth); g.add(shoulders)
+    hips.position.y = 0.36; g.add(hips)
+    // shoulders carry the dye (they swap to plate); metal caps sit atop
+    const shoulders = cast(new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 8), M(tunic)))
+    shoulders.position.y = 0.88; shoulders.scale.set(1.3, 0.5, 0.85); g.add(shoulders)
     g.userData.shoulders = shoulders
     for (const sx of [-0.17, 0.17]) {
       const pauld = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.6), metal(0x767b85, 0.4, 0.6))))
-      pauld.position.set(sx * girth, 0.9, 0); g.add(pauld)
+      pauld.position.set(sx, 0.9, 0); g.add(pauld)
     }
-    const fur = D(cast(new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.035, 7, 16, Math.PI * 1.2), M(furC, 1))))
-    fur.position.set(0, 0.9, -0.02); fur.rotation.set(Math.PI / 2, 0, Math.PI); g.add(fur)
-    const neck = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.09, 10), skin()))
+    const neck = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.09, 10), M(skinC, 0.6)))
     neck.position.y = 0.95; g.add(neck)
 
-    // ---- the head: a real face worth the name floating over it ----
-    const head = cast(new THREE.Mesh(new THREE.SphereGeometry(0.135, 18, 16), skin()))
+    // ---- the head: a face worth the name floating over it ----
+    const head = cast(new THREE.Mesh(new THREE.SphereGeometry(0.135, 16, 14), M(skinC, 0.5)))
     head.position.y = 1.08; head.scale.set(0.94, 1.06, 0.96); g.add(head)
-    const jaw = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 10), skin())))
+    const jaw = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 10), M(skinC, 0.5))))
     jaw.position.set(0, 1.02, 0.03); jaw.scale.set(0.9, 0.72, 0.85); g.add(jaw)
-    const nose = D(new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.05, 6), skin()))
+    const nose = D(new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.05, 6), M(skinC, 0.5)))
     nose.position.set(0, 1.06, 0.13); nose.rotation.x = Math.PI * 0.55; g.add(nose)
-    const bridge = D(new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.05, 0.02), skin()))
-    bridge.position.set(0, 1.095, 0.122); g.add(bridge)
     for (const ex of [-0.125, 0.125]) {
-      const ear = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), skin())))
+      const ear = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), M(skinC, 0.5))))
       ear.position.set(ex, 1.07, 0); ear.scale.set(0.6, 1, 0.7); g.add(ear)
     }
-    for (const ex of [-0.05, 0.05]) { // eyes: sclera, iris, pupil, a lid, a brow
-      const sclera = D(new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), new THREE.MeshStandardMaterial({ color: 0xf4f0e8, roughness: 0.35 })))
-      sclera.position.set(ex, 1.088, 0.108); sclera.scale.set(1, 0.78, 0.6); g.add(sclera)
-      const iris = D(new THREE.Mesh(new THREE.SphereGeometry(0.011, 8, 6), new THREE.MeshStandardMaterial({ color: eyeC, roughness: 0.2 })))
-      iris.position.set(ex, 1.086, 0.121); g.add(iris)
+    for (const ex of [-0.05, 0.05]) { // eyes: sclera, iris, pupil, and a catchlight of life
+      const sclera = D(new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), new THREE.MeshStandardMaterial({ color: 0xf4f0e8, roughness: 0.4 })))
+      sclera.position.set(ex, 1.09, 0.107); sclera.scale.set(1, 0.8, 0.6); g.add(sclera)
+      const iris = D(new THREE.Mesh(new THREE.SphereGeometry(0.011, 8, 6), new THREE.MeshStandardMaterial({ color: eyeC, roughness: 0.25 })))
+      iris.position.set(ex, 1.088, 0.12); g.add(iris)
       const pup = D(new THREE.Mesh(new THREE.SphereGeometry(0.005, 6, 5), new THREE.MeshBasicMaterial({ color: 0x080808 })))
-      pup.position.set(ex, 1.086, 0.127); g.add(pup)
-      const lid = D(cast(new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.016, 0.03), skin())))
-      lid.position.set(ex, 1.102, 0.112); lid.rotation.x = -0.35; g.add(lid)
-      const brow = D(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.02), new THREE.MeshBasicMaterial({ color: hairC })))
-      brow.position.set(ex, 1.118, 0.113); g.add(brow)
+      pup.position.set(ex, 1.088, 0.126); g.add(pup)
+      const brow = D(new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.012, 0.02), new THREE.MeshBasicMaterial({ color: hairC })))
+      brow.position.set(ex, 1.116, 0.114); g.add(brow)
     }
-    const mouth = D(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.02), M(0x7a3b34, 0.6)))
-    mouth.position.set(0, 1.006, 0.126); mouth.rotation.z = bit(20, 2) ? 0.06 : -0.02; g.add(mouth) // a hint of expression
     // hair as a group so a helm can hide the whole coiffure at once
     const hairGroup = new THREE.Group(); g.add(hairGroup); g.userData.hair = hairGroup
     const hairMat = M(hairC, 0.85)
-    const cap = cast(new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), hairMat))
+    const cap = cast(new THREE.Mesh(new THREE.SphereGeometry(0.14, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), hairMat))
     cap.position.y = 1.10; hairGroup.add(cap)
-    const fringe = D(cast(new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.05, 0.06), hairMat))) // a hairline
-    fringe.position.set(0, 1.15, 0.10); fringe.rotation.x = 0.3; hairGroup.add(fringe)
-    for (const sx of [-0.12, 0.12]) { // sideburns
-      const sb = D(cast(new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.07, 0.03), hairMat)))
-      sb.position.set(sx, 1.06, 0.02); hairGroup.add(sb)
-    }
-    const style = bit(9, 3)
+    const style = (hv >> 9) % 3
     if (style === 1) { // a ponytail
       const tail = D(cast(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.014, 0.22, 6), hairMat)))
-      tail.position.set(0, 1.02, -0.13); tail.rotation.x = -0.4; hairGroup.add(tail)
+      tail.position.set(0, 1.02, -0.12); tail.rotation.x = -0.4; hairGroup.add(tail)
     } else if (style === 2) { // a topknot
       const bun = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 7), hairMat)))
       bun.position.set(0, 1.23, -0.01); hairGroup.add(bun)
     }
-    if (bit(11, 10) < 4) { // some wear a beard
-      const beard = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.088, 10, 8, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5), hairMat)))
-      beard.position.set(0, 1.0, 0.03); beard.scale.set(0.96, 0.98, 0.82); hairGroup.add(beard)
+    if ((hv >> 11) % 10 < 4) { // some wear a beard
+      const beard = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5), hairMat)))
+      beard.position.set(0, 1.0, 0.03); beard.scale.set(0.95, 0.95, 0.82); hairGroup.add(beard)
     }
-    const helm = cast(new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), metal(0x9a9fa8, 0.35, 0.7)))
+    const helm = cast(new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), metal(0x9a9fa8, 0.35, 0.7)))
     helm.position.y = 1.09; helm.visible = false; g.add(helm); g.userData.helm = helm
     const nasal = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.09, 0.02), metal(0x9a9fa8, 0.35, 0.7))
     nasal.position.set(0, -0.05, 0.14); helm.add(nasal) // the nose-guard hides with the helm
-    if (hasHood) { // a lowered hood bunched at the back of the neck
-      const hood = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 10, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.5), cloth(cloakC))))
-      hood.position.set(0, 0.92, -0.1); hood.scale.set(1, 1.2, 1.1); g.add(hood)
-    }
 
     // ---- two-segment limbs: the joint contract the animator relies on ----
     const mkLimb2 = (rw, upLen, loLen, upC, loC) => {
       const hip2 = new THREE.Group()
-      const upper = cast(new THREE.Mesh(new THREE.CylinderGeometry(rw, rw * 0.82, upLen, 10), upC.isColor ? cloth(upC) : M(upC)))
+      const upper = cast(new THREE.Mesh(new THREE.CylinderGeometry(rw, rw * 0.82, upLen, 10), M(upC)))
       upper.position.y = -upLen / 2; hip2.add(upper)
       const joint = new THREE.Group(); joint.position.y = -upLen; hip2.add(joint)
-      const lower = cast(new THREE.Mesh(new THREE.CylinderGeometry(rw * 0.82, rw * 0.66, loLen, 10), loC === skinC ? skin() : M(loC)))
+      const lower = cast(new THREE.Mesh(new THREE.CylinderGeometry(rw * 0.82, rw * 0.66, loLen, 10), M(loC)))
       lower.position.y = -loLen / 2; joint.add(lower)
       hip2.userData.joint = joint
       return hip2
@@ -1465,40 +1633,28 @@ function beingMesh(kind, id, thing) {
     const armL = mkLimb2(0.045, 0.2, 0.2, tunic, skinC), armR = mkLimb2(0.045, 0.2, 0.2, tunic, skinC)
     armL.position.set(-0.2, 0.86, 0); armR.position.set(0.2, 0.86, 0)
     g.add(armL); g.add(armR); g.userData.arms = [armL, armR]
-    for (const arm of [armL, armR]) { // a shaped hand: palm and thumb
-      const palm = D(cast(new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.06, 0.036), skin())))
-      palm.position.y = -0.205; arm.userData.joint.add(palm)
-      const thumb = D(cast(new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.034, 0.018), skin())))
-      thumb.position.set(0.03, -0.185, 0.012); arm.userData.joint.add(thumb)
-      const cuff = D(cast(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 10), cloth(accent))))
-      cuff.position.y = -0.16; arm.userData.joint.add(cuff)
+    for (const arm of [armL, armR]) { // hands
+      const mitt = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), M(skinC, 0.6))))
+      mitt.position.y = -0.2; mitt.scale.set(1, 1.2, 0.7); arm.userData.joint.add(mitt)
     }
     const legL = mkLimb2(0.058, 0.19, 0.19, 0x2f2820, 0x241d16), legR = mkLimb2(0.058, 0.19, 0.19, 0x2f2820, 0x241d16)
     legL.position.set(-0.07, 0.36, 0); legR.position.set(0.07, 0.36, 0)
     g.add(legL); g.add(legR); g.userData.legs = [legL, legR]
-    for (const leg of [legL, legR]) { // boots with a toe and a folded cuff
+    for (const leg of [legL, legR]) { // boots with a toe
       const boot = cast(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.06, 0.12), M(0x1a140e, 0.7)))
       boot.position.set(0, -0.19, 0.02); leg.userData.joint.add(boot)
       const toe = D(cast(new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.05, 0.06), M(0x1a140e, 0.7))))
       toe.position.set(0, -0.2, 0.09); leg.userData.joint.add(toe)
-      const bcuff = D(cast(new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.05, 0.04, 10), M(0x3a2c1a, 0.8))))
-      bcuff.position.y = -0.15; leg.userData.joint.add(bcuff)
     }
-    // bracers on the forearms
-    for (const arm2 of [armL, armR]) {
+    // pauldrons and bracers: the road's armour
+    for (const [px3, arm2] of [[-0.2, armL], [0.2, armR]]) {
+      const pd = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.6), metal(0x6b7078, 0.4, 0.5))))
+      pd.position.set(px3, 0.9, 0); g.add(pd)
       const brace = D(cast(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.1, 10), metal(0x5a4a30, 0.6, 0.3))))
-      brace.position.y = -0.11; arm2.userData.joint.add(brace)
-    }
-    if (hasPack) { // a satchel on the back, with a strap across the chest
-      const sack = D(cast(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.24, 0.12), M(leatherC, 0.85))))
-      sack.position.set(0, 0.66, -0.19); g.add(sack)
-      const flap = D(cast(new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.1, 0.13), M(0x4a3520, 0.85))))
-      flap.position.set(0, 0.76, -0.19); g.add(flap)
-      const sstrap = D(new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.02), M(0x3a2c1a, 0.8)))
-      sstrap.position.set(0.08, 0.62, 0.12); sstrap.rotation.z = 0.35; g.add(sstrap)
+      brace.position.y = -0.12; arm2.userData.joint.add(brace)
     }
     // a curved cloak that drapes and sways, clasped at the throat
-    const cloak = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.30, 0.55, 18, 1, true, Math.PI * 0.72, Math.PI * 0.56),
+    const cloak = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.30, 0.55, 16, 1, true, Math.PI * 0.72, Math.PI * 0.56),
       new THREE.MeshStandardMaterial({ color: cloakC, roughness: 0.92, side: THREE.DoubleSide })))
     cloak.position.set(0, 0.62, -0.02); cloak.rotation.x = 0.08; g.add(cloak); g.userData.cloak = cloak
     const clasp = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), metal(0xc9a24a, 0.3, 0.85))))
@@ -1538,7 +1694,6 @@ function beingMesh(kind, id, thing) {
     bow.add(bowstr) // the string rides with the bow
     const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.36, 4), metal(0x8a8a82, 0.4, 0.6))
     chain.position.set(0, -0.4, 0.03); chain.visible = false; hand.add(chain); g.userData.chain = chain
-    g.scale.setScalar(tall) // the crowd is not all one height
     g.userData.name = makeName('')
     g.add(g.userData.name)
     g.userData.hpbar = makeHpBar(); g.userData.hpbar.position.y = 1.36; g.add(g.userData.hpbar)
@@ -1617,11 +1772,12 @@ function beingMesh(kind, id, thing) {
     g.userData.hpbar = makeHpBar()
     g.userData.hpbar.position.y = (thing.type === 'troll' ? 1.5 : 0.95); g.add(g.userData.hpbar)
     g.userData.maxHp = thing.hp
+    addBlob(g, sz * 1.25) // beasts too are pinned to the earth
   }
+  if (kind === 'citizen') addBlob(g, 0.72)
   return g
 }
-function syncBeings(s, prev, dt) {
-  dt = dt || 0.016
+function syncBeings(s, prev) {
   const seen = new Set()
   const t2 = Math.min(1, Math.max(0, (performance.now() - clock.at) / TICK_MS))
   const place = (kind, id, thing, old) => {
@@ -1650,7 +1806,7 @@ function syncBeings(s, prev, dt) {
       let dAng = want - m.rotation.y
       while (dAng > Math.PI) dAng -= Math.PI * 2
       while (dAng < -Math.PI) dAng += Math.PI * 2
-      m.rotation.y += dAng * Math.min(1, dt * 12) // the body TURNS smoothly, then walks forward
+      m.rotation.y += dAng * 0.25 // the body TURNS, then walks forward
     }
     if (kind === 'citizen') {
       const nm = thing.name ? thing.name + ' (lvl ' + lvlOf(thing) + ')' : '(unnamed)'
@@ -1662,11 +1818,7 @@ function syncBeings(s, prev, dt) {
       if (m.userData.lvl !== undefined && curLvl > m.userData.lvl) levelBurst(m.position)
       m.userData.lvl = curLvl
       const moving = thing.x !== ox || thing.y !== oy
-      // eased locomotion: the walk fades in and out instead of snapping on,
-      // and the gait advances on a dt clock so it's smooth at any frame rate
-      const mv = m.userData.mv = (m.userData.mv ?? 0) + ((moving ? 1 : 0) - (m.userData.mv ?? 0)) * Math.min(1, dt * 9)
-      m.userData.gait = (m.userData.gait ?? 0) + dt * (7.5 + mv * 2)
-      const ph = Math.sin(m.userData.gait)
+      const ph = Math.sin(performance.now() / 140)
       if (m.userData.rigged) { // clips crossfade; missing clips get body english
         const fighting2 = thing.action?.type === 'attack' || thing.action?.type === 'attackp'
         const working2 = thing.action?.type === 'gather'
@@ -1700,25 +1852,18 @@ function syncBeings(s, prev, dt) {
         const exch = fighting && ((s.tick - (thing.action.since ?? 0)) % 2 === 0
           || thing.equipment?.weapon?.item === 'old-chain')
         const strikeT2 = exch ? Math.max(0, Math.sin(t2 * Math.PI)) : 0
-        // legs swing on the eased amplitude: a stride that fades out, not off
-        m.userData.legs[0].rotation.x = ph * 0.65 * mv
-        m.userData.legs[1].rotation.x = -ph * 0.65 * mv
-        m.userData.legs[0].userData.joint.rotation.x = Math.max(0, -ph) * 0.9 * mv
-        m.userData.legs[1].userData.joint.rotation.x = Math.max(0, ph) * 0.9 * mv
-        m.userData.arms[0].rotation.x = -ph * 0.5 * mv + 0.06 * (1 - mv)
-        // the working / fighting arm EASES toward its pose, so the swing and
-        // the recovery read as motion instead of a snap between frames
-        const armTarget = fighting ? (exch ? (-2.4 + strikeT2 * 2.4) : -1.1)
-          : working ? (-2.0 + Math.abs(Math.sin(m.userData.gait * 0.85)) * 1.5) // the axe rises and falls
-          : (ph * 0.5 * mv + 0.06 * (1 - mv))
-        const rArm = m.userData.arms[1]
-        rArm.rotation.x += (armTarget - rArm.rotation.x) * Math.min(1, dt * (fighting ? 20 : 11))
-        m.userData.arms[0].userData.joint.rotation.x = -0.3 * mv - 0.12 * (1 - mv)
-        const elbowTarget = (fighting || working) ? -0.5 : (-0.3 * mv - 0.12 * (1 - mv))
-        const rElbow = m.userData.arms[1].userData.joint
-        rElbow.rotation.x += (elbowTarget - rElbow.rotation.x) * Math.min(1, dt * 11)
-        m.userData.torso.scale.y = 1 + Math.sin(m.userData.gait * 0.34) * 0.012 // breath
-        if (m.userData.cloak) m.userData.cloak.rotation.x = 0.08 + 0.28 * mv + Math.sin(m.userData.gait * 0.5) * 0.035
+        m.userData.legs[0].rotation.x = moving ? ph * 0.65 : 0
+        m.userData.legs[1].rotation.x = moving ? -ph * 0.65 : 0
+        m.userData.legs[0].userData.joint.rotation.x = moving ? Math.max(0, -ph) * 0.9 : 0
+        m.userData.legs[1].userData.joint.rotation.x = moving ? Math.max(0, ph) * 0.9 : 0
+        m.userData.arms[0].rotation.x = moving ? -ph * 0.5 : 0.06
+        m.userData.arms[1].rotation.x = fighting ? (exch ? (-2.4 + strikeT2 * 2.4) : -1.1)
+          : working ? (-2.0 + Math.abs(Math.sin(performance.now() / 420)) * 1.5) // the axe rises and falls
+          : (moving ? ph * 0.5 : 0.06)
+        m.userData.arms[0].userData.joint.rotation.x = moving ? -0.3 : -0.12
+        m.userData.arms[1].userData.joint.rotation.x = (fighting || working) ? -0.5 : (moving ? -0.3 : -0.12)
+        m.userData.torso.scale.y = 1 + Math.sin(performance.now() / 900 + m.position.x) * 0.015 // breath
+        if (m.userData.cloak) m.userData.cloak.rotation.x = 0.08 + (moving ? 0.28 + ph * 0.05 : Math.sin(performance.now() / 1100) * 0.03)
         // the job puts its tool in the hand
         const nd2 = working ? s.nodes[thing.action.nodeId] : null
         if (m.userData.hatchet) {
@@ -1760,11 +1905,9 @@ function syncBeings(s, prev, dt) {
       if (thing.hp <= 0) m.visible = false; else m.visible = true
     } else {
       const moving = thing.x !== ox || thing.y !== oy
-      const mv = m.userData.mv = (m.userData.mv ?? 0) + ((moving ? 1 : 0) - (m.userData.mv ?? 0)) * Math.min(1, dt * 9)
-      m.userData.gait = (m.userData.gait ?? 0) + dt * (7.7 + mv * 3)
       if (m.userData.legs4) for (let li = 0; li < 4; li++)
-        m.userData.legs4[li].rotation.x = Math.sin(m.userData.gait + li * Math.PI / 2) * 0.6 * mv
-      if (m.userData.hunch) m.userData.hunch.rotation.x = 0.32 + Math.sin(m.userData.gait * 0.4 + m.position.x) * 0.04
+        m.userData.legs4[li].rotation.x = moving ? Math.sin(performance.now() / 130 + li * Math.PI / 2) * 0.6 : 0
+      if (m.userData.hunch) m.userData.hunch.rotation.x = 0.32 + Math.sin(performance.now() / 700 + m.position.x) * 0.04
       if (m.userData.hpbar) {
         m.userData.maxHp = Math.max(m.userData.maxHp ?? thing.hp, thing.hp)
         if (m.userData.lastHp !== undefined && thing.hp < m.userData.lastHp) {
@@ -1856,6 +1999,7 @@ ws.onmessage = async (ev) => {
   if (m.type === 'hello') { myId = m.playerId }
   if (m.type === 'state') {
     prevWorld = world; world = m.state
+    if (m.worldId) curWorldId = m.worldId
     clock = { tick: m.state.tick, at: performance.now() }
     // the first spawn was stamped tick 1 into a world at tick twenty
     // thousand: born stale, rejected, invisible. Ask again each state
@@ -2027,7 +2171,11 @@ const fogCol = new THREE.Color()
 const sunDirV = new THREE.Vector3()
 let lastFrame = 0
 let lightAt = -1e9, lastStrikeTick = -1     // the last flash, and its tick
+let rainMem = 0    // the sky remembers its rain: the rainbow needs the memory
+let snowCover = 0  // and the ground remembers its snow: it settles, then thaws
+let leafAt = 0     // the last leaf shed
 const camDesired = new THREE.Vector3(), camRay = new THREE.Raycaster()
+const sunNDC = new THREE.Vector3(), antiSun = new THREE.Vector3()
 function animate(now) {
   requestAnimationFrame(animate)
   const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now
@@ -2041,7 +2189,7 @@ function animate(now) {
   }
   if (!world) return
   const s = world
-  syncBeings(s, prevWorld, dt)
+  syncBeings(s, prevWorld)
   const t2 = Math.min(1, Math.max(0, (now - clock.at) / TICK_MS))
   const cyc = (((s.tick + t2) % DAY) / DAY)
   const bright = (Math.sin(cyc * Math.PI * 2) + 1) / 2
@@ -2080,7 +2228,7 @@ function animate(now) {
   fogCol.copy(NIGHT_HOR).lerp(DAY_HOR, day).lerp(DUSK_HOR, dusk * 0.32)
   scene.fog.color.copy(fogCol)
   renderer.setClearColor(scene.fog.color)
-  ridgeMat.color.setHSL(0.6, 0.10, 0.5 + day * 0.42) // scales the rock-and-snow vertex colors by the hour
+  ridgeMat.color.setHSL(0.62, 0.22, 0.04 + day * 0.14)
 
   // ---- WEATHER: the tick decides the sky, and every window agrees ----
   const tgt = weatherAt(s.tick)
@@ -2114,6 +2262,73 @@ function animate(now) {
     snowField.pts.material.opacity = curW.snow * 0.85
     stepPrecip(snowField, 3.5, slantX * 0.5, slantZ * 0.5, dt, camera.position.x, camera.position.z)
   }
+  // the snow SETTLES: the ground whitens while it falls, thaws when it stops
+  snowCover = clamp01(snowCover + (curW.snow > 0.15 ? dt * 0.022 : -dt * 0.008))
+  uSnowAmt.value = snowCover
+  if (skirtMat) skirtMat.color.copy(SKIRT_BASE).lerp(SNOW_C, snowCover * 0.85)
+  // cloud shadows crawl by day; storms flatten the light so they fade
+  uCloudAmt.value = day * (1 - gloom * 0.8) * 0.55
+  // the sky remembers its rain, then spends the memory on a rainbow
+  if (curW.rain > 0.3) rainMem = Math.min(1, rainMem + dt * 0.15)
+  else rainMem = Math.max(0, rainMem - dt * 0.010)
+  const rbAmt = day * clamp01(rainMem * 2) * clamp01((0.28 - curW.rain) / 0.28)
+  rainbow.visible = rbAmt > 0.02
+  if (rainbow.visible) {
+    antiSun.set(-sunDirV.x, 0, -sunDirV.z).normalize()
+    rainbow.position.set(fx + antiSun.x * 95, 17, fz + antiSun.z * 95)
+    rainbow.lookAt(fx, 8, fz)
+    rainbow.material.opacity = rbAmt * 0.6
+  }
+  // rain splashes: flat rings where the drops land near the walker
+  if (rainOn && quality > 0.5 && Math.random() < curW.rain * dt * 26) {
+    const sr = splashRings[splashCur]; splashCur = (splashCur + 1) % splashRings.length
+    sr.m.position.set(fx + (Math.random() - 0.5) * 22, 0.03, fz + (Math.random() - 0.5) * 22)
+    sr.t0 = now; sr.m.visible = true
+  }
+  for (const sr of splashRings) {
+    if (!sr.m.visible) continue
+    const age = (now - sr.t0) / 450
+    if (age >= 1) { sr.m.visible = false; continue }
+    sr.m.scale.setScalar(0.6 + age * 2.6)
+    sr.m.material.opacity = (1 - age) * 0.5 * curW.rain
+  }
+  // the autumn trees shed, one leaf at a time, downwind
+  if (autumnTrees.length && now - leafAt > 260 && Math.random() < 0.5) {
+    leafAt = now
+    const at = autumnTrees[(Math.random() * autumnTrees.length) | 0]
+    if (Math.abs(at.x - fx) < 34 && Math.abs(at.z - fz) < 34) {
+      leafPool.spawn(at.x + (Math.random() - 0.5) * 0.7, 1.15 + Math.random() * 0.4, at.z + (Math.random() - 0.5) * 0.7,
+        { max: 2.6, size: 0.055, grow: 1, opacity: 0.9, vy: -0.5,
+          vx: curW.wind * 0.35 + (Math.random() - 0.5) * 0.2, vz: (Math.random() - 0.5) * 0.25,
+          color: [0xc9862a, 0xa8722a, 0xd49a3a][(Math.random() * 3) | 0] })
+    }
+  }
+  // butterflies by day, over the meadow, never in the rain
+  const flutterOp = Math.max(0, day - 0.3) * (1 - curW.rain) * (1 - curW.snow) * 0.95
+  for (const bt of flutters) {
+    const t3 = now / 1000 * bt.sp2 + bt.seed
+    bt.sp.position.set(fx + Math.cos(t3) * bt.r + Math.sin(t3 * 2.7) * 1.2,
+      0.32 + Math.sin(t3 * 4.1) * 0.16, fz + Math.sin(t3 * 0.9) * bt.r)
+    bt.sp.material.opacity = flutterOp
+    bt.sp.scale.x = bt.base * (0.5 + Math.abs(Math.sin(now / 70 + bt.seed)) * 0.5) // the flap
+  }
+  // the flocks cross the sky in slow rings; grounded by storms, gone by night
+  const birdOp = Math.max(0, day - 0.25) * (1 - gloom) * 0.85
+  for (const bf of birdFlocks) {
+    const a = now * bf.sp + bf.ph
+    bf.flock.visible = birdOp > 0.02
+    if (!bf.flock.visible) continue
+    bf.flock.position.set(fx + Math.cos(a) * bf.r, bf.h, fz + Math.sin(a) * bf.r)
+    bf.flock.rotation.y = -a
+    bf.mat.opacity = birdOp
+    for (const mb2 of bf.members) {
+      const flap = Math.sin(now / 95 + mb2.ph) * 0.75
+      mb2.pivL.rotation.z = flap
+      mb2.pivR.rotation.z = -flap
+    }
+  }
+  leafPool.update(dt)
+  blobMat.opacity = 0.10 + day * 0.20 // contact shadows soften after dark
   // the low fog banks drift about the walker's knees
   fogGroup.position.set(fx, 0, fz)
   fogGroup.rotation.y = now / 90000
@@ -2154,6 +2369,8 @@ function animate(now) {
   celestial.rotation.y = now / 600000 // the slowest drift there is
   moonSprite.position.set(-sunDirV.x * 150, Math.max(10, -sunH * 130 + 20), -sunDirV.z * 150)
   moonSprite.material.opacity = night * 0.95
+  moonHalo.position.copy(moonSprite.position)
+  moonHalo.material.opacity = night * 0.20 * (1 - gloom)
   for (let ci = 0; ci < clouds.length; ci++) {
     const cl = clouds[ci]
     cl.material.opacity = 0.10 + day * 0.42
@@ -2184,6 +2401,9 @@ function animate(now) {
   waterMat.uniforms.uTime.value = now / 1000
   waterMat.uniforms.uSunDir.value.copy(sunDirV)
   waterMat.uniforms.uSun.value = 0.12 + day * 0.95
+  waterMat.uniforms.uSky.value.copy(scene.fog.color).multiplyScalar(1.15) // the water carries the true sky
+  waterMat.uniforms.uMoonDir.value.copy(moonSprite.position).normalize()
+  waterMat.uniforms.uMoon.value = night * 0.9 * (1 - gloom) // the moon's road across the sea
   // fires flicker; embers rise; smoke leans; canopies sway
   for (const [, pl] of fireLights) {
     pl.intensity = 1.25 + Math.sin(now / 90 + pl.position.x) * 0.35 + Math.sin(now / 37) * 0.12 + night * 0.9
@@ -2246,7 +2466,7 @@ function animate(now) {
     if (hit && hit.distance < len) camDesired.copy(hit.point).addScaledVector(toCam, -0.5)
     camDesired.y = Math.max(camDesired.y, 0.8)
   }
-  camera.position.lerp(camDesired, Math.min(1, dt * 9))
+  camera.position.lerp(camDesired, 0.28)
   camera.lookAt(fx, 0.6, fz)
   // ---- LOD + footstep dust: distant folk shed shadows and nameplates,
   // and a scuff of dust rises where the near ones tread ----
@@ -2260,11 +2480,7 @@ function animate(now) {
     if (m.userData.lod !== lod) {
       m.userData.lod = lod
       m.traverse(o => { if (o.isMesh) o.castShadow = lod === 2 })
-    }
-    const detClose = d < 17 // the fine face/clothing detail only near the eye
-    if (m.userData.detClose !== detClose) {
-      m.userData.detClose = detClose
-      if (m.userData.detail) for (const dpart of m.userData.detail) dpart.visible = detClose
+      if (m.userData.detail) for (const dpart of m.userData.detail) dpart.visible = lod === 2
     }
     const lp = m.userData.lastPos
     if (lp) {
@@ -2286,7 +2502,11 @@ function animate(now) {
   }
   // the mood in the darkroom: the night blooms harder and cools the grade
   if (bloomPass) bloomPass.strength = 0.28 + night * 0.24 + dusk * 0.08
-  if (gradePass) gradePass.uniforms.uNight.value = night
+  if (gradePass) {
+    gradePass.uniforms.uNight.value = night
+    gradePass.uniforms.uWarm.value = dusk * (1 - gloom) // the golden hour earns its grade
+    gradePass.uniforms.uTime.value = now / 1000
+  }
   goalRing.material.opacity = 0.55 + Math.sin(now / 260) * 0.3
   goalRing.scale.setScalar(1 + Math.sin(now / 260) * 0.08)
   const bAge = (now - burstAt) / 420
@@ -2333,10 +2553,28 @@ function animate(now) {
   else { slowStreak = 0; fastStreak = 0 }
   if (slowStreak > 90 && quality > 0.5) {
     quality = 0.5; renderer.setPixelRatio(1); if (composer) composer.setPixelRatio(1); slowStreak = 0
+    if (shaftPass) shaftPass.enabled = false // the rays are the first luxury surrendered
     feed('easing the graphics for a smoother frame')
   } else if (fastStreak > 200 && quality < 1) {
     quality = 1; const pr = Math.min(devicePixelRatio, 2)
     renderer.setPixelRatio(pr); if (composer) composer.setPixelRatio(pr); fastStreak = 0
+    if (shaftPass) shaftPass.enabled = true // and the first restored
+  }
+  // ---- the shafts: find the sun on the screen and rake the light from it.
+  // Off-screen or under the horizon, the pass sleeps for free. ----
+  if (shaftPass) {
+    camera.updateMatrixWorld()
+    sunNDC.copy(camera.position).addScaledVector(sunDirV, 80).project(camera)
+    camera.getWorldDirection(antiSun) // borrowed scratch: is the eye even facing the sun?
+    const facing = antiSun.dot(sunDirV) > 0.1
+    const onScreen = facing && sunNDC.z < 1 && Math.abs(sunNDC.x) < 1.5 && Math.abs(sunNDC.y) < 1.5
+    const edge = onScreen ? clamp01(1.6 - Math.max(Math.abs(sunNDC.x), Math.abs(sunNDC.y))) : 0
+    const strength = edge * (sunH > -0.05 ? (0.30 * day + 0.85 * dusk) : 0) * (1 - gloom * 0.85)
+    shaftPass.uniforms.uLightPos.value.set(sunNDC.x * 0.5 + 0.5, sunNDC.y * 0.5 + 0.5)
+    shaftPass.uniforms.uIntensity.value = quality > 0.5 ? strength : 0
+    shaftPass.uniforms.uFlare.value = quality > 0.5 ? strength * day * 0.8 : 0
+    shaftPass.uniforms.uAspect.value = innerWidth / innerHeight
+    shaftPass.uniforms.uTint.value.setRGB(1.0, 0.72 + 0.2 * day, 0.45 + 0.32 * day) // gold at noon, ember at dusk
   }
   if (composer) composer.render()
   else renderer.render(scene, camera)
