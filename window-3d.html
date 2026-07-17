@@ -78,7 +78,44 @@
      mark and its facing — and tapping the map walks the world. The
      grade was mended too: grain moved after gamma and out of the
      shadows, fringe pushed to the rim, a true dither against banding —
-     the rainbow confetti of dark half-resolution nights is gone. -->
+     the rainbow confetti of dark half-resolution nights is gone.
+
+     Then the map came home, the items found their verbs, and the world
+     learned to confess. The minimap is LOCAL now: a window that walks
+     with you, close enough to show the trees. Every item offers every
+     interaction the engine actually grants it — light fire, cook,
+     bury, plant, eat, wield, and near the town, sell and deposit — all
+     through the same signed wire, every shape blessed by the engine's
+     own validator. The peaks bake a fixed sun into their vertex colors
+     (flat pale triangles became faceted rock, in families now, with
+     strata and spurs). The double pauldrons came off the shoulders and
+     the cloak became fabric: narrow at the clasp, flaring at the hem,
+     darker than any tunic. And when steps go unanswered, the window
+     SAYS SO: the header carries the live tick, turns red and admits
+     'the world holds its breath' when it stalls, and after five silent
+     steps the feed names the likely culprit instead of shrugging.
+
+     And every level earned is now CELEBRATED: each skill watched the
+     way /play watches it, a banner in the window's own chrome popping
+     over the scene, and true fireworks — three rockets that climb from
+     your feet and burst into shells of gold, starlight, and ember
+     sparks, each shell heard where it opens. Chasing a harness flake
+     through that celebration exposed a true race — a fast gate click
+     could mint a second identity and adopt one key while playing the
+     other — now impossible: the identity flies ONCE, and every door
+     knocks on the same promise.
+
+     Then the progression loop closed, and the surfaces learned to
+     remember the sky. Experience DRIPS now: every point floats up and
+     names its skill in that skill's own color. A skills panel rides
+     the corner — all fifteen, each with its level and a bar of how far
+     the next one stands, in the inventory's own chrome. And the
+     weather stopped being only an atmosphere: snow settles on the tree
+     crowns and whitens the roofs first, feet press blue-gray prints
+     into the snow and dark ones into the wet sand by the water, rain
+     leaves standing puddles on the trails that wear the sky's color
+     until the sun takes them back, and on cold nights every citizen's
+     breath shows. -->
 <html>
 <head>
 <meta charset="utf-8">
@@ -457,6 +494,11 @@ async function ownIdentity() {
     return { priv: kp.privateKey, pub }
   } catch (e) { signErr = 'this browser cannot sign Ed25519 (' + (e?.message ?? 'unsupported') + ')'; return null }
 }
+// one identity, ONE flight: onopen and the gate retry share the same
+// promise, so a fast click can never mint a second key and adopt one
+// while playing the other
+let ownIdentityP = null
+function ownIdentityOnce() { return ownIdentityP ?? (ownIdentityP = ownIdentity().then((k) => { if (!k) ownIdentityP = null; return k })) }
 function signBanner() { // a spectator should KNOW they are spectating
   if (document.getElementById('signwarn')) return
   const d = document.createElement('div')
@@ -479,10 +521,20 @@ const BRIDGE = (a) =>
   : a.do === 'eat' ? { type: 'eat', slot: a.slot }
   : a.do === 'drop' ? { type: 'drop', slot: a.slot }
   : a.do === 'wield' ? { type: 'wield', slot: a.slot }
+  : a.do === 'cook' ? { type: 'cook', slot: a.slot }
+  : a.do === 'light' ? { type: 'light', slot: a.slot }
+  : a.do === 'bury' ? { type: 'bury', slot: a.slot }
+  : a.do === 'plant' ? { type: 'plant', slot: a.slot }
+  : a.do === 'sell' ? { type: 'sell', slot: a.slot }
+  : a.do === 'deposit' ? { type: 'deposit', slot: a.slot }
   : null
 // must match engine.js SIG_DOMAINS.input to the byte (fix brief §2.3)
 const DOMAIN_INPUT = 'INTERVAL_INPUT_V1|'
 let curWorldId = ''
+// the tick's pulse, watched: a world that stops advancing looks alive
+// (every effect here is client-side) while no input can land — the
+// engine only accepts inputs stamped for the exact current tick
+let lastTickN = -1, lastAdvanceAt = 0, movesSent = 0, lastMoveWarn = 0, myLastPos = ''
 async function send(a) {
   if (ws.readyState !== 1 || !ownKey || !curWorldId) return
   const f = BRIDGE(a); if (!f) return
@@ -678,32 +730,48 @@ for (let i = 0; i < 14; i++) {
 const ridgeMat = new THREE.MeshBasicMaterial({ color: 0x232b3a, vertexColors: true })
 const ridgeMatFar = new THREE.MeshBasicMaterial({ color: 0x2a3346, vertexColors: true }) // paler: the air between
 function peakGeo(seed) {
-  const geo = new THREE.ConeGeometry(1, 1, 9, 4)
+  // v2: more segments, ridged displacement, rock strata — and, the real
+  // difference, LIGHT baked into the vertex colors. MeshBasicMaterial
+  // cannot shade, so the geometry shades itself: each vertex multiplies
+  // its color by a fixed sun's dot with its own displaced normal, and
+  // the flat pale triangles become faceted rock.
+  const geo = new THREE.ConeGeometry(1, 1, 10, 5)
   const pos = geo.attributes.position
-  const cols = []
-  const cRock = new THREE.Color(), cSnow = new THREE.Color()
-  const hz = (a, b) => { // a self-contained hash: the ridges rise before the terrain's own
+  const hz = (a, b) => {
     let h = ((Math.floor(a * 131) * 374761393 + Math.floor(b * 173) * 668265263 + seed * 1442695041) >>> 0)
     h = (h ^ (h >> 13)) >>> 0; h = (h * 1274126177) >>> 0
     return ((h ^ (h >> 16)) >>> 0) % 1000 / 1000
   }
   for (let i = 0; i < pos.count; i++) {
     let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i)
-    const t = y + 0.5                              // 0 at the skirts, 1 at the summit
+    const t = y + 0.5
     const r = Math.hypot(x, z)
     if (r > 0.001) {
       const a = Math.atan2(z, x)
-      const n = hz(a * 2.2 + 9, t * 3.0) - 0.5     // the flanks refuse symmetry
-      const m2 = 1 + n * 0.55 * (1 - t * 0.6)
+      const n1 = hz(a * 2.2 + 9, t * 3.0) - 0.5
+      const n2 = Math.abs(hz(a * 5.1 + 31, t * 6.0) - 0.5) - 0.25 // ridged: spurs and gullies
+      const m2 = 1 + (n1 * 0.55 + n2 * 0.5) * (1 - t * 0.5)
       x *= m2; z *= m2
     }
-    y += (hz(x * 3.1 + 21, z * 2.7) - 0.5) * 0.10 * (1 - t) // the shoulders break
+    y += (hz(x * 3.1 + 21, z * 2.7) - 0.5) * 0.14 * (1 - t)
     pos.setX(i, x); pos.setY(i, y); pos.setZ(i, z)
-    const facet = 0.78 + hz(i * 0.37, seed) * 0.5  // no two faces one gray
-    cRock.setRGB(0.80 * facet, 0.88 * facet, 1.06 * facet)
-    const snowLine = 0.5 + (hz(i * 0.11, 3) - 0.5) * 0.3 // the snow keeps a crooked line
+  }
+  geo.computeVertexNormals() // the displaced truth, for the baked sun
+  const nrm = geo.attributes.normal
+  const cols = []
+  const cRock = new THREE.Color(), cSnow = new THREE.Color()
+  const L = new THREE.Vector3(0.55, 0.6, 0.35).normalize()
+  const NV = new THREE.Vector3()
+  for (let i = 0; i < pos.count; i++) {
+    const t = Math.max(0, Math.min(1, pos.getY(i) + 0.5))
+    NV.set(nrm.getX(i), nrm.getY(i), nrm.getZ(i))
+    const lit = 0.45 + 0.6 * Math.max(0, NV.dot(L))            // the fixed sun, baked
+    const strata = 1 - 0.12 * Math.max(0, Math.sin(t * 26 + hz(i * 0.07, 5) * 6)) // the rock keeps its layers
+    const facet = 0.82 + hz(i * 0.37, seed) * 0.4
+    cRock.setRGB(0.66 * facet, 0.74 * facet, 0.92 * facet).multiplyScalar(lit * strata)
+    const snowLine = 0.5 + (hz(i * 0.11, 3) - 0.5) * 0.3
     const sf = Math.max(0, Math.min(1, (t - snowLine) / 0.22))
-    cSnow.setRGB(2.5, 2.6, 2.9)                    // snow burns brighter than its hour
+    cSnow.setRGB(2.2, 2.3, 2.6).multiplyScalar(0.55 + 0.5 * lit) // even the snow takes the sun's side
     cRock.lerp(cSnow, sf)
     cols.push(cRock.r, cRock.g, cRock.b)
   }
@@ -720,6 +788,14 @@ for (let i = 0; i < 26; i++) {
   cone.position.set(Math.cos(a) * r, hgt / 2 - 2.5, Math.sin(a) * r)
   cone.rotation.y = i
   celestial.add(cone); ridges.push(cone)
+  if (i % 2 === 0) { // a companion shoulder: peaks come in families
+    const sub = new THREE.Mesh(peakGeo(i + 100), ridgeMat)
+    const h3 = hgt * 0.55, r3 = rad2 * 0.62
+    sub.scale.set(r3, h3, r3 * 0.7)
+    sub.position.set(Math.cos(a + 0.09) * (r + rad2 * 0.45), h3 / 2 - 2.5, Math.sin(a + 0.09) * (r + rad2 * 0.45))
+    sub.rotation.y = i * 2.3
+    celestial.add(sub); ridges.push(sub)
+  }
 }
 for (let i = 0; i < 12; i++) { // a second, farther rank: taller, and half-lost in the haze
   const a = (i / 12) * Math.PI * 2 + 0.26 + (i % 3) * 0.2
@@ -872,6 +948,15 @@ let auroraAmtG = 0 // the sky's felt amount, read by the ambient bed
 let fireNear = null // the nearest living fire, for crackle and pops
 const lanterns = [] // the town's posts, lit at dusk
 let camShake = 0 // the blow reaches the eye, then lets go
+// the surfaces remember the sky: canopies and roofs whiten under the
+// same snowCover the ground obeys; feet print the snow and the wet
+// sand; rain leaves standing water; cold nights show every breath
+const snowReg = [] // { m: material, base: Color, amt: how fully it whitens }
+let lastSnowApp = -1
+const SNOW_W = new THREE.Color(0xe3e8f0)
+const footPrints = [] // { mesh, at, life }
+let footPool = []
+const puddles = []
 const arrowPool = [], arrowFlights = [] // arrows actually FLY now
 const V3A = new THREE.Vector3(), V3B = new THREE.Vector3(), V3C = new THREE.Vector3() // audio scratch
 
@@ -1219,6 +1304,58 @@ function hitFlash(pos) {
   }
 }
 // a level won: a rising fountain of gold
+// ---- the level-up, celebrated properly: a banner in the window's own
+// chrome, and true fireworks — rockets that CLIMB and burst into shells
+// of sparks over your head. /play's fanfare, grown into three dimensions.
+function showLevelBanner(skill, lvl) {
+  if (!document.getElementById('lvlcss')) {
+    const st = document.createElement('style'); st.id = 'lvlcss'
+    st.textContent = '@keyframes lvlpop{0%{transform:translateX(-50%) scale(.5);opacity:0}12%{transform:translateX(-50%) scale(1.1);opacity:1}20%{transform:translateX(-50%) scale(1)}86%{transform:translateX(-50%) scale(1);opacity:1}100%{transform:translateX(-50%) scale(.96);opacity:0}}'
+    document.head.appendChild(st)
+  }
+  document.getElementById('lvlbanner')?.remove()
+  const d = document.createElement('div')
+  d.id = 'lvlbanner'
+  d.innerHTML = '\u2728 <b style="letter-spacing:1px">' + skill.toUpperCase() + '</b> &nbsp;LEVEL ' + lvl + ' \u2728'
+  d.style.cssText = 'position:fixed;top:74px;left:50%;transform:translateX(-50%);z-index:30;' +
+    'background:linear-gradient(#544936,#2e2820);border:3px double #ffcc33;border-radius:10px;' +
+    'padding:12px 26px;color:#ffe27a;font:bold 18px Verdana;text-shadow:0 0 8px rgba(255,204,51,.7);' +
+    'box-shadow:0 0 26px rgba(255,204,51,.4), inset 0 1px 0 rgba(255,255,255,.12);' +
+    'animation:lvlpop 2.6s ease forwards;pointer-events:none;white-space:nowrap'
+  document.body.appendChild(d)
+  setTimeout(() => d.remove(), 2700)
+}
+function fireworksAt(pos) {
+  const px3 = pos.x, py3 = pos.y, pz3 = pos.z
+  const COLS = [0xffd24a, 0x8ce0ff, 0xff7a5a] // gold, starlight, ember
+  for (let s3 = 0; s3 < 3; s3++) {
+    const dx5 = (Math.random() - 0.5) * 2.6, dz5 = (Math.random() - 0.5) * 2.6
+    const hy3 = 2.6 + Math.random() * 1.3
+    setTimeout(() => {
+      sparkPool.spawn(px3 + dx5, py3 + 0.5, pz3 + dz5, { max: 0.42, size: 0.1, opacity: 1,
+        vx: 0, vy: hy3 / 0.42, vz: 0, g: 0, color: 0xfff2c0 }) // the rocket climbs
+      setTimeout(() => { // and the shell opens: a true sphere of sparks
+        const col = COLS[s3 % 3]
+        flashPool.spawn(px3 + dx5, py3 + 0.5 + hy3, pz3 + dz5, { max: 0.5, size: 1.6, grow: 3.0, opacity: 0.85, color: col })
+        for (let i = 0; i < 26; i++) {
+          const th = Math.random() * 6.283, ph2 = Math.acos(2 * Math.random() - 1)
+          const sp = 1.6 + Math.random() * 1.2
+          sparkPool.spawn(px3 + dx5, py3 + 0.5 + hy3, pz3 + dz5, { max: 0.8 + Math.random() * 0.4, size: 0.11, grow: 0.2, opacity: 1,
+            vx: Math.sin(ph2) * Math.cos(th) * sp, vy: Math.cos(ph2) * sp * 0.8 + 0.4, vz: Math.sin(ph2) * Math.sin(th) * sp,
+            g: -2.2, color: col })
+        }
+        snd('pop', V3C.set(px3 + dx5, py3 + hy3, pz3 + dz5))
+      }, 420)
+    }, s3 * 340)
+  }
+}
+function celebrateLevel(skill, lvl) {
+  feed('\u2728 LEVEL UP! Your ' + skill + ' is now level ' + lvl + '. \u2728')
+  showLevelBanner(skill, lvl)
+  const meM = beings.get(myId)
+  if (meM) fireworksAt(meM.position)
+  snd('level')
+}
 function levelBurst(pos) {
   for (let i = 0; i < 22; i++) {
     const a = Math.random() * 6.28, r = Math.random()
@@ -1545,6 +1682,33 @@ function buildGround(s0) {
     }
   }
 
+  // ---- the puddles: rain leaves standing water on the packed ground.
+  // Deterministic hollows on trail and cobble tiles; the sky's memory
+  // (rainMem) fills them and the sun takes them back. They wear the
+  // fog's color, which is to say the sky's. ----
+  {
+    const pudGeo = new THREE.CircleGeometry(0.5, 12)
+    pudGeo.rotateX(-Math.PI / 2)
+    const pudMat = new THREE.MeshBasicMaterial({ color: 0x6a7a8a, transparent: true, opacity: 0, depthWrite: false })
+    let placed = 0
+    for (let i = 0; i < 8000 && placed < 16; i++) {
+      const gx = tileHash(i, 41, 84) % W, gy = tileHash(i, 43, 85) % H
+      const tt = terrainOf(gx, gy)
+      if (tt !== 'trail' && tt !== 'cobble') continue
+      if (tileHash(gx, gy, 86) % 5 !== 0) continue
+      const pd2 = new THREE.Mesh(pudGeo, pudMat)
+      const s6 = 0.4 + (tileHash(gx, gy, 87) % 60) / 100
+      pd2.scale.set(s6, 1, s6 * (0.6 + (tileHash(gx, gy, 88) % 40) / 100))
+      pd2.rotation.y = (tileHash(gx, gy, 89) % 628) / 100
+      pd2.position.set(wx(gx) + ((tileHash(gx, gy, 90) % 60) - 30) / 100, Math.max(0, groundYAt(gx, gy)) + 0.015, wz(gy))
+      pd2.renderOrder = 1
+      scene.add(pd2)
+      puddles.push(pd2)
+      placed++
+    }
+    if (puddles.length) puddles.mat = pudMat
+  }
+
   // ---- the foam itself: one merged strip of quads along every edge
   // where a water tile meets land. v runs 0 at the land edge to 1 in
   // the water; each segment carries a hashed phase so no two laps agree.
@@ -1755,7 +1919,9 @@ function nodeMesh(n) {
     }
     const blob = (r2, c, x2, y2, z2) => {
       const b = cast(new THREE.Mesh(new THREE.IcosahedronGeometry(r2, 1), std(tint(c))))
-      b.position.set(x2, y2, z2); b.scale.y = 0.82; canopy.add(b); return b
+      b.position.set(x2, y2, z2); b.scale.y = 0.82; canopy.add(b)
+      snowReg.push({ m: b.material, base: b.material.color.clone(), amt: 0.55 + (y2 - 0.9) * 0.5 }) // the crown catches most
+      return b
     }
     blob(0.48, 0x2f5c1a, 0, 0.98, 0)            // the dark under-mass
     blob(0.36, 0x3a7020, 0.26, 1.18, 0.12)
@@ -1895,6 +2061,7 @@ function nodeMesh(n) {
       }
       roofGeo.computeVertexNormals() }
     const roof = cast(new THREE.Mesh(roofGeo, std(roofC, 0.95)))
+    snowReg.push({ m: roof.material, base: roof.material.color.clone(), amt: 0.8 }) // roofs whiten first
     roof.scale.setScalar(twoStorey ? 1.18 : 1.12)
     roof.position.y = topY + 0.26; roof.rotation.y = Math.PI / 4; g.add(roof)
     const finial = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), beamM)
@@ -2027,6 +2194,8 @@ const splats = []
 // every window shares, then living dots painted over it. Tap the map,
 // walk the world. ----
 let miniCv = null, miniCtx = null, miniTerrain = null, miniAt = 0
+const MINI_VW = 48, MINI_VH = 24 // the map is LOCAL now: a window that walks with you
+let miniView = { sx: 0, sy: 0 }
 function buildMinimap() {
   miniTerrain = document.createElement('canvas'); miniTerrain.width = W; miniTerrain.height = H
   const mg = miniTerrain.getContext('2d')
@@ -2041,7 +2210,7 @@ function buildMinimap() {
   wrap.id = 'mini3d'
   wrap.style.cssText = 'position:fixed;top:64px;right:10px;z-index:20;border:2px solid #6b5d43;border-radius:8px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.5);opacity:.92;background:#0a0c08'
   miniCv = document.createElement('canvas')
-  miniCv.width = W; miniCv.height = H
+  miniCv.width = MINI_VW * 2; miniCv.height = MINI_VH * 2
   miniCv.style.cssText = 'width:168px;height:84px;display:block;image-rendering:pixelated'
   wrap.appendChild(miniCv)
   document.body.appendChild(wrap)
@@ -2050,8 +2219,8 @@ function buildMinimap() {
     e.stopPropagation(); e.preventDefault()
     if (!world || !myId || !world.players[myId]) return
     const r = miniCv.getBoundingClientRect()
-    const gx = Math.max(0, Math.min(W - 1, Math.floor((e.clientX - r.left) / r.width * W)))
-    const gy = Math.max(0, Math.min(H - 1, Math.floor((e.clientY - r.top) / r.height * H)))
+    const gx = Math.max(0, Math.min(W - 1, miniView.sx + Math.floor((e.clientX - r.left) / r.width * MINI_VW)))
+    const gy = Math.max(0, Math.min(H - 1, miniView.sy + Math.floor((e.clientY - r.top) / r.height * MINI_VH)))
     walkGoal = { x: gx, y: gy }; huntTarget = null; workTarget = null
     goalRing.material.color.set(0xffe83a)
     goalRing.position.set(wx(gx), 0.03, wz(gy)); goalRing.visible = true
@@ -2060,29 +2229,39 @@ function buildMinimap() {
 function paintMinimap(s, now) {
   if (!miniCtx || now - miniAt < 160) return
   miniAt = now
-  miniCtx.drawImage(miniTerrain, 0, 0)
+  const meP = s.players[myId]
+  // the viewport rides with you, clamped at the world's rim
+  if (meP) {
+    miniView.sx = Math.max(0, Math.min(W - MINI_VW, Math.round(meP.x - MINI_VW / 2)))
+    miniView.sy = Math.max(0, Math.min(H - MINI_VH, Math.round(meP.y - MINI_VH / 2)))
+  }
+  const { sx, sy } = miniView
+  const px2 = (gx) => (gx - sx) * 2, py2 = (gy) => (gy - sy) * 2
+  const inV = (gx, gy) => gx >= sx - 1 && gx <= sx + MINI_VW && gy >= sy - 1 && gy <= sy + MINI_VH
+  miniCtx.drawImage(miniTerrain, sx, sy, MINI_VW, MINI_VH, 0, 0, MINI_VW * 2, MINI_VH * 2)
   miniCtx.fillStyle = '#3a6ba8' // the waters
-  for (const nd of Object.values(s.nodes)) if (nd.type === 'fishing-spot') miniCtx.fillRect(nd.x, nd.y, 1, 1)
+  for (const nd of Object.values(s.nodes)) if (nd.type === 'fishing-spot' && inV(nd.x, nd.y)) miniCtx.fillRect(px2(nd.x), py2(nd.y), 2, 2)
+  miniCtx.fillStyle = '#2f7a35' // the trees, now that the map is close enough to care
+  for (const nd of Object.values(s.nodes)) if (nd.type === 'tree' && inV(nd.x, nd.y) && !(nd.depletedUntil > s.tick)) miniCtx.fillRect(px2(nd.x), py2(nd.y), 2, 2)
   miniCtx.fillStyle = '#ff8830' // the fires
   for (const nd of Object.values(s.nodes)) {
     if (nd.type !== 'campfire' && nd.type !== 'fire') continue
     if (nd.type === 'fire' && nd.expiresAt <= s.tick) continue
-    miniCtx.fillRect(nd.x, nd.y - 1, 2, 2)
+    if (inV(nd.x, nd.y)) miniCtx.fillRect(px2(nd.x) - 1, py2(nd.y) - 1, 3, 3)
   }
   miniCtx.fillStyle = '#d94a3a' // the beasts
-  for (const mb of Object.values(s.mobs)) if (mb.hp > 0) miniCtx.fillRect(mb.x - 1, mb.y - 1, 2, 2)
+  for (const mb of Object.values(s.mobs)) if (mb.hp > 0 && inV(mb.x, mb.y)) miniCtx.fillRect(px2(mb.x) - 1, py2(mb.y) - 1, 3, 3)
   miniCtx.fillStyle = '#e8e4d8' // the others
-  for (const [pid, p] of Object.entries(s.players)) if (pid !== myId && p.hp > 0) miniCtx.fillRect(p.x - 1, p.y - 1, 2, 2)
-  if (walkGoal) { miniCtx.strokeStyle = '#ffe83a'; miniCtx.lineWidth = 1; miniCtx.strokeRect(walkGoal.x - 1.5, walkGoal.y - 1.5, 4, 4) }
-  const meP = s.players[myId]
+  for (const [pid, p] of Object.entries(s.players)) if (pid !== myId && p.hp > 0 && inV(p.x, p.y)) miniCtx.fillRect(px2(p.x) - 1, py2(p.y) - 1, 3, 3)
+  if (walkGoal && inV(walkGoal.x, walkGoal.y)) { miniCtx.strokeStyle = '#ffe83a'; miniCtx.lineWidth = 1; miniCtx.strokeRect(px2(walkGoal.x) - 2, py2(walkGoal.y) - 2, 5, 5) }
   if (meP) { // you, and the way you face
     miniCtx.fillStyle = '#ffcc33'
-    miniCtx.fillRect(meP.x - 1, meP.y - 1, 3, 3)
+    miniCtx.fillRect(px2(meP.x) - 1, py2(meP.y) - 1, 4, 4)
     const meM = beings.get(myId)
     if (meM) {
-      miniCtx.strokeStyle = '#ffcc33'; miniCtx.lineWidth = 1
-      miniCtx.beginPath(); miniCtx.moveTo(meP.x + 0.5, meP.y + 0.5)
-      miniCtx.lineTo(meP.x + 0.5 + Math.sin(meM.rotation.y) * 5, meP.y + 0.5 + Math.cos(meM.rotation.y) * 5)
+      miniCtx.strokeStyle = '#ffcc33'; miniCtx.lineWidth = 1.5
+      miniCtx.beginPath(); miniCtx.moveTo(px2(meP.x) + 1, py2(meP.y) + 1)
+      miniCtx.lineTo(px2(meP.x) + 1 + Math.sin(meM.rotation.y) * 9, py2(meP.y) + 1 + Math.cos(meM.rotation.y) * 9)
       miniCtx.stroke()
     }
   }
@@ -2100,6 +2279,86 @@ function spawnArrow(from, to) { // the shot, made visible
   }
   scene.add(a)
   arrowFlights.push({ a, from: from.clone(), to: to.clone(), t0: performance.now(), dur: 260 })
+}
+// the drip: every point of experience floats up and names its skill,
+// in that skill's own color, exactly as /play drips them
+const SKILL_COL = { woodcutting: '#5aa03a', mining: '#9a9aa4', fishing: '#54a0d8', cooking: '#e08a44',
+  smithing: '#8a8a99', firemaking: '#ff8830', prayer: '#efe9d2', ranged: '#8ab04a', magic: '#8ce0ff',
+  farming: '#7dbb45', fletching: '#c0a86a', attack: '#d94a3a', defence: '#5a7ec0', hitpoints: '#e06a8a', exploration: '#e8c05a' }
+function spawnXp(amt, skill, pos, stack) {
+  const c = document.createElement('canvas'); c.width = 160; c.height = 40
+  const g2 = c.getContext('2d')
+  g2.font = 'bold 20px Verdana'; g2.textAlign = 'center'
+  g2.lineWidth = 4; g2.strokeStyle = 'rgba(10,8,4,.85)'
+  g2.strokeText('+' + amt + ' ' + skill, 80, 27)
+  g2.fillStyle = SKILL_COL[skill] ?? '#ffcc33'
+  g2.fillText('+' + amt + ' ' + skill, 80, 27)
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }))
+  sp.scale.set(1.1, 0.28, 1)
+  sp.position.copy(pos); sp.position.y += 1.35 + stack * 0.24
+  scene.add(sp)
+  splats.push({ sp, at: performance.now(), life: 1300, vy: 0.009 })
+}
+// ---- the skills panel: the fireworks opened a progression loop; this
+// closes it. Every skill, its level, and a bar of how far the next one
+// stands — in the inventory's own chrome. ----
+const SKILLS3 = ['woodcutting', 'mining', 'fishing', 'cooking', 'smithing', 'firemaking', 'prayer',
+  'ranged', 'magic', 'farming', 'fletching', 'attack', 'defence', 'hitpoints', 'exploration']
+function XP_AT(l) { let need = 83, tot = 0; for (let i = 1; i < l; i++) { tot += need; need = Math.floor(need * 1.104) } return tot }
+function buildSkillsUI() {
+  if (document.getElementById('skillsbtn')) return
+  const b = document.createElement('button')
+  b.id = 'skillsbtn'; b.textContent = '\u2694 skills'
+  b.style.cssText = 'position:fixed;top:64px;left:10px;z-index:21;background:linear-gradient(#544936,#3e352a);' +
+    'color:#ffcc33;border:2px solid #7d6c4d;border-radius:6px;padding:6px 12px;font:bold 12px Verdana;cursor:pointer'
+  document.body.appendChild(b)
+  const p = document.createElement('div')
+  p.id = 'skillpanel'
+  p.style.cssText = 'position:fixed;top:100px;left:10px;z-index:21;display:none;width:196px;max-height:56vh;overflow-y:auto;' +
+    'background:linear-gradient(rgba(30,24,16,.94),rgba(12,10,7,.96));border:2px solid #6b5d43;border-radius:8px;' +
+    'padding:8px 10px;font:11px Verdana;color:#d9cfb8;box-shadow:0 2px 12px rgba(0,0,0,.5)'
+  document.body.appendChild(p)
+  b.addEventListener('click', () => {
+    const open2 = p.style.display === 'block'
+    p.style.display = open2 ? 'none' : 'block'
+    if (!open2 && world && myId && world.players[myId]) renderSkills(world.players[myId])
+  })
+}
+function renderSkills(me2) {
+  const p = document.getElementById('skillpanel')
+  if (!p || p.style.display !== 'block') return
+  const sk = me2.skills ?? {}
+  let total = 0, html3 = ''
+  for (const k of SKILLS3) {
+    const xp = sk[k] ?? 0, l = XP_LVL(xp); total += l
+    const a = XP_AT(l), b2 = XP_AT(l + 1)
+    const fr = l >= 99 ? 1 : Math.max(0, Math.min(1, (xp - a) / (b2 - a)))
+    const col = SKILL_COL[k] ?? '#ffcc33'
+    html3 += '<div style="margin:3px 0">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline">' +
+      '<span style="color:' + col + ';text-shadow:0 1px 2px #000">' + k + '</span>' +
+      '<b style="color:#ffe27a">' + l + '</b></div>' +
+      '<div style="height:5px;background:rgba(0,0,0,.55);border-radius:3px;overflow:hidden;border:1px solid rgba(125,108,77,.5)">' +
+      '<div style="height:100%;width:' + (fr * 100).toFixed(0) + '%;background:linear-gradient(90deg,' + col + '88,' + col + ')"></div></div></div>'
+  }
+  p.innerHTML = '<div style="text-align:center;color:#ffcc33;font-weight:bold;margin-bottom:6px;border-bottom:1px solid #6b5d43;padding-bottom:4px">total level ' + total + '</div>' + html3
+}
+// footprints: a flat mark stamped where a foot planted, oriented with
+// the walker, fading as the snow reclaims it or the sand dries
+const FOOT_GEO = new THREE.PlaneGeometry(0.085, 0.15)
+FOOT_GEO.rotateX(-Math.PI / 2)
+function spawnPrint(x, z, y, ry, side, col, op, life) {
+  let mm = footPool.pop()
+  if (!mm) {
+    if (footPrints.length > 44) return // the pool is the budget
+    mm = new THREE.Mesh(FOOT_GEO, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }))
+    scene.add(mm)
+  }
+  mm.visible = true
+  mm.material.color.set(col); mm.material.opacity = op
+  mm.position.set(x + Math.cos(ry) * 0.06 * side, y + 0.012, z - Math.sin(ry) * 0.06 * side)
+  mm.rotation.y = ry
+  footPrints.push({ mesh: mm, at: performance.now(), life, op })
 }
 function spawnSplat(pos, dmg) {
   const c = document.createElement('canvas'); c.width = 64; c.height = 64
@@ -2335,17 +2594,17 @@ function beingMesh(kind, id, thing) {
       const toe = D(cast(new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.05, 0.06), M(0x1a140e, 0.7))))
       toe.position.set(0, -0.2, 0.09); leg.userData.joint.add(toe)
     }
-    // pauldrons and bracers: the road's armour
-    for (const [px3, arm2] of [[-0.2, armL], [0.2, armR]]) {
-      const pd = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.6), metal(0x6b7078, 0.4, 0.5))))
-      pd.position.set(px3, 0.9, 0); g.add(pd)
+    // bracers only here: the pauldrons already live on the shoulders —
+    // a second stacked pair read as strange gray growths
+    for (const arm2 of [armL, armR]) {
       const brace = D(cast(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.1, 10), metal(0x5a4a30, 0.6, 0.3))))
       brace.position.y = -0.12; arm2.userData.joint.add(brace)
     }
     // a curved cloak that drapes and sways, clasped at the throat
-    const cloak = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.30, 0.55, 16, 1, true, Math.PI * 0.72, Math.PI * 0.56),
-      new THREE.MeshStandardMaterial({ color: cloakC, roughness: 0.92, side: THREE.DoubleSide })))
-    cloak.position.set(0, 0.62, -0.02); cloak.rotation.x = 0.08; g.add(cloak); g.userData.cloak = cloak
+    const cloakDk = new THREE.Color(cloakC).multiplyScalar(0.62) // fabric, not bodywork
+    const cloak = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.33, 0.6, 14, 1, true, Math.PI * 0.68, Math.PI * 0.64),
+      new THREE.MeshStandardMaterial({ color: cloakDk, roughness: 0.96, side: THREE.DoubleSide })))
+    cloak.position.set(0, 0.6, -0.04); cloak.rotation.x = 0.1; g.add(cloak); g.userData.cloak = cloak
     const clasp = D(cast(new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), metal(0xc9a24a, 0.3, 0.85))))
     clasp.position.set(0, 0.9, -0.03); g.add(clasp)
 
@@ -2702,9 +2961,29 @@ function syncBeings(s, prev) {
         // footfalls: each plant of the player's foot is heard, in the
         // voice of whatever ground received it
         const sSign = s5 >= 0 ? 1 : -1
-        if (an.lastS !== undefined && sSign !== an.lastS && mvA > 0.45 && id === myId)
-          snd('step', m.position, terrainOf(Math.round(thing.x), Math.round(thing.y)))
+        if (an.lastS !== undefined && sSign !== an.lastS && mvA > 0.45) {
+          if (id === myId) snd('step', m.position, terrainOf(Math.round(thing.x), Math.round(thing.y)))
+          // the ground remembers the step: snow takes a blue-gray press,
+          // the wet sand near the water takes a dark one
+          if (snowCover > 0.25) {
+            spawnPrint(m.position.x, m.position.z, m.position.y, m.rotation.y, sSign, 0x8a94ac, 0.32 * Math.min(1, snowCover * 2), 7000)
+          } else {
+            let sd3 = 1e9
+            for (let si = 0; si < shoreXZ.length; si += 6) { // a coarse scan is plenty for a footfall
+              const dxs = m.position.x - shoreXZ[si], dzs = m.position.z - shoreXZ[si + 1]
+              const d2p = dxs * dxs + dzs * dzs
+              if (d2p < sd3) sd3 = d2p
+            }
+            if (sd3 < 2.6) spawnPrint(m.position.x, m.position.z, m.position.y, m.rotation.y, sSign, 0x3a2f1e, 0.3, 3500)
+          }
+        }
         an.lastS = sSign
+        // cold nights show every breath
+        if (curNight > 0.5 && (curW.snow > 0.05 || snowCover > 0.15) && nowMs - (an.breathAt ?? 0) > 2400 + an.seed * 400) {
+          an.breathAt = nowMs
+          dustPool.spawn(m.position.x + Math.sin(m.rotation.y) * 0.16, m.position.y + 1.03, m.position.z + Math.cos(m.rotation.y) * 0.16,
+            { max: 1.0, size: 0.05, grow: 1.9, opacity: 0.2, vy: 0.11, color: 0xdfe6f0 })
+        }
         if (fishingW && nd2 && Math.random() < dt3 * 0.22) // the water, briefly interested in the line
           snd('splash', V3C.set(wx(nd2.x), -0.1, wz(nd2.y)))
         // arms: counter-swing on the walk; the off arm counterbalances
@@ -2863,7 +3142,7 @@ const lvlOf = (p) => Math.max(1, Math.floor(Object.entries(p.skills ?? {}).filte
 // the serve answers; it does not greet. Speak first, at the door.
 let entered = false
 ws.onopen = async () => {
-  ownKey = await ownIdentity()
+  ownKey = await ownIdentityOnce()
   if (ownKey) {
     myId = ownKey.pub
     ws.send(JSON.stringify({ type: 'adopt', pub: ownKey.pub }))
@@ -2978,7 +3257,7 @@ function snd(kind, pos, flavor) {
 document.getElementById('gate3dbtn').addEventListener('click', () => {
   entered = true
   try { AC3 = new (window.AudioContext ?? window.webkitAudioContext)(); initAmbient() } catch {}
-  if (!ownKey) ownIdentity().then((k) => { // one more knock at the door
+  if (!ownKey) ownIdentityOnce().then((k) => { // one more knock, on the SAME door
     if (!k) { signBanner(); return }
     ownKey = k; myId = k.pub
     if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'adopt', pub: k.pub }))
@@ -2993,6 +3272,27 @@ ws.onmessage = async (ev) => {
     prevWorld = world; world = m.state
     if (m.worldId) curWorldId = m.worldId
     clock = { tick: m.state.tick, at: performance.now() }
+    if (m.state.tick !== lastTickN) { lastTickN = m.state.tick; lastAdvanceAt = performance.now() }
+    if (prevWorld && ownKey) { // each skill watched, exactly as /play watches
+      const meN = m.state.players[ownKey.pub], meO = prevWorld.players?.[ownKey.pub]
+      if (meN?.skills && meO?.skills) {
+        let drips = 0
+        for (const k2 of Object.keys(meN.skills)) {
+          const gained = (meN.skills[k2] ?? 0) - (meO.skills[k2] ?? 0)
+          if (gained > 0 && !['attack', 'defence', 'hitpoints'].includes(k2)) {
+            const meM2 = beings.get(myId)
+            if (meM2) spawnXp(gained, k2, meM2.position, drips++)
+          }
+          const l1 = XP_LVL(meO.skills[k2] ?? 0), l2 = XP_LVL(meN.skills[k2] ?? 0)
+          if (l2 > l1) celebrateLevel(k2, l2)
+        }
+        if (drips || document.getElementById('skillpanel')?.style.display === 'block') renderSkills(meN)
+      }
+    }
+    const meS = ownKey && m.state.players[ownKey.pub]
+    if (meS) { const ps2 = meS.x + ',' + meS.y; if (ps2 !== myLastPos) { myLastPos = ps2; movesSent = 0 } }
+    const widEl2 = document.getElementById('wid')
+    if (widEl2 && curWorldId) widEl2.textContent = 'world ' + curWorldId.slice(0, 12) + '… · tick ' + m.state.tick
     // the first spawn was stamped tick 1 into a world at tick twenty
     // thousand: born stale, rejected, invisible. Ask again each state
     // until the census answers: exactly like the reference window.
@@ -3001,6 +3301,7 @@ ws.onmessage = async (ev) => {
       W = m.state.genesis.worldW; H = m.state.genesis.worldH
       buildGround(m.state)
       buildMinimap()
+      buildSkillsUI()
       document.getElementById('wid').textContent = 'world ' + (m.worldId ?? '').slice(0, 12) + '…'
     }
     syncNodes(m.state)
@@ -3154,6 +3455,11 @@ setInterval(() => { // one greedy step per tick: the deluxe window keeps its leg
   const preferX = Math.abs(walkGoal.x - me.x) >= Math.abs(walkGoal.y - me.y)
   if ((preferX && !stuck) || (stuck && !lastStep.wasX)) { if (dx) send({ do: 'move', dx, dy: 0 }); else send({ do: 'move', dx: 0, dy }); lastStep = { x: me.x, y: me.y, wasX: true } }
   else { if (dy) send({ do: 'move', dx: 0, dy }); else send({ do: 'move', dx, dy: 0 }); lastStep = { x: me.x, y: me.y, wasX: false } }
+  movesSent++
+  if (movesSent >= 5 && performance.now() - lastMoveWarn > 30000) { // the silence, named
+    lastMoveWarn = performance.now()
+    feed('five steps sent, none taken: the world is not applying inputs. If /play on this device also stands still, the world itself has stalled (no quorum), not this window')
+  }
 }, TICK_MS)
 let lastStep = null
 
@@ -3184,15 +3490,21 @@ function animate(now) {
     f.a.lookAt(V3A)
   }
   for (let i = splats.length - 1; i >= 0; i--) {
-    const s2 = splats[i], age = (performance.now() - s2.at) / 750
+    const s2 = splats[i], age = (performance.now() - s2.at) / (s2.life ?? 750)
     if (age >= 1) { scene.remove(s2.sp); splats.splice(i, 1); continue }
-    s2.sp.position.y += 0.006
+    s2.sp.position.y += s2.vy ?? 0.006
     s2.sp.material.opacity = 1 - age * age
   }
   if (!world) return
   const s = world
   syncBeings(s, prevWorld)
   paintMinimap(s, now)
+  { const widEl = document.getElementById('wid')
+    if (widEl && entered) {
+      const stale = performance.now() - lastAdvanceAt > 2600
+      widEl.style.color = stale ? '#ff8873' : ''
+      if (stale && !widEl.textContent.includes('breath')) widEl.textContent += ' · the world holds its breath'
+    } }
   const t2 = Math.min(1, Math.max(0, (now - clock.at) / TICK_MS))
   const cyc = (((s.tick + t2) % DAY) / DAY)
   const bright = (Math.sin(cyc * Math.PI * 2) + 1) / 2
@@ -3231,8 +3543,8 @@ function animate(now) {
   fogCol.copy(NIGHT_HOR).lerp(DAY_HOR, day).lerp(DUSK_HOR, dusk * 0.32)
   scene.fog.color.copy(fogCol)
   renderer.setClearColor(scene.fog.color)
-  ridgeMat.color.setHSL(0.62, 0.22, 0.035 + day * 0.115)
-  ridgeMatFar.color.setHSL(0.62, 0.15, 0.045 + day * 0.15) // paler with distance: aerial perspective
+  ridgeMat.color.setHSL(0.62, 0.22, 0.045 + day * 0.145)
+  ridgeMatFar.color.setHSL(0.62, 0.15, 0.055 + day * 0.175) // paler with distance: aerial perspective
 
   // ---- WEATHER: the tick decides the sky, and every window agrees ----
   const tgt = weatherAt(s.tick)
@@ -3484,6 +3796,19 @@ function animate(now) {
     ln.glass.material.emissiveIntensity = amt * (1.8 + flick * 4)
     if (ln.pl) ln.pl.intensity = amt * (1.05 + flick)
   }
+  if (puddles.mat) { // the rain's memory, standing in the road
+    puddles.mat.opacity = clamp01(rainMem * 1.6) * 0.5
+    if (puddles.mat.opacity > 0.01) puddles.mat.color.copy(scene.fog.color).multiplyScalar(1.35).lerp(new THREE.Color(0xbfd4e8), 0.25)
+  }
+  if (Math.abs(snowCover - lastSnowApp) > 0.02) { // the crowns and roofs answer the fall
+    lastSnowApp = snowCover
+    for (const r5 of snowReg) r5.m.color.copy(r5.base).lerp(SNOW_W, Math.min(0.9, snowCover * r5.amt * 1.3))
+  }
+  for (let i = footPrints.length - 1; i >= 0; i--) { // old steps fade from the snow
+    const fp = footPrints[i], age = (now - fp.at) / fp.life
+    if (age >= 1) { fp.mesh.visible = false; footPool.push(fp.mesh); footPrints.splice(i, 1); continue }
+    fp.mesh.material.opacity = fp.op * (1 - age * age)
+  }
   const winGlow = Math.max(0, (0.5 - day) * 2.4)
   for (const [, m] of nodeMeshes) {
     if (m.userData.win) { // each household keeps its own hour: the town
@@ -3590,11 +3915,23 @@ function animate(now) {
       const bar = document.getElementById('invact')
       const sl3 = selSlot >= 0 ? me.inventory?.[selSlot] : null
       if (sl3) {
+        // ---- every interaction an item HAS, offered: the engine's own
+        // vocabulary (light, cook, bury, plant...), plus the trades the
+        // nearby town makes possible ----
         const EQ = ['bronze-sword', 'bronze-hatchet', 'bronze-pickaxe', 'bronze-helm', 'bronze-plate', 'wooden-bow', 'star-sword', 'star-helm', 'star-plate', 'old-chain']
         const btn = (label3, act3) => '<button data-act="' + act3 + '" style="background:linear-gradient(#544936,#3e352a);color:#ffcc33;border:2px solid #7d6c4d;border-radius:4px;padding:7px 16px;font-family:Verdana;font-size:12px;cursor:pointer">' + label3 + '</button>'
-        bar.innerHTML = (sl3.item === 'cooked-fish' ? btn('eat', 'eat') : '')
-          + (EQ.includes(sl3.item) ? btn('wield', 'wield') : '')
-          + btn('drop', 'drop')
+        const near2 = (tt) => Object.values(s.nodes).some((n2) => n2.type === tt && Math.abs(n2.x - me.x) + Math.abs(n2.y - me.y) <= 2)
+        let acts = ''
+        if (sl3.item === 'cooked-fish') acts += btn('eat', 'eat')
+        if (sl3.item === 'raw-fish') acts += btn('cook', 'cook') // beside a fire, the engine will allow it
+        if (sl3.item === 'logs') acts += btn('light fire', 'light')
+        if (sl3.item === 'bones') acts += btn('bury', 'bury')
+        if (sl3.item === 'seeds') acts += btn('plant', 'plant')
+        if (EQ.includes(sl3.item)) acts += btn('wield', 'wield')
+        if (near2('store')) acts += btn('sell', 'sell')
+        if (near2('bank')) acts += btn('deposit', 'deposit')
+        acts += btn('drop', 'drop')
+        bar.innerHTML = acts
         bar.style.display = 'flex'
       } else { bar.style.display = 'none' }
     }
