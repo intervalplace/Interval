@@ -5,6 +5,7 @@
 <div class="page"><main class="stone">
   <h1>Hiscores</h1>
   <p class="tagline">Every rank on this page is cryptographically provable. No exceptions, no appeals.</p>
+  <div id="picker"></div>
   <div id="board">loading the world…</div>
 
   <h2>The Sixteen</h2>
@@ -28,20 +29,104 @@
   just a window.</p>
 </main></div>
 <script>
-let SKILLS = []
-async function load() {
-  try {
-    const r = await fetch('/api/hiscores'); const j = await r.json()
-    if (!j.players.length) { document.getElementById('board').textContent = 'No citizens yet. Be first.'; return }
-    SKILLS = Object.keys(j.players[0].levels)  // whatever the constitution says
+// Tell the truth about what failed. A 404 means this node is older than this
+// page and has never heard of the route; that is a deployment to do, not a
+// world that has fallen over.
+async function readJson(url) {
+  let r
+  try { r = await fetch(url) }
+  catch { throw new Error('world unreachable. Is a node running?') }
+  if (r.status === 404) throw new Error('this node does not serve ' + url + ' yet. Update the node to the current release.')
+  if (!r.ok) throw new Error('the node answered ' + r.status + ' for ' + url + '.')
+  try { return await r.json() }
+  catch { throw new Error('the node answered ' + url + ' with something that was not JSON.') }
+}
+let SKILLS = [], VIEW = 'standing', LAST = null
+
+// Standing is a sum, so the whole-world board always belongs to generalists.
+// A citizen is introduced by their CALLING though, and a calling had no board
+// at all: the best brewer alive had no way to learn that they were.
+// Seventeen equal buttons is a wall. Standing is not a trade and should not
+// look like one, and the sixteen fall into three plain families that a citizen
+// already thinks in: what you take from the land, what you make of it, and
+// what you do when something objects.
+const FAMILIES = [
+  ['what you gather', ['woodcutting', 'mining', 'fishing', 'farming', 'exploration']],
+  ['what you make',   ['smithing', 'cooking', 'firemaking', 'brewing', 'fletching']],
+  ['what you fight',  ['attack', 'defence', 'hitpoints', 'ranged', 'magic', 'prayer']],
+]
+function drawPicker() {
+  const el = document.getElementById('picker')
+  if (!SKILLS.length) return
+  const tab = (key, label) => '<button class="stab' + (VIEW === key ? ' on' : '')
+    + '" data-view="' + key + '">' + label + '</button>'
+  const known = new Set(SKILLS)
+  let html = '<div class="prow prow-top">'
+    + '<button class="stab wide' + (VIEW === 'standing' ? ' on' : '')
+    + '" data-view="standing">the whole world</button></div>'
+  for (const [label, group] of FAMILIES) {
+    const present = group.filter(x => known.has(x))
+    if (!present.length) continue
+    html += '<div class="prow"><span class="plab">' + label + '</span>'
+      + present.map(x => tab(x, x)).join('') + '</div>'
+  }
+  // anything the constitution has that this page did not know about
+  const placed = new Set(FAMILIES.flatMap(f => f[1]))
+  const rest = SKILLS.filter(x => !placed.has(x))
+  if (rest.length) html += '<div class="prow"><span class="plab">and</span>'
+    + rest.map(x => tab(x, x)).join('') + '</div>'
+  el.innerHTML = html
+  for (const b of el.querySelectorAll('.stab')) {
+    b.onclick = () => { VIEW = b.dataset.view; drawPicker(); if (LAST) drawBoard(LAST) }
+  }
+}
+
+function drawBoard(j) {
+  const el = document.getElementById('board')
+  if (!j.players.length) { el.textContent = 'No citizens yet. Be first.'; return }
+
+  if (VIEW === 'standing') { // every trade at once, for the whole world
     let html = '<table><tr><th class="rank">Rank</th><th>Name</th><th>Total</th>'
       + SKILLS.map(s => '<th>' + s + '</th>').join('') + '</tr>'
     j.players.forEach((p, i) => {
-      html += '<tr><td class="rank">' + (i+1) + '</td><td>' + p.name + '</td><td><b style="color:var(--gold)">' + p.total + '</b></td>'
-        + SKILLS.map(s => '<td' + (p.levels[s] >= 99 ? ' style="color:#ffcc33;font-weight:bold"' : '') + '>' + p.levels[s] + '</td>').join('') + '</tr>'
+      html += '<tr><td class="rank">' + (i+1) + '</td><td>' + p.name
+        + '</td><td><b style="color:var(--gold)">' + p.total + '</b></td>'
+        + SKILLS.map(s => '<td' + (p.levels[s] >= 99 ? ' style="color:#ffcc33;font-weight:bold"' : '')
+          + '>' + p.levels[s] + '</td>').join('') + '</tr>'
     })
-    document.getElementById('board').innerHTML = html + '</table>'
-  } catch { document.getElementById('board').textContent = 'world unreachable. Is a node running?' }
+    el.innerHTML = html + '</table>'
+    return
+  }
+
+  // one trade, ranked by the work done in it and nothing else
+  const sk = VIEW
+  const ranked = j.players
+    .map(p => ({ name: p.name, level: p.levels[sk] ?? 1, xp: (p.skillXp ?? {})[sk] ?? 0 }))
+    .filter(p => p.xp > 0)
+    .sort((a, b) => b.xp - a.xp)
+  if (!ranked.length) {
+    el.innerHTML = '<p style="color:var(--dim)">Nobody has done a day of ' + sk
+      + ' yet. The first rank is there to be taken.</p>'
+    return
+  }
+  let html = '<table><tr><th class="rank">Rank</th><th>Name</th><th>Level</th><th>Experience</th></tr>'
+  ranked.forEach((p, i) => {
+    html += '<tr><td class="rank">' + (i + 1) + '</td><td>' + p.name + '</td>'
+      + '<td' + (p.level >= 99 ? ' style="color:#ffcc33;font-weight:bold"' : ' style="color:var(--gold)"')
+      + '>' + p.level + '</td>'
+      + '<td style="color:var(--dim)">' + p.xp.toLocaleString() + '</td></tr>'
+  })
+  el.innerHTML = html + '</table>'
+}
+
+async function load() {
+  try {
+    const j = await readJson('/api/hiscores')
+    LAST = j
+    if (j.players.length) SKILLS = Object.keys(j.players[0].levels) // whatever the constitution says
+    drawPicker()
+    drawBoard(j)
+  } catch (e) { document.getElementById('board').textContent = e.message }
 }
 // the honour roll. Not a ranking: a record, in the order the world set it down.
 const FIRST_NAMES = {
@@ -61,7 +146,7 @@ const firstLabel = (key) => key.startsWith('master:')
 async function loadFirsts() {
   const el = document.getElementById('firsts')
   try {
-    const r = await fetch('/api/firsts'); const j = await r.json()
+    const j = await readJson('/api/firsts')
     const got = j.firsts ?? []
     if (!got.length) {
       el.innerHTML = '<p style="color:var(--dim)">Nothing has been done first yet. '
@@ -81,13 +166,13 @@ async function loadFirsts() {
     el.innerHTML = html + '</table>'
       + '<p style="font-size:11px;color:var(--dim);margin-top:10px">'
       + got.length + ' of 24 claimed. Raw data: <code>GET /api/firsts</code>.</p>'
-  } catch { el.textContent = 'world unreachable. Is a node running?' }
+  } catch (e) { el.textContent = e.message }
 }
 
 async function loadRaces() {
   const el = document.getElementById('races')
   try {
-    const r = await fetch('/api/races'); const j = await r.json()
+    const j = await readJson('/api/races')
     const rs = j.races ?? []
     if (!rs.length) { el.textContent = 'no skills reported'; return }
     let html = '<table><tr><th>Skill</th><th>Standing</th><th>Closest</th></tr>'
@@ -113,7 +198,7 @@ async function loadRaces() {
       }
     }
     el.innerHTML = html + '</table>'
-  } catch { el.textContent = 'world unreachable. Is a node running?' }
+  } catch (e) { el.textContent = e.message }
 }
 
 load(); setInterval(load, 3000)

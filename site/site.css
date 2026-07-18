@@ -18,12 +18,27 @@ body {
   border-bottom: 2px solid var(--stone-dk); border-right: 2px solid var(--stone-dk);
 }
 .page { width: 100%; max-width: 860px; }
-nav { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 14px; }
+/* six doors on a phone will wrap, and a wrapped row of loose boxes reads as a
+   mistake. Let it wrap as evenly spaced tiles that keep their shape, and shrink
+   the type before the row breaks rather than after. */
+nav { display: flex; gap: 2px; flex-wrap: wrap; margin-bottom: 14px; align-items: stretch; }
 nav a {
-  display: block; padding: 7px 14px; color: var(--gold); text-decoration: none;
-  font-weight: bold; font-size: 12px; letter-spacing: .5px;
+  display: flex; align-items: center; padding: 7px 14px; color: var(--gold);
+  text-decoration: none; font-weight: bold; font-size: 12px; letter-spacing: .5px;
+  white-space: nowrap; border-radius: 3px; flex: 0 1 auto;
 }
 nav a:hover, nav a.here { background: var(--stone-dk); color: #fff; }
+@media (max-width: 700px) {
+  nav { gap: 1px; }
+  nav a { padding: 7px 9px; font-size: 11px; letter-spacing: .2px; }
+}
+@media (max-width: 460px) {
+  /* at this width it must wrap; make the wrap deliberate, two tidy rows of
+     equal tiles rather than a ragged line with an odd box hanging off it */
+  nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+  nav a { padding: 8px 4px; font-size: 10.5px; letter-spacing: 0; justify-content: center;
+    text-align: center; }
+}
 main { padding: 22px 26px; }
 h1 { color: var(--gold); font-size: 26px; letter-spacing: 1px; margin-bottom: 4px; }
 h2 { color: var(--gold); font-size: 16px; letter-spacing: .5px; margin: 26px 0 8px; }
@@ -157,3 +172,26 @@ h1 {
 .shapes span { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim) }
 .shapes b { color: var(--gold); margin-right: 5px }
 .shapes .itemicon { width: 28px; height: 28px }
+
+/* the trade picker. Three short labelled rows read faster than seventeen equal
+   buttons, and the whole-world board sits apart because it is not a trade. */
+#picker { margin: 0 0 16px; }
+.prow { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-bottom: 4px; }
+.prow-top { margin-bottom: 9px; }
+.plab {
+  font: italic 10px Georgia, serif; color: var(--dim); letter-spacing: .3px;
+  width: 96px; flex: 0 0 96px; text-align: right; padding-right: 9px;
+}
+.stab {
+  font: bold 11px Verdana, sans-serif; letter-spacing: .3px; cursor: pointer;
+  color: var(--gold); background: #241a0e; border: 1px solid #4a3c24;
+  padding: 6px 10px; border-radius: 3px;
+}
+.stab.wide { padding: 7px 18px; }
+.stab:hover { border-color: var(--gold); color: var(--gold-hi); }
+.stab.on { background: var(--gold); border-color: var(--gold-hi); color: #1a1206; }
+@media (max-width: 560px) {
+  .plab { width: 100%; flex: 0 0 100%; text-align: left; padding: 3px 0 1px; }
+  .prow { margin-bottom: 8px; }
+  .stab { padding: 6px 8px; font-size: 10.5px; letter-spacing: 0; }
+}
