@@ -11,8 +11,9 @@ import http from 'http'
 import { WebSocketServer } from 'ws'
 import E from './engine.js'
 import { IntervalNode } from './node.mjs'
+import { DEFAULT_STARTUP_VERIFY_RECENT_N } from './errors.mjs'
 import { IntervalClient } from './sdk.mjs'
-import { buildWorld } from './worldgen.mjs'
+import { buildWorld } from './worldgen-any.mjs'
 
 const SEED = 'solo-' + (process.env.INTERVAL_SEED || 'world')
 const RULES_HASH = E.sha256(fs.readFileSync(new URL('./SPEC.md', import.meta.url))).toString('hex')
@@ -28,77 +29,117 @@ const P2P_PORT = Number(process.env.INTERVAL_P2P_PORT || 4600)
 // ---- persistence across restarts and updates ----
 // Same rules → resume the same world from checkpoint.
 // Changed rules → found a NEW world whose genesis imports the citizens.
-const KNOWN_ITEMS = new Set(['seeds', 'grain', 'logs', 'ore', 'raw-fish', 'cooked-fish', 'burnt-fish', 'bones',
-  ...Object.keys(E.RECIPES), 'wooden-bow', 'arrows', 'bronze-helm', 'bronze-plate', 'magic-stone', 'sigil'])
+const KNOWN_ITEMS = E.ITEMS // ONE constitutional item registry (rev5 §4) — engine, validator, and imports all share it
 const announced = new Map() // peerId -> { addr, at }: the mesh directory
 let GENESIS, migrated = 0
 const saved = fs.existsSync(WORLD_FILE) ? JSON.parse(fs.readFileSync(WORLD_FILE)) : null
+let savedCp = null
+try { if (fs.existsSync(CP_FILE)) savedCp = JSON.parse(fs.readFileSync(CP_FILE)) } catch {}
 
-if (saved && saved.genesis.rulesHash === RULES_HASH && saved.genesis.genesisSeed === SEED) {
+// ---- the founding witness (fix brief Milestone 4, Phase 9) ----
+// The pillar is a witness, not an authority: it proposes and attests to
+// interval bundles like any other witness. Its witness key is a founding
+// fact — listed in genesis, immutable for this world. Extra witnesses
+// and the quorum can be set at founding via env:
+//   INTERVAL_WITNESSES=pub1,pub2   INTERVAL_QUORUM=2
+const WITNESS = E.loadOrCreateIdentity(fs, 'identities/witness-pillar.json')
+const EXTRA_WITNESSES = (process.env.INTERVAL_WITNESSES || '').split(',').map(s => s.trim()).filter(s => /^[0-9a-f]{64}$/.test(s))
+
+// ---- founding vs resuming (fix brief §2.4) ----
+// Genesis is consensus identity and is IMMUTABLE after founding. We resume
+// the same world only if the rules, the seed, and the clock all still fit.
+// A long sleep no longer rebases anchorMs (that mutated the world's
+// identity in place); it founds a NEW world — new anchor, new worldId —
+// whose genesis imports the citizens.
+const REFOUND_GAP = 3000 // ticks (~30 min): beyond this, empty-tick replay is not worth it
+const cpTick = Number.isInteger(savedCp?.tick) ? savedCp.tick : 0
+const cpValidFor = (g) => savedCp && savedCp.worldId === E.worldId(g)
+  && E.canonical(savedCp.state?.genesis) === E.canonical(g)
+  && E.stateHash(savedCp.state) === savedCp.stateHash
+const gapOf = (g) => Math.floor((Date.now() - g.anchorMs) / E.TICK_MS) - cpTick
+
+const canResume = saved
+  && saved.genesis.rulesHash === RULES_HASH
+  && saved.genesis.genesisSeed === SEED
+  && Array.isArray(saved.genesis.witnesses)              // pre-witness worlds refound as witnessed ones
+  && saved.genesis.witnesses.includes(WITNESS.playerId)  // our witness key must be a founding witness
+  && (!savedCp || cpValidFor(saved.genesis))    // an alien/corrupt checkpoint is not this world
+  && gapOf(saved.genesis) <= REFOUND_GAP
+
+if (canResume) {
   GENESIS = saved.genesis
 } else {
   GENESIS = E.makeGenesis(SEED, RULES_HASH, Date.now(), WORLD_W, WORLD_H)
-  if (saved && fs.existsSync(CP_FILE)) {
-    try {
-      const old = JSON.parse(fs.readFileSync(CP_FILE)).state
-      // the founding carries everyone who LIVED: a name, any xp beyond
-      // birth, anything owned. Pure ghosts (spawned once, did nothing,
-      // never returned) rest in the old world's history.
-      const lived = (p) => p.name
-        || Object.entries(p.skills).some(([k, xp]) => k !== 'hitpoints' ? xp > 0 : xp > 1154)
-        || (p.inventory ?? []).some(Boolean)
-        || Object.keys(p.bank ?? {}).length > 0
-        || p.equipment?.weapon
-      GENESIS._imported = Object.entries(old.players).filter(([, p]) => lived(p)).map(([pid, p]) => ({
-        pid, skills: p.skills, name: p.name, hp: p.hp, bank: p.bank ?? {},
-        inventory: (p.inventory ?? []).filter(sl => sl && KNOWN_ITEMS.has(sl.item)),
-        weapon: p.equipment?.weapon && KNOWN_ITEMS.has(p.equipment.weapon.item) ? p.equipment.weapon : null,
-      }))
-    } catch { /* unreadable old world: found fresh */ }
-    fs.rmSync(CP_FILE, { force: true })
+  // the founding witness set (Milestone 4): immutable for this world; a
+  // different witness configuration is a different world (Phase 9)
+  GENESIS.witnesses = [WITNESS.playerId, ...EXTRA_WITNESSES.filter(w => w !== WITNESS.playerId)]
+  const nWit = GENESIS.witnesses.length
+  // Byzantine Safety Upgrade: the constitution fixes an explicit fault
+  // threshold f. Default to the maximum this witness set can tolerate,
+  // floor((n-1)/3); the quorum is then the safe minimum 2f+1 unless an
+  // explicit (larger, still valid) quorum is requested.
+  GENESIS.byzantineTolerance = Number.isInteger(Number(process.env.INTERVAL_FAULT_TOLERANCE))
+    ? Number(process.env.INTERVAL_FAULT_TOLERANCE)
+    : E.maxByzantine(nWit)
+  const fWit = GENESIS.byzantineTolerance
+  GENESIS.quorum = Math.max(E.minQuorumFor(nWit, fWit),
+    Math.min(nWit, Number(process.env.INTERVAL_QUORUM) || 0))
+  // The world is founded Byzantine-safe or not at all (n>=3f+1, q>=2f+1,
+  // 2q-n>f): an unsafe configuration is refused at founding, not discovered
+  // at forking.
+  if (!E.byzantineSafe(nWit, GENESIS.quorum, fWit)) {
+    console.error(`refusing to found a Byzantine-unsafe world: n=${nWit}, q=${GENESIS.quorum}, f=${fWit} — need n>=3f+1, q>=2f+1, 2q-n>f`)
+    process.exit(1)
   }
+  const old = savedCp?.state ?? (savedCp === null && saved && fs.existsSync(CP_FILE)
+    ? (() => { try { return JSON.parse(fs.readFileSync(CP_FILE)).state } catch { return null } })() : null)
+  if (old?.players) {
+    // the founding carries everyone who LIVED: a name, any xp beyond
+    // birth, anything owned. Pure ghosts (spawned once, did nothing,
+    // never returned) rest in the old world's history.
+    const lived = (p) => p.name
+      || Object.entries(p.skills).some(([k, xp]) => k !== 'hitpoints' ? xp > 0 : xp > 1154)
+      || (p.inventory ?? []).some(Boolean)
+      || Object.keys(p.bank ?? {}).length > 0
+      || p.equipment?.weapon
+    // imports are FOUNDING data: they live inside the genesis, the worldId
+    // commits to them, and worldgen applies them on every node identically
+    GENESIS.imported = Object.entries(old.players).filter(([, p]) => lived(p)).map(([pid, p]) => ({
+      pid, skills: p.skills, name: E.isValidName(p.name) ? p.name : null, // constitutional or nothing (rev5 §3) hp: p.hp,
+      bank: Object.fromEntries(Object.entries(p.bank ?? {}).filter(([it]) => KNOWN_ITEMS.has(it))),
+      inventory: (p.inventory ?? []).filter(sl => sl && KNOWN_ITEMS.has(sl.item)),
+      weapon: p.equipment?.weapon && KNOWN_ITEMS.has(p.equipment.weapon.item) ? p.equipment.weapon : null,
+    }))
+    migrated = GENESIS.imported.length
+  }
+  fs.rmSync(CP_FILE, { force: true })
   fs.writeFileSync(WORLD_FILE, JSON.stringify({ genesis: GENESIS }))
 }
 
-const node = await new IntervalNode({ peerKeyFile: 'identities/peer-pillar.json',
-  genesis: GENESIS, buildWorld, name: 'web', checkpointFile: CP_FILE,
-  listen: `/ip4/0.0.0.0/tcp/${P2P_PORT}`,   // the pillar accepts peers
-}).start()
-
-// apply the crossing (only on a fresh founding with imports)
-if (GENESIS._imported && node.state.tick === 0) {
-  const sp = { x: Math.floor(WORLD_W / 2), y: Math.floor(WORLD_H / 2) }
-  for (const c of GENESIS._imported) {
-    E.addPlayer(node.state, c.pid, sp.x, sp.y)
-    const p = node.state.players[c.pid]
-    for (const k of Object.keys(p.skills)) if (c.skills?.[k] !== undefined) p.skills[k] = c.skills[k]
-    p.hp = Math.min(c.hp ?? p.hp, E.levelForXp(p.skills.hitpoints))
-    c.inventory.forEach((sl, i) => { if (i < p.inventory.length) p.inventory[i] = sl })
-    p.equipment.weapon = c.weapon
-    for (const [it, q] of Object.entries(c.bank ?? {})) if (KNOWN_ITEMS.has(it)) p.bank[it] = q
-    if (c.name && !(c.name in node.state.names)) { node.state.names[c.name] = c.pid; p.name = c.name }
-    migrated++
+let node
+try {
+  node = await new IntervalNode({ peerKeyFile: 'identities/peer-pillar.json',
+    genesis: GENESIS, buildWorld, name: 'web', checkpointFile: CP_FILE,
+    witnessKey: WITNESS,                      // the pillar proposes and attests
+    safetyDir: 'witness-safety',              // world-namespaced vote lock + frontier (rev5 §1)
+    finalityBackend: process.env.INTERVAL_FINALITY_BACKEND || 'sqlite', // SQLite is the production default (final review §3); set 'flatfile' for the dev/compat backend
+    checkpointInterval: Number(process.env.INTERVAL_CHECKPOINT_INTERVAL) || 1000, // §1: checkpoints accelerate recovery; finality certs record every tick
+    startupVerifyRecentN: process.env.INTERVAL_STARTUP_VERIFY_RECENT ? Number(process.env.INTERVAL_STARTUP_VERIFY_RECENT) : DEFAULT_STARTUP_VERIFY_RECENT_N, // §2: shared bounded default; env can override (Infinity = full audit)
+    listen: `/ip4/0.0.0.0/tcp/${P2P_PORT}`,   // the pillar accepts peers
+  }).start()
+} catch (e) {
+  if (e.code === 'ERR_WITNESS_LOCK_HELD') {
+    console.error(`\n${e.message}\n\nAnother witness process is already operating this identity for this world. Stop it first, or run a different witness identity.`)
+    process.exit(1)
   }
-  delete GENESIS._imported
-  fs.writeFileSync(WORLD_FILE, JSON.stringify({ genesis: GENESIS }))
-  console.log(`constitution changed: ${migrated} citizen(s) crossed into the new world`)
+  throw e
 }
 
-// if the pillar slept a long time, rebase the clock rather than replaying
-// days of empty ticks. (A solo pillar may do this; a multi-node world must
-// fast-forward or re-corroborate — rebasing is a whole-world decision.)
+console.log(`witnessed world ${node.worldId.slice(0, 12)}… · ${GENESIS.witnesses.length} witness(es), quorum ${GENESIS.quorum} · this witness ${WITNESS.playerId.slice(0, 12)}…`)
+if (migrated) console.log(`world refounded (rules changed, clock lapsed, or checkpoint invalid): ${migrated} citizen(s) crossed into world ${node.worldId.slice(0, 12)}…`)
 {
-  const expected = Math.floor((Date.now() - GENESIS.anchorMs) / E.TICK_MS)
-  const gap = expected - node.state.tick
-  if (gap > 3000) {
-    GENESIS.anchorMs = Date.now() - node.state.tick * E.TICK_MS
-    node.genesis.anchorMs = GENESIS.anchorMs
-    node.state.genesis.anchorMs = GENESIS.anchorMs
-    fs.writeFileSync(WORLD_FILE, JSON.stringify({ genesis: GENESIS }))
-    console.log(`the world slept ${Math.round(gap * E.TICK_MS / 60000)} minutes — clock rebased at tick ${node.state.tick}`)
-  } else if (gap > 0) {
-    console.log(`catching up ${gap} ticks…`)
-  }
+  const gap = node.scheduledTick - node.state.tick
+  if (gap > 0) console.log(`catching up ${gap} ticks by certified proposal…`)
 }
 // every visitor is their own citizen: one identity per browser, keyed by a
 // local ID the browser stores. The node custodies these keys (a friendly
@@ -133,8 +174,9 @@ const server = http.createServer((req, res) => {
       note: 'run join.mjs against this URL to enter this world with your own node and keys',
     })
     if (path === '/api/world') return json({
-      tick: node.state.tick, worldId: RULES_HASH.slice(0, 12),
-      awake: Object.values(node.state.players).filter(p => E.isAwake(p, node.state.tick)).length,
+      tick: node.state.tick, finalizedTick: node.finalizedTick, scheduledTick: node.scheduledTick,
+      worldId: node.worldId, witnesses: GENESIS.witnesses.length, quorum: GENESIS.quorum,
+      halted: node.agreement?.halted ?? false,
       awake: Object.values(node.state.players).filter(p => E.isAwake(p, node.state.tick)).length,
       players: Object.keys(node.state.players).length,
       mobs: Object.values(node.state.mobs).filter(m => m.hp > 0).length })
@@ -242,7 +284,9 @@ function handle(ws, buf) {
     else if (a.do === 'eat') client.eat(a.slot | 0)
     else if (a.do === 'smith') client.smith(String(a.recipe))
     else if (a.do === 'wield') client.wield(a.slot | 0)
-    else if (a.do === 'unwield') client.unwield()
+    else if (a.do === 'unwield') client.unequip(String(a.gear ?? 'weapon'))
+    else if (a.do === 'buy') client.buy(String(a.item))
+    else if (a.do === 'recall') client.recall(String(a.to))
     else if (a.do === 'drop') client.drop(a.slot | 0)
     else if (a.do === 'pickup') client.pickup(String(a.groundId))
     else if (a.do === 'light') client.light(a.slot | 0)
@@ -256,7 +300,11 @@ function handle(ws, buf) {
     else if (a.do === 'unequip') client.unequip(['weapon','head','body'].includes(a.gear) ? a.gear : 'weapon')
     else if (a.do === 'deposit') client.deposit(a.slot | 0)
     else if (a.do === 'withdraw') client.withdraw(String(a.item))
-    else if (a.do === 'offer_trade') client.offerTrade(String(a.to), a.giveSlot | 0, String(a.wantItem))
+    else if (a.do === 'offer_trade') {
+      // canonical demand: an item OR positive gold, never both (pre-freeze §1)
+      if (a.wantGold != null && (a.wantItem == null || a.wantItem === '')) client.offerTradeForGold(String(a.to), a.giveSlot | 0, a.wantGold | 0)
+      else client.offerTradeForItem(String(a.to), a.giveSlot | 0, String(a.wantItem))
+    }
     else if (a.do === 'accept_trade') client.acceptTrade(String(a.from))
     else if (a.do === 'cancel_trade') client.cancelTrade()
     else if (a.do === 'chat') { if (client.chat) client.chat(String(a.text)) }
@@ -271,7 +319,7 @@ node.onChat = (msg) => {
   for (const ws of sockets.keys()) if (ws.readyState === 1) ws.send(out)
 }
 
-const worldId = RULES_HASH.slice(0, 12)
+const worldId = node.worldId // the COMPLETE id: windows sign with it and display a prefix
 let lastTickAt = 0
 node.onTick = (state) => {
   const nowT = Date.now()
@@ -284,7 +332,8 @@ node.onTick = (state) => {
 }
 
 node.startTicking()
-server.listen(8787, () => {
-  console.log('Interval is live: http://localhost:8787  (site, game, hiscores, API)')
+const HTTP_PORT = Number(process.env.INTERVAL_HTTP_PORT) || 8787
+server.listen(HTTP_PORT, () => {
+  console.log('Interval is live: http://localhost:' + HTTP_PORT + '  (site, game, hiscores, API)')
   console.log('peers may join via join.mjs — p2p port ' + P2P_PORT + ', peer ' + node.peerId())
 })

@@ -12,6 +12,7 @@ import { IntervalNode } from './node.mjs'
 const SEED = 'interval-genesis-0001'
 const RULES_HASH = E.sha256(fs.readFileSync('./SPEC.md')).toString('hex')
 const GENESIS = E.makeGenesis(SEED, RULES_HASH, 0)
+const WID = E.worldId(GENESIS)
 
 const alice = E.generateIdentity()
 const bob = E.generateIdentity()
@@ -58,15 +59,15 @@ async function runTick() {
   const aP = A.state.players[alice.playerId]
   const bP = B.state.players[bob.playerId]
   if (tick === 1) {
-    await A.submitInput(E.signInput({ tick, playerId: alice.playerId, type: 'claim_name', name: 'alice' }, alice.privateKey))
+    await A.submitInput(E.signInput({ worldId: WID, tick, playerId: alice.playerId, type: 'claim_name', name: 'alice' }, alice.privateKey))
   } else if (!aP.action) {
-    await A.submitInput(E.signInput({ tick, playerId: alice.playerId, type: 'gather', nodeId: 'tree-1' }, alice.privateKey))
+    await A.submitInput(E.signInput({ worldId: WID, tick, playerId: alice.playerId, type: 'gather', nodeId: 'tree-1' }, alice.privateKey))
   }
   if (tick === 3) {
     // bob tries to take alice's name — the constitution says no
-    await B.submitInput(E.signInput({ tick, playerId: bob.playerId, type: 'claim_name', name: 'alice' }, bob.privateKey))
+    await B.submitInput(E.signInput({ worldId: WID, tick, playerId: bob.playerId, type: 'claim_name', name: 'alice' }, bob.privateKey))
   } else if (!bP.action) {
-    await B.submitInput(E.signInput({ tick, playerId: bob.playerId, type: 'gather', nodeId: 'rock-1' }, bob.privateKey))
+    await B.submitInput(E.signInput({ worldId: WID, tick, playerId: bob.playerId, type: 'gather', nodeId: 'rock-1' }, bob.privateKey))
   }
   await sleep(E.TICK_MS)
   const hashes = await Promise.all(nodes.map(n => n.advanceTick()))

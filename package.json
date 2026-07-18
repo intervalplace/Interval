@@ -1,16 +1,34 @@
 {
   "name": "interval",
-  "version": "0.10.0",
+  "version": "0.23.0",
   "description": "A world that runs on rules, not servers. Decentralized deterministic MMO protocol.",
   "scripts": {
-    "test": "node sim.js",
+    "test": "npm run test:unit && npm run test:adversarial:ci",
     "play": "node play.mjs",
     "serve": "node serve.mjs",
     "demo:network": "node demo.mjs",
     "demo:join": "node demo2.mjs",
     "demo:trade": "node demo3.mjs",
     "demo:clock": "node demo4.mjs",
-    "demo:stall": "node demo5.mjs"
+    "demo:stall": "node demo5.mjs",
+    "demo6": "node demo6.mjs",
+    "sim": "node sim.js",
+    "advsim": "node advsim.mjs all 3 30000",
+    "demo7": "node demo7.mjs",
+    "e2e": "bash e2e-multiproc.sh",
+    "demo:adversarial": "node demo7.mjs",
+    "sdk-test": "node --test test/sdk.test.mjs",
+    "evidence": "bash freeze-evidence.sh",
+    "test:unit": "node run-tests.mjs",
+    "test:adversarial:ci": "node run-tests.mjs --only adversarial",
+    "test:adversarial:full": "node advsim.mjs all 3 30000",
+    "storage:health": "node storage-ops.mjs health",
+    "storage:backup": "node storage-ops.mjs backup",
+    "storage:verify": "node storage-ops.mjs verify",
+    "bench:storage": "node bench-storage.mjs",
+    "manifest": "node manifest.mjs",
+    "manifest:check": "node manifest.mjs --check",
+    "test:all": "node run-tests.mjs --all"
   },
   "dependencies": {
     "@chainsafe/libp2p-gossipsub": "^14.1.2",
@@ -24,5 +42,14 @@
     "libp2p": "^2.10.0",
     "ws": "^8.21.0"
   },
-  "type": "commonjs"
+  "type": "commonjs",
+  "release": "phase-1-freeze",
+  "protocol": {
+    "specVersion": "0.55",
+    "consensusVersion": "1.9",
+    "rulesHash": "be10c0d0d49e098a"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
 }

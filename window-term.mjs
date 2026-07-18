@@ -41,7 +41,7 @@ export function renderFrame(client) {
 
   const me = client.me
   const lines = []
-  lines.push(`${C.bold}INTERVAL${C.reset}  world ${client.worldId}…  tick ${client.tick}  peers ${client.peers}`)
+  lines.push(`${C.bold}INTERVAL${C.reset}  world ${client.worldIdShort}…  tick ${client.tick}  peers ${client.peers}`)
   lines.push('┌' + '─'.repeat(W * 2 + 1) + '┐')
   for (const row of grid) lines.push('│ ' + row.join(' ') + ' │')
   lines.push('└' + '─'.repeat(W * 2 + 1) + '┘')

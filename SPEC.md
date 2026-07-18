@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.42 ("The Constitution")
+# Interval: Protocol Specification v0.55 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -313,7 +313,20 @@ containing:
 The **state hash** is SHA-256 of the canonical JSON encoding.
 
 The genesis object is
-`{specVersion, rulesHash, genesisSeed, anchorMs, worldW, worldH}`.
+`{specVersion, rulesHash, genesisSeed, anchorMs, worldW, worldH,
+worldGenerator}`. `worldGenerator` names the deterministic generator
+that founds this world (currently `"interval-classic-v1"`), so a
+founding record can never be ambiguous about which world it founds; a
+node that does not implement the named generator refuses to build the
+world rather than guessing. The genesis schema is EXACT: the seven
+fields above plus the optional trio `witnesses`/`quorum`/`imported` —
+any other key is refused (a key execution ignores still changes the
+worldId, minting a distinct founding identity with identical behavior),
+and `witnesses` and `quorum` are supplied together or not at all.
+Signed inputs are equally exact: one canonical serialized form per
+action (per-type field schemas with explicit types; trade offers carry
+BOTH demand fields, `wantItem: null` or `wantGold: 0` written out —
+omission is not a representation).
 
 ### 3.1 Player
 
@@ -441,7 +454,7 @@ v0.1 input types:
 
 - `move` → `{dx, dy}` where dx,dy ∈ {-1,0,1}; moves 1 tile per tick.
   The world is a bounded grid of **genesis-defined size**: the genesis
-  object carries `worldW` and `worldH` (defaults 14 × 8), and a move
+  object carries `worldW` and `worldH` (defaults 320 × 200, the canonical classic-generator size), and a move
   whose destination lies outside is invalid. The world has edges
   because its founding says so: and how much world there is, is a
   founding decision like everything else. Resource nodes (all types,
@@ -552,6 +565,36 @@ is derived, like the time of day. A sleeping citizen stands where they
 stopped, blocks nothing, and can complete no trade (accepting requires
 an input, which would wake them). Any input wakes the sleeper. The
 world never forgets a citizen; it lets them rest.
+
+## 5f. World announcements: milestones every citizen sees (v0.48)
+
+The world keeps a short herald's log, `state.announce`: an ordered list
+of at most 24 recent `{tick, text}` entries, and a permanent honors
+roll, `state.firsts`, mapping a milestone key to the id of the citizen
+who reached it first. Both are written only by the deterministic rules
+below, so every node computes byte-identical announcements and one
+agreed record of who was first — "first ever" is a fact of the state,
+not a claim any window can invent.
+
+**Mastery.** When a citizen's XP in a skill first crosses the mastery
+threshold (`XP_TABLE[99]`) on a tick, the world announces it. The very
+first citizen ever to master a given skill is named as such (and
+recorded in `firsts` under `master:<skill>`); everyone after is
+announced plainly. When the crossing that a tick produces leaves a
+citizen at mastery in **all** skills for the first time, the world
+announces a **Master of Interval** — and the first ever to achieve it is
+recorded under `firsts.totalmaster`. This is expected to be
+vanishingly rare; the honor is permanent.
+
+**Anniversaries.** On every tick that is an exact multiple of
+`TICKS_PER_YEAR` (`round(365.25 · 24 · 3600 · 1000 / TICK_MS)`), the
+world marks its own age. Because it is a pure function of the tick, the
+year turns identically for everyone.
+
+The log is bounded and the honors roll is finite (one entry per skill
+plus totals and any named firsts), so neither grows without limit. The
+herald changes no other state: a windows renders these cries how it
+likes, or ignores them; the record is the same regardless.
 
 ## 6. Gathering resolution
 
@@ -684,6 +727,315 @@ Two new anvil recipes: `bronze-helm` (1 ore, 1 logs, 30 xp) and
 Worn armor soaks incoming damage: each piece reduces every hit taken
 by 1, to a minimum of 0. Death destroys all of it. The sink spares
 nothing, and now it eats plate.
+
+## 6v. The star-dagger and the root (v0.49)
+
+A fourth star recipe: `star-dagger` (2 magic-stone, 1 ore; smithing 20,
+magic 15; wield attack 20). It strikes for less than the star-sword (a
++2 hit, not +4) — its worth is not the edge but the **root**.
+
+When a successful star-dagger blow lands on a living target — mob or
+citizen — and the wielder's root is ready and the target is neither
+already rooted nor within its post-root immunity, three things happen
+together: the target is **rooted** for `ROOT_TICKS` (3) ticks and cannot
+move for their duration; the target gains **immunity** for a further
+`ROOT_IMMUNE` (10) ticks, during which no dagger may root it again; and
+the wielder's dagger goes on **cooldown** for `ROOT_CD` (120) ticks. A
+rooted entity's move inputs resolve to no motion; a rooted mob does not
+wander or pursue. Damage is unaffected by any of this — only the root
+is gated. Roots never stack and never chain: at most one target is held
+by one dagger at a time, and the immunity window forbids a second
+dagger from seizing a body the instant the first releases it. The long
+cooldown makes landing a root a decision, not a rhythm — a rare, earned,
+expensive thing, as a frontier weapon forged from compressed night
+should be.
+
+## 7. Exploration: the world as profession (v0.50)
+
+The fifteenth skill. Its verb is `survey`; its XP is paid in distance;
+its goods are **charts**. Every value below is deterministic — markers,
+rewards, and charts are pure functions of the beacon and the state, so
+every node agrees without a word passing between them.
+
+### 7a. Survey markers
+
+`state.markers` holds `genesis.survey.k` points of interest, each a
+`{ x, y, kind, bornAt }` (and a `ws` id when it is a rumor). Whenever
+the world holds fewer than `k`, the top-up mints replacements. Marker
+position and kind are drawn from `H(beacon || tick || index || salt)`,
+rejected until the tile is in-bounds, outside every city, and off every
+node — and **distance-weighted**, so most markers land in the near and
+middle country and the deep-Wilds ones are genuinely rare. A marker
+unclaimed after `MARKER_LIFE` (3000) ticks relocates: the frontier
+never goes stale.
+
+Most markers are `ord` (ordinary). A minority are `ws` **rumors**,
+minted beside a waystone; surveying one yields that waystone's chart.
+
+### 7b. `survey`
+
+`survey` is valid when a living citizen stands on a marker's tile. It is
+**instant** — the cost was the walk, not a channel. On resolution it
+pays Exploration XP by distance (7c), yields a chart if the marker was a
+rumor and the pack has room, records the first-ever surveyor in the
+honors roll, and **relocates the marker**. First-come and single-claim:
+reaching the deep one first is the race.
+
+### 7c. XP paid in distance
+
+```
+xp = min( survey.max, survey.base + survey.perTile * chebyshev(marker, anchor) )
+```
+
+**These constants live in the genesis, not the protocol.** The classic
+world founds itself with `{ k: 8, base: 40, perTile: 10, max: 1800 }` —
+values *derived from a survey-simulation of its own geometry*. They
+are not a universal curve. A larger world is free — indeed expected — to
+found itself with a different `k`, `base`, `perTile`, and `max`, derived
+from *its* geometry by *its* own simulation. One numerical curve does
+not fit every world scale, and the constitution does not pretend it
+does. What is constitutional is the *form* of the reward; the *numbers*
+are a property of the founded world.
+
+Why this reaches mastery on a finite map: it is not coverage that is the
+grind but *journeys*. Markers relocate forever, so the XP is bounded
+only by traversal time — exactly as a finite set of respawning rocks
+supports mining to 99. A bot cartographer pays for it in the same walked
+ticks a human does.
+
+### 7d. Charts — knowledge as a portable capability
+
+A chart is `chart:<waystoneId>`: an ordinary, stackable, **tradeable**
+inventory item. Because canonical state is public, a chart is not secret
+information — the waystone's location was always derivable. A chart is a
+transferable **capability**: `read_chart` spends it to add that waystone
+to the bearer's `attuned` set, granting recall access *without ever
+walking there*. The explorer converts distance walked into charts and
+sells recall access to citizens who would rather pay than walk. The
+waystone set is fixed at founding, so charts are a small set of fixed
+variants — no per-item payload, no change to the slot schema.
+
+### 7e. Constitutional consequences
+
+`SKILLS` gains `exploration`; **Master of Interval is now mastery in all
+fifteen**, and the honors roll gains `master:exploration` and a first
+`surveyor`. `genesis.survey` joins the founding record (and the worldId
+it hashes to). `state.markers` is bounded to `k`. Two items
+(`chart:*`) and two actions (`survey`, `read_chart`) join the
+vocabulary. Bot indifference holds: a bot that walks the frontier and
+sells charts is a load-bearing citizen, not an exploit.
+
+## 8. Brewing: the profession the world waits for (v0.51)
+
+The sixteenth skill, and the first whose passive part is genuine: the
+*world* does the waiting. A brewer starts a batch, lives the rest of
+their day, and returns to a finished, tradeable draught. It stays honest
+the way every passive thing must — **the gain consumes a good that took
+active effort to make** (grain, fish, and the logs and ore of the pot
+itself), so a bot earns nothing it did not first gather.
+
+### 8a. Brewpots
+
+A brewpot is an owned, placed node (`type: 'brewpot'`, fields `by`, and
+while fermenting `readyAt` + `brewKind`). `build_brewpot` raises one on a
+free tile beside the founder, consuming `brew.buildLogs` logs and
+`brew.buildOre` ore — **but only adjacent to a `house`.** The protocol
+knows nothing of taverns; it knows only "a brewpot must stand by a
+roof." A brewhouse — a house ringed with brewpots and the people who
+gather there — is a meaning *players* assign, the way they made trade
+routes of waystones. A citizen may own at most `brew.potCap` brewpots.
+The cap is flat: capacity is bought, not leveled — running four pots is
+an act of supply and organization, not a reward the protocol hands out
+for grinding.
+
+A brewpot is **walkable** — a citizen may stand on or step through its
+tile — so no arrangement of pots can ever wall a doorway or fence a
+citizen in or out; the commons stays passable. A pot **abandoned** (not
+built, brewed, or collected at) for longer than `brew.decayTicks`
+crumbles and returns its tile to the world, so brewpots can never
+permanently enclose the buildable space against newcomers — active pots
+reset the clock, only neglect reclaims. And a founder may `dismantle`
+their own pot, recovering half its makings and freeing the ground, so a
+brewhouse can be moved rather than merely abandoned. Owned, yes — but
+never a permanent private claim on the common ground.
+
+### 8b. Brew, wait, collect
+
+At an idle brewpot they own, a founder `brew`s, consuming one input —
+`grain → ale`, `raw-fish → broth` — and setting `readyAt = tick +
+brew.ferment`. Nothing more happens until the world reaches that tick;
+fermentation is **deterministic**, so a brewer knows exactly when a
+batch lands (Interval treats time constitutionally; a brewer should not
+be made to guess). Pots ferment on world-ticks whether their founder is
+present or not. When `tick >= readyAt`, the founder `collect`s: the
+draught enters the pack, Brewing XP is paid **on the completed batch**,
+and the pot returns to idle. Active at both ends, patient in the middle.
+
+### 8c. The goods
+
+`ale` and `broth` are ordinary, stackable, tradeable items that
+**restore** on `eat` (broth a little more than a cooked fish, ale a
+little less) — restoration, not buffs, so Brewing stays inside the food
+system without a layer of buff-management. Their point is the market:
+farmer → grain → brewer → ale → everyone; fisher → fish → brewer →
+broth. Brewing couples the professions that already exist.
+
+### 8d. The constants are the world's
+
+`brew: { ferment, potCap, buildLogs, buildOre, xpPerBatch }` lives in the
+**genesis**, part of the founding record. The classic world founds
+itself with values derived from a brew-simulation of a brewer tending a
+rotation of pots — sized so mastery is a matter of *regular brewing over
+time*, not a number of hours anyone announces. A larger or busier world
+tunes its own. What is constitutional is the *shape* — start, wait,
+collect, at a flat-capped rotation — not the numbers.
+
+### 8e. Watchfires: Firemaking as public infrastructure (v0.53)
+
+The public-light idea that first wore the name "Beaconry" belongs in
+**Firemaking**, not in a skill of its own. A citizen is not "a
+beacon-keeper"; they are an experienced firemaker tending a great fire.
+Folded in, it enriches an existing profession and leaves the skill list,
+and Master of Interval, honest.
+
+A **watchfire** is an owned, placed node (`type: 'watchfire'`, fields
+`by` and `fuelUntil`). At Firemaking `watch.level` a citizen may
+`kindle` one on free ground, spending `watch.kindleLogs` logs at once. It
+**burns** while `tick < fuelUntil`, and while it burns it lights the
+country around it for every citizen who passes, not only its keeper. No
+one owns the light.
+
+**Fuel is the whole economy of it.** `stoke` feeds one log to any
+watchfire and extends its burn by `watch.perLog` ticks, banking forward
+from whichever is later, the present tick or the fire's remaining burn,
+and never past `watch.cap` ticks ahead. A fire cannot be loaded with a
+year of wood and abandoned; it must be *returned to*. Every log
+delivered pays `watch.xpPerLog` Firemaking experience to **whoever
+delivered it**, so feeding a neighbour's fire is not charity. While a
+fire burns, its keeper earns a further `watch.burnXp` per tick: the light
+is public, the vigil is theirs. Because burn time is bought only with
+logs, that trickle is fuel-proportional, and no citizen earns anything a
+forester did not first cut. A citizen keeps at most `watch.maxOwned`
+watchfires, so the map cannot be carpeted for a passive wage.
+
+Watchfires are **walkable**, as brewpots are: nothing a citizen builds
+may wall a door or fence a neighbour in. A fire left cold for longer
+than `watch.decayTicks` crumbles to ash and returns its ground to the
+commons.
+
+As with survey and brewing, `genesis.watch` lives in the founding
+record, not the protocol: a larger, darker world may want longer burns,
+cheaper fuel, or more fires to a keeper, and is free to found itself
+that way. What is constitutional is the shape, logs in, light out,
+never a wage without wood.
+
+## 10. Standing and calling: who a citizen is (v0.55)
+
+For a while every window invented its own idea of a citizen's "level" and
+they disagreed about the same public state: one averaged three combat
+skills, another averaged five and subtracted two, and computed the skill
+levels themselves from a curve that was not the constitutional one. A
+number shown beside a citizen's name was therefore a property of the
+software someone happened to open, rather than of the person. In a world
+whose windows are meant to be views of one truth, that is a category
+error. Both are derived here instead.
+
+**Standing** is the sum of a citizen's true level in all sixteen skills:
+
+```
+standing = sum over SKILLS of levelForXp(xp)
+```
+
+It is `levelForXp`, the *unbounded* level of §4b, and deliberately not
+`effLevel`: mastery at 99 is a milestone, not a ceiling, and a citizen
+who keeps going past it keeps rising. Standing therefore has no maximum
+to write down. It privileges no profession: an explorer who never draws
+a sword and a knight who never brews are measured by the same rule,
+which is the only honest measure in a world of sixteen trades.
+
+There is deliberately **no combat level.** Combat is three skills of
+sixteen. A world whose countries are wood, stone, water, danger, and
+home does not rank its people by their capacity for violence.
+
+**Calling** is the trade a citizen is best at, rendered as a word:
+forester, miner, fisher, cook, smith, firekeeper, mourner, archer,
+sigilist, farmer, fletcher, fighter, warden, cartographer, brewer.
+Hitpoints is excluded, being a consequence of fighting rather than a
+trade, and starting at 10 — without that exclusion every citizen would
+be born a fighter. Ties fall to the constitutional skill order, so every
+node answers identically. A citizen whose every trade is still level 1
+has no calling yet and is a **newcomer**.
+
+Together they read as an introduction rather than a score:
+
+```
+Erik · brewer (412)
+```
+
+The number says how much of the world someone has touched; the word says
+who they are. A single scalar would flatten sixteen professions into one
+hierarchy, which this world refuses everywhere else. The calling restores
+what the scalar throws away, and it is the more useful half socially:
+it tells you who to ask for a smithing job, who sells charts, and whose
+tavern you are standing in.
+
+Both are pure functions of public state. Neither is stored, so neither
+can drift from the skills it describes.
+
+## 9. A world's geography is its own (v0.54)
+
+Anchor's walls, Norwick's bounds, and the marches of the Wilds were
+written as constants when there was only one world. The Wilds in
+particular are **law**, not scenery: recall is refused from inside them
+and the Brand is earned inside them, so where they lie is a
+constitutional question. A constant cannot answer it for a world of a
+different size — on a map four times the classic one, a fixed 34-by-22
+rectangle is a rounding error in a corner.
+
+So the three rectangles join the founding record as `genesis.geo`:
+
+```
+geo: { city: {x0,x1,y0,y1}, wilds: {...}, norwick: {...} }
+```
+
+Each region is optional, and **a genesis that names none of them gets
+exactly the classic numbers**, so the classic world is unchanged to the
+byte: same nodes, same mobs, same hashes. A world that names its own
+regions is telling every node where its law runs, in the same record
+that fixes its size, its seed, and its rules. `inWilds` now asks the
+world it is standing in rather than a constant.
+
+This is the same principle already governing `survey`, `brew`, and
+`watch`: the *shape* of a rule is constitutional, its *numbers* belong
+to the world that was founded with them.
+
+### 9a. The expanse (`interval-expanse-v1`)
+
+A second generator, and the first world designed for the founding record
+rather than around it. Where the classic generator reads "a safe town,
+then danger" — a radial gradient, identical in every direction — the
+expanse gives every direction a meaning: **north is wood, east is stone,
+south is water, west is danger, and the middle is home.** Five
+countries, seven walled settlements, every road a spoke to Anchor, and
+eighteen waystones. The country is *knowable*: a citizen who learns it
+once still knows it after a year away, which is what a world owes people
+who leave and come back.
+
+The generator is not part of the rules hash — `SPEC.md` is — but the
+world it founds is named in the genesis, and a node that does not
+implement that generator refuses to guess at its landscape rather than
+grow a different one.
+
+### 8f. Constitutional consequences
+
+`SKILLS` gains `brewing`; **Master of Interval is now mastery in all
+sixteen.** The honors roll gains `master:brewing` and a first `brewer`.
+`genesis.brew` joins the founding record. A new node `brewpot`, two
+items (`ale`, `broth`), and three actions (`build_brewpot`, `brew`,
+`collect`) join the vocabulary. Watchfires add the `watchfire` node, the
+`kindle` and `stoke` actions, `genesis.watch`, and a first `watchfire`. Bot indifference holds: a bot brewer
+still has to gather every log, every grain, and tend the rotation in
+real returns — it simply runs a small business, like anyone else.
 
 ## 6j. Ranged (the bow and the bone arrow)
 
@@ -829,23 +1181,61 @@ The rules therefore never ask "is this player human," and never need to:
 ## 9. Worlds, versions, and forks
 
 The genesis object contains the spec version and the **rules hash**
-(SHA-256 of this document's canonical text). Two peers are in the same
-world if and only if their genesis objects match.
+(SHA-256 of this document's canonical text), the genesis seed, the
+anchor time, the world dimensions, and any imported founding citizens.
+Two peers are in the same world if and only if their genesis objects
+match byte-for-byte in canonical encoding.
+
+**World identity (v0.43).** The world's identifier is
+
+```
+worldId = SHA-256(canonical(genesis))
+```
+
+hex-encoded, never truncated for protocol use (a short prefix is
+display-only). The rules hash names a constitution; the worldId names
+one exact founded world. Two worlds under the same constitution but
+different seeds, anchors, sizes, or imports are different worlds and
+different networks: every gossip topic and request protocol is
+namespaced by the complete worldId
+(`interval/<worldId>/inputs`, `interval/<worldId>/hashes`,
+`interval/<worldId>/chat/2.0.0`, `/interval/<worldId>/checkpoint/2.0.0`,
+`/interval/<worldId>/ticklog/2.0.0`).
+
+**Genesis is immutable.** After founding, no field of genesis may
+change, including `anchorMs`. A node that cannot honor the original
+schedule catches up by replay or founds a NEW world (new anchor, new
+worldId) whose genesis imports the citizens (`genesis.imported`), which
+every node applies deterministically at world construction.
+
+**Signature domains (v0.43).** Every signature binds a purpose and a
+world. The signed bytes are `domain || canonical(payload-without-sig)`
+with domains `INTERVAL_INPUT_V1|` (game inputs) and `INTERVAL_CHAT_V1|`
+(chat). Every signed payload includes the full `worldId`; the state
+machine rejects any input whose `worldId` is not this world's, so an
+input signed for World A is unverifiable and invalid in World B.
 
 Changing any rule changes the rules hash and creates a new world sharing
 history up to the fork tick. Characters exist in every timeline that
-shares their history. Clients display the spec version and rules hash
+shares their history. Clients display the spec version and worldId
 prominently; players choose their constitution.
 
 ## 9a. Checkpoints and late join
 
-A **checkpoint** is `{tick, state}` where `state` is the full canonical
-world state at that tick. Checkpoints are self-verifying up to identity:
-anyone can recompute the state hash. Trust that a checkpoint is *the*
-canonical timeline comes from corroboration, not authority:
+A **checkpoint** is the envelope
+`{formatVersion, worldId, tick, stateHash, state}` where `state` is the
+full canonical world state at that tick. Checkpoints are self-verifying
+up to identity: anyone can recompute the state hash. Before ANY
+checkpoint is adopted (from disk or from a peer), the receiver MUST
+verify: `worldId` equals its own, `state.genesis` is byte-identical in
+canonical form, `state.tick === tick`, and the recomputed hash of
+`state` equals `stateHash`. Trust that a checkpoint is *the* canonical
+timeline comes from corroboration, not authority:
 
-- Nodes persist a checkpoint locally every tick and serve their latest
-  checkpoint on the protocol `interval/<ns>/checkpoint/1.0.0`.
+- Nodes persist a checkpoint locally through a serialized, crash-safe
+  writer (one write in flight, newest snapshot wins, unique temp file,
+  flush, atomic rename; failures are surfaced, never swallowed) and
+  serve their latest on `/interval/<worldId>/checkpoint/2.0.0`.
 - A joining peer MUST fetch checkpoints from at least two independent
   peers and verify the state hashes match before adopting one. More
   corroboration is better; one peer is never enough.
@@ -858,12 +1248,126 @@ canonical timeline comes from corroboration, not authority:
 
 Nodes retain a recent **input log** (the exact input sets applied per
 tick) and serve contiguous ranges of it on
-`interval/<ns>/ticklog/1.0.0`. A node that stalls past one or more tick
+`/interval/<worldId>/ticklog/2.0.0`, bounded per request (at most 256
+ticks and 4 MiB per response). A node that stalls past one or more tick
 boundaries recovers by fetching the missed range and replaying it
 through the state machine: recomputing, not trusting: hash gossip
 still judges the result. If no reachable peer's log extends back far
 enough, the node falls back to checkpoint re-sync (§9a). Determinism
 makes history replayable; replayability makes stalls survivable.
+
+## 9d. Network limits (v0.43)
+
+Every network surface is bounded before allocation. Nodes MUST reject:
+gossip frames over 16 KiB (chat over 2 KiB) before parsing; inputs more
+than 20 ticks in the future or for any other world; malformed player
+ids; more than 4096 buffered inputs per interval or 64 buffered future
+intervals; hash gossip outside a 512-tick window. Rate/retention maps
+(input buffers, hash history, chat rate table) are pruned by tick or
+capped in size. Values are protocol constants published by the
+implementation (`LIMITS` in node.mjs).
+
+## 9e. Two kinds of world
+
+A genesis that lists a **witness set** (§9f) is an *authoritative
+world*: intervals finalize only through quorum-attested bundles, and
+the claim "one finalized world every honest node independently
+verifies" holds against the network model in §9f. A genesis without one
+runs the older optimistic mode — deterministic peer-to-peer input
+propagation with state-hash divergence detection — which remains
+accurately described as a prototype: adverse timing can make honest
+nodes apply different input sets for a tick, and hash gossip detects
+but does not repair this. Optimistic worlds exist for development and
+demonstration; a network that intends to be one world MUST found with
+witnesses.
+
+## 9f. Certified interval bundles (v0.44)
+
+Authoritative worlds finalize through **IntervalBundles**: for each
+tick, one canonical, certified set of inputs.
+
+**Witnesses and quorum.** `genesis.witnesses` is an ordered list of
+ed25519 public keys; `genesis.quorum` is an integer with
+`1 <= quorum <= |witnesses|` and — constitutionally —
+`2 * quorum > |witnesses|`, so any two quorums intersect. A genesis
+violating this MUST be refused at founding and by every verifier. Both
+are founding facts: immutable forever, committed to by the worldId, and
+never changed in-protocol; witness replacement means founding a new
+world (with imports). A different witness configuration is a different
+world.
+
+**Proposal.** The proposer for `(tick, round)` is
+`witnesses[(H(worldId || previousStateHash || tick) + round) mod n]`.
+At the schedule boundary the round-0 proposer publishes a bundle
+`{v, worldId, tick, round, previousStateHash, proposer, inputs, sig}`
+where `inputs` are player-signed inputs sorted by
+`(playerId, inputHash)`, at most **two** per player (one action, or the
+pair that proves equivocation, which the state machine's duplicate rule
+then excludes deterministically), and `sig` is the proposer's signature
+under domain `INTERVAL_BUNDLE_V1|`. The proposer selects which inputs a
+tick contains; it cannot invent one (all remain player-signed) and
+cannot forge an outcome (see attestation).
+
+**Attestation and the vote lock.** Every witness that receives a bundle
+validates it structurally (world, tick, lineage via
+`previousStateHash`, expected proposer, order, caps, every input
+signature), **recomputes the state transition itself**, and publishes
+an attestation `{v, worldId, tick, round, bundleHash,
+resultingStateHash, witness, sig}` under domain
+`INTERVAL_ATTESTATION_V1|`. Voting is governed by the **tick lock**
+(CONSENSUS.md §4): the first valid bundle a witness signs for a tick is
+written durably to disk *before* the attestation is broadcast, and the
+witness thereafter signs no other bundle hash for that tick — across
+ALL rounds, across restarts. The identical bundle may be re-attested
+and rebroadcast freely. Locks are released only by finalization of the
+tick, never by rounds or timeouts.
+
+**Finality.** An interval is FINAL when `quorum` distinct witnesses
+attest to the same `(bundleHash, resultingStateHash)`. The bundle plus
+that quorum of attestations is a **finality record**: a portable proof
+anyone can verify against genesis alone. Nothing finalizes on a timer;
+the 600 ms schedule only paces proposals. `scheduledTick` (what local
+time predicts) and the finalized tick (what quorum evidence proves) are
+distinct quantities and MUST NOT be conflated.
+
+**Timeout and fallback.** If round `r` produces no finalization within
+`ROUND_TIMEOUT_MS`, round `r+1` opens with the next proposer in
+canonical order. A round cannot be jumped early. If quorum is
+unreachable (partition, dead witnesses), the world **stops finalizing**
+and resumes when quorum returns: a stopped world, never two worlds.
+Because locks are never released, a multi-round partition can strand
+locks across bundles such that a tick can never finalize
+(CONSENSUS.md §8, H2): that too is a stop, recovered by refounding, and
+is the accepted price of fork-freedom.
+
+**Fairness (honesty clause).** The protocol guarantees deterministic
+execution and deterministic finality; it does NOT guarantee complete
+input inclusion. The round's proposer chooses the bundle from what it
+saw; an omitted input dies with its tick (inputs are tick-bound) and
+the client resubmits. Proposer misbehavior — omission or signing two
+bundles for one round — is detectable, and proposer equivocation yields
+portable evidence. See CONSENSUS.md §7.
+
+**Mismatch means halt.** A node whose own computation of a certified
+bundle's result differs from the quorum-certified
+`resultingStateHash` — or that observes a quorum certify a structurally
+invalid bundle — HALTS: it refuses to finalize further intervals,
+preserves the conflicting evidence, and recovers only from a certified
+checkpoint. Silent self-repair onto an unverified state is forbidden.
+
+**The consensus specification.** The full agreement protocol — model,
+fault assumptions, locking rules, the common verifier, liveness limits,
+halting conditions, and witness lifecycle — is normatively specified in
+CONSENSUS.md v1.0. Where implementation and CONSENSUS.md disagree, the
+document wins.
+
+**Certified sync.** A checkpoint from an authoritative world carries
+the finality record certifying its state; a receiver verifies the proof
+and the recomputed state hash, so a checkpoint from ONE peer is
+trustworthy (§9a's two-peer corroboration remains the rule only for
+optimistic worlds). Catch-up serves finality records, not raw inputs:
+the recovering node verifies each proof and replays each bundle,
+demanding the certified result byte-for-byte.
 
 ## 10. Out of scope for v0.1
 

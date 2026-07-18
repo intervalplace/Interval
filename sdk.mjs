@@ -16,9 +16,12 @@ export class IntervalClient {
   // ---- reading the world (all state is public and verifiable) ----
   get world() { return this.node.state }
   get tick() { return this.node.state.tick }
+  get finalizedTick() { return this.node.finalizedTick }   // highest interval with a quorum proof
+  get scheduledTick() { return this.node.scheduledTick }   // where local time PREDICTS the world should be
   get me() { return this.node.state.players[this.identity.playerId] ?? null }
   get peers() { return this.node.p2p.getConnections().length }
-  get worldId() { return this.node.genesis.rulesHash.slice(0, 12) }
+  get worldId() { return this.node.worldId }                      // the COMPLETE world ID (fix brief §2)
+  get worldIdShort() { return this.node.worldId.slice(0, 12) }    // display only — never for protocol use
 
   players() {
     return Object.entries(this.world.players).map(([pid, p]) => ({
@@ -32,8 +35,15 @@ export class IntervalClient {
 
   // ---- acting in the world (signed inputs, one per tick) ----
   #send(fields) {
+    // §2.3: worldId is inside the signed payload — this action is valid in
+    // exactly one world, and the signature enforces it
+    // pre-freeze §5: ONE shared normalizer builds the object that gets
+    // signed — equivalent requests always produce byte-identical
+    // canonical bytes (e.g. an item trade without wantGold gains
+    // wantGold: 0 here, not in some client's private convention)
+    const canon = E.normalizeInput(fields)
     const input = E.signInput(
-      { tick: this.tick, playerId: this.identity.playerId, ...fields },
+      { worldId: this.node.worldId, tick: this.tick, playerId: this.identity.playerId, ...canon },
       this.identity.privateKey)
     return this.node.submitInput(input)
   }
@@ -42,7 +52,8 @@ export class IntervalClient {
   stop() { return this.#send({ type: 'stop' }) }
   claimName(name) { return this.#send({ type: 'claim_name', name }) }
   spawn() { return this.#send({ type: 'spawn' }) }
-  offerTrade(to, giveSlot, wantItem) { return this.#send({ type: 'offer_trade', to, giveSlot, wantItem }) }
+  offerTradeForItem(to, giveSlot, wantItem) { return this.#send({ type: 'offer_trade', to, giveSlot, wantItem, wantGold: 0 }) }
+  offerTradeForGold(to, giveSlot, wantGold) { return this.#send({ type: 'offer_trade', to, giveSlot, wantItem: null, wantGold }) }
   acceptTrade(from) { return this.#send({ type: 'accept_trade', from }) }
   cancelTrade() { return this.#send({ type: 'cancel_trade' }) }
   cook(slot) { return this.#send({ type: 'cook', slot }) }
@@ -64,7 +75,8 @@ export class IntervalClient {
   withdraw(item) { return this.#send({ type: 'withdraw', item }) }
   smith(recipe) { return this.#send({ type: 'smith', recipe }) }
   wield(slot) { return this.#send({ type: 'wield', slot }) }
-  unwield() { return this.#send({ type: 'unwield' }) }
+  buy(item) { return this.#send({ type: 'buy', item }) }
+  recall(to) { return this.#send({ type: 'recall', to }) }
   chat(text) { return this.node.publishChat(this.identity, text) }
   onChat(cb) { this.node.onChat = cb }
 

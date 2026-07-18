@@ -28,7 +28,20 @@ export function trailYAt(genesis, x) {
   return base + Math.round(wobble * (1 - settle))
 }
 
+// The generator's own constitutional floor (rev6 §5): below this, the
+// procedural layout provably places objects out of bounds (empirically:
+// 64x48 builds a valid world; 60x40 does not).
+export const WORLDGEN_MIN = { w: 64, h: 48 }
+export const GENERATOR_ID = 'interval-classic-v1' // named in every founding record (rev7 §8)
+
 export function buildWorld(genesis) {
+  // rev6 §3: never construct a world from an invalid founding record
+  const gerr = E.validateGenesis(genesis)
+  if (gerr) throw new Error('refusing to build a world from an invalid genesis: ' + gerr)
+  if (genesis.worldGenerator !== GENERATOR_ID)
+    throw new Error(`this genesis names generator ${JSON.stringify(genesis.worldGenerator)}; this node implements ${GENERATOR_ID} — refusing to guess at another generator's world`)
+  if (genesis.worldW < WORLDGEN_MIN.w || genesis.worldH < WORLDGEN_MIN.h)
+    throw new Error(`worldgen requires at least ${WORLDGEN_MIN.w}x${WORLDGEN_MIN.h} (got ${genesis.worldW}x${genesis.worldH}) — the procedural layout does not fit smaller worlds`)
   const w = E.newWorld(genesis)
   const W = genesis.worldW, H = genesis.worldH
   const trailY = Math.floor(H / 2)
@@ -251,7 +264,7 @@ export function buildWorld(genesis) {
   place('mtnmagic', 5, (x, y) => inMountains(x, y), (id, x, y) => E.addNode(w, id, 'magic-rock', x, y))
   // the scree band: sparser trees near hazard country are backfilled with bare rock
   place('screerock', 18, (x, y) => hazardCloseness(x, y) > 0.2 && hazardCloseness(x, y) < 1
-    && !inMountains(x, y) && !E.inWilds(x, y) && !inCave(x, y) && !inHighlands(x, y) && !inForest(x, y),
+    && !inMountains(x, y) && !E.inWilds(genesis, x, y) && !inCave(x, y) && !inHighlands(x, y) && !inForest(x, y),
     (id, x, y) => E.addNode(w, id, 'rock', x, y))
   placeClustered('gob', 36, 7, 4, (x, y) => x > 20 && x < W - 40 && !nearLake(x, y) && !inForest(x, y) && !inMountains(x, y),
     (id, x, y) => E.addMob(w, id, 'goblin', x, y))
@@ -288,5 +301,32 @@ export function buildWorld(genesis) {
     }
   }
 
+  // ---- the crossing (fix brief §2.4): imported citizens are FOUNDING data.
+  // They live in the genesis itself (so the worldId commits to them) and are
+  // applied here, deterministically, by every node that grows this world.
+  if (Array.isArray(genesis.imported)) {
+    for (const c of genesis.imported) {
+      if (!/^[0-9a-f]{64}$/.test(c.pid ?? '')) continue
+      E.addPlayer(w, c.pid, spawn.x, spawn.y)
+      const p = w.players[c.pid]
+      for (const k of Object.keys(p.skills)) if (c.skills?.[k] !== undefined) p.skills[k] = c.skills[k]
+      p.hp = Math.min(c.hp ?? p.hp, E.levelForXp(p.skills.hitpoints))
+      // rev7 §6: validateGenesis already ran at the top of buildWorld and
+      // validateImports guarantees every field here — construction applies
+      // VALIDATED data directly. Silent per-field filtering would let two
+      // implementations disagree about which validated citizen got what.
+      ;(c.inventory ?? []).forEach((sl, i) => { if (i < p.inventory.length) p.inventory[i] = sl ?? null })
+      p.equipment.weapon = c.weapon ?? null
+      for (const [it, q] of Object.entries(c.bank ?? {})) p.bank[it] = q
+      if (c.name != null) { w.names[c.name] = c.pid; p.name = c.name }
+    }
+  }
+
+  // rev6 §4: every accepted genesis produces a constitutionally valid
+  // initial state — proven here, at the source, with the exact invariant
+  // named on failure. A generator bug becomes an aborted founding, never
+  // a world whose own checkpoints are unloadable.
+  const serr = E.validateState(w)
+  if (serr) throw new Error('worldgen produced an invalid state (' + serr + ') — founding aborted')
   return w
 }

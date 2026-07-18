@@ -1,4 +1,6 @@
-# Interval v0.19
+# Interval 0.23.0 — Phase 1 Freeze
+
+*Release 0.23.0 · protocol spec v0.55 · consensus spec v1.9 · rules hash `be10c0d0d49e098a…`. These four move together; a change to any is a new release.*
 
 A decentralized MMO protocol. The game is a deterministic state machine,
 the spec is the constitution, and the rules are the authority: not a
@@ -11,6 +13,29 @@ constitution: [github.com/intervalplace/interval](https://github.com/intervalpla
 Design homage: Interval is deeply inspired by early-2000s RuneScape,
 its tick-based time, discrete systems, and coherent fixed rules. Interval
 is an independent project with no affiliation to Jagex.
+
+## Tested against a hostile network
+
+Consensus safety is exercised by a seeded, deterministic adversarial
+simulator (`npm run advsim`): honest witnesses under packet loss, delay,
+reordering, duplication, and timed partitions, alongside Byzantine
+witnesses (equivocating proposers, lying attesters, replayers, garbage
+floods) and crash-restart recovery from durable stores. Three test
+surfaces cover it, all enumerated in [TESTING.md](TESTING.md): the CI
+battery (`test/adversarial.test.mjs`, 15 tests — every scenario at one
+seed plus convergence and determinism checks), the **attached freeze
+evidence** (`freeze-evidence/`, all 12 scenarios × 1 seed × 11s), and
+the full campaign on demand (`node advsim.mjs all 3 30000`, 12 scenarios
+× 3 seeds × 30s). Across the runs in the attached evidence, no two
+honest nodes finalized different hashes for the same tick, no honest
+witness double-signed, and every committed certificate verified — the
+world stops rather than forks. These are claims about the enumerated
+runs, not a proof over all executions. The same properties are shown
+live over real libp2p (`npm run demo7`) and across real OS processes
+(`npm run
+e2e`); those two bind real sockets and are captured separately (see
+TESTING.md and `INTERVAL_LIVE=1 npm run evidence`), not in the default
+evidence run.
 
 ## The network is real
 
@@ -26,6 +51,21 @@ By default a joined citizen simply exists while its node verifies the
 world. Add `--chop` for the example executor: a bot that trains
 woodcutting and banks its logs. Bots and people enter the world the
 same way; the protocol cannot tell them apart, and does not want to.
+
+## New in v0.23: the world learns to stop, safely
+
+Phase 1 is frozen. The consensus core — canonical interval bundles, a
+Byzantine-safe intersecting quorum (`n≥3f+1`, `q≥2f+1`, `2q−n>f`),
+durable vote locks, certified finality, and halt-not-fork recovery — is
+now settled and will not change; storage engines, monitoring, and tooling
+may still evolve beneath it. Witnesses hold a true kernel-backed
+host-local lock, default to a SQLite finality store with strict world
+binding, drain every checkpoint write before releasing exclusivity (and
+fail closed if the last one cannot be written), and verify only the
+recent tail of history at startup so a witness boots in constant time no
+matter how long the world has run. A release manifest derives every test
+count and version banner from the source tree, so the documentation
+cannot quietly drift from what actually ships.
 
 ## New in v0.19: nobody builds a fire to stand in it
 
@@ -185,6 +225,13 @@ aesthetic. The node also speaks JSON: `/api/world`, `/api/hiscores`,
 
 - `SPEC.md`: the protocol constitution (intervals, XP, gathering,
   verifiable RNG, worlds & forks)
+- `CONSENSUS.md`: the agreement protocol, formally — witness locking,
+  quorum intersection, verification invariants, failure model, halting
+  conditions (normative for `protocol.mjs` / `agreement.mjs`)
+- `protocol.mjs`: wire objects — bundles, attestations, finality
+  records, evidence; the one proof verifier
+- `agreement.mjs`: proposer rounds, durable vote locks, quorum
+  finality, halt-not-fork
 - `engine.js`: reference state machine, zero dependencies, pure functions
 - `sim.js`: single-process determinism proof + adversarial tests
 - `node.mjs`: the networked node: engine + gossipsub + persistence +

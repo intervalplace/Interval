@@ -14,12 +14,13 @@
 <title>Interval</title>
 <style>
   :root {
-    --stone: #494034; --stone-dk: #2e2820; --stone-lt: #6b5f4a;
-    --gold: #ffcc33; --parch: #d9c9a3; --hp: #c0392b; --hpbg: #4a1008;
+    --stone: #291f12; --stone-dk: #191108; --stone-lt: #55462d;
+    --gold: #c6941e; --gold-hi: #e2b63e; --parch: #d6c49c; --dim: #94805a;
+    --hp: #c0392b; --hpbg: #4a1008;
   }
   * { box-sizing: border-box; margin: 0; }
   body {
-    background: #1c1710; color: var(--gold);
+    background: #14100a; color: var(--gold);
     font: 13px/1.4 Verdana, Geneva, sans-serif;
     display: flex; justify-content: center; align-items: flex-start;
     min-height: 100vh; padding: 16px;
@@ -30,7 +31,8 @@
            width: 100%; height: auto; }
   /* the classic stone bevel: light top-left, dark bottom-right */
   .stone {
-    background: var(--stone);
+    background-color: var(--stone);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23g)' opacity='0.10'/%3E%3C/svg%3E");
     border-top: 2px solid var(--stone-lt); border-left: 2px solid var(--stone-lt);
     border-bottom: 2px solid var(--stone-dk); border-right: 2px solid var(--stone-dk);
   }
@@ -79,10 +81,12 @@
     to { transform: scaleY(1.22) skewX(4deg); opacity: 1; }
   }
   #gatebox h1 {
-    text-shadow: 0 0 14px rgba(255,204,51,.35), 0 2px 0 #1c1710;
+    filter: drop-shadow(0 0 11px rgba(198,148,30,.4)) drop-shadow(0 1px 0 rgba(0,0,0,.6));
   }
   #gatebox { width: min(92vw, 380px); padding: 26px 28px; text-align: center; }
-  #gatebox h1 { color: var(--gold); font-size: 30px; letter-spacing: 4px; margin-bottom: 2px; }
+  #gatebox h1 { font-size: 30px; letter-spacing: 4px; margin-bottom: 2px;
+    background: linear-gradient(180deg, #f2d574 0%, #c6941e 50%, #855c10 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; }
   #gatebox .sub { color: var(--dim); font-size: 11px; margin-bottom: 18px; }
   #gateinfo { color: var(--parch); font-size: 12px; min-height: 18px; margin-bottom: 14px; }
   #gatekey { color: var(--dim); font-size: 10px; margin-top: 14px; }
@@ -192,6 +196,17 @@ function itemSprite(item) {
     case 'raw-fish': fishBody('#7da5c9', '#3a6b96'); break
     case 'cooked-fish': fishBody('#d9a05e', '#96622a'); break
     case 'burnt-fish': fishBody('#4a4440', '#2a2624'); break
+    case 'ale':
+      g.fillStyle = '#6b5a3a'; g.fillRect(11, 12, 12, 15) // tankard
+      g.fillStyle = '#caa23e'; g.fillRect(12, 14, 10, 12)  // ale
+      g.fillStyle = '#f2ead2'; g.fillRect(12, 12, 10, 3)   // foam
+      g.strokeStyle = '#4a3f28'; g.lineWidth = 2; g.strokeRect(11, 12, 12, 15)
+      g.fillStyle = '#6b5a3a'; g.fillRect(23, 15, 3, 8); break // handle
+    case 'broth':
+      g.fillStyle = '#5a5048'; g.beginPath(); g.ellipse(17, 20, 8, 5, 0, 0, 7); g.fill() // bowl
+      g.fillStyle = '#b9843a'; g.beginPath(); g.ellipse(17, 18, 6.5, 3, 0, 0, 7); g.fill() // broth
+      g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 1
+      g.beginPath(); g.moveTo(14, 14); g.lineTo(15, 11); g.moveTo(20, 14); g.lineTo(19, 11); g.stroke(); break // steam
     case 'bones':
       g.strokeStyle = '#e8e4d0'; g.lineWidth = 3.4
       g.beginPath(); g.moveTo(9, 22); g.lineTo(23, 10); g.stroke()
@@ -294,7 +309,7 @@ function itemSprite(item) {
 const ICONS = new Proxy({}, { get: (t, item) => typeof item === 'string'
   ? '<img src="' + itemSprite(item).toDataURL() + '" style="width:24px;height:24px;image-rendering:pixelated;vertical-align:middle">'
   : undefined, has: () => true })
-const EQUIPPABLE = new Set(['bronze-sword', 'bronze-hatchet', 'bronze-pickaxe', 'bronze-helm', 'bronze-plate', 'wooden-bow', 'star-sword', 'star-helm', 'star-plate', 'old-chain'])
+const EQUIPPABLE = new Set(['bronze-sword', 'bronze-hatchet', 'bronze-pickaxe', 'bronze-helm', 'bronze-plate', 'wooden-bow', 'star-sword', 'star-dagger', 'star-helm', 'star-plate', 'old-chain'])
 const XP_TABLE = (() => { const t = [0, 0]; let pts = 0
   for (let l = 2; l <= 99; l++) { pts += Math.floor((l-1) + 300 * Math.pow(2, (l-1)/7)); t[l] = Math.floor(pts/4) }
   return t })()
@@ -309,9 +324,39 @@ const XP_TO_LVL = xp => {
     l++
   }
 }
+
+// ---- who a citizen is (spec 10): derived, never invented by a window ----
+// Windows once each had their own idea of "level" and disagreed about the same
+// public state. These are the constitutional definitions, character for
+// character the same in every window and in engine.js.
+const CALLINGS = {
+  woodcutting: 'forester', mining: 'miner', fishing: 'fisher', cooking: 'cook',
+  smithing: 'smith', firemaking: 'firekeeper', prayer: 'mourner', ranged: 'archer',
+  magic: 'sigilist', farming: 'farmer', fletching: 'fletcher', attack: 'fighter',
+  defence: 'warden', exploration: 'cartographer', brewing: 'brewer',
+}
+const SKILL_ORDER = ['woodcutting', 'mining', 'fishing', 'cooking', 'smithing',
+  'firemaking', 'prayer', 'ranged', 'magic', 'farming', 'fletching', 'attack',
+  'defence', 'hitpoints', 'exploration', 'brewing']
+function standingOf(p) { // the sum of true levels: mastery is a milestone, not a ceiling
+  let n = 0
+  for (const sk of SKILL_ORDER) n += XP_TO_LVL(p?.skills?.[sk] ?? 0)
+  return n
+}
+function callingOf(p) { // the trade you are best at, as a word
+  let best = null, bestLvl = 1
+  for (const sk of SKILL_ORDER) {
+    if (sk === 'hitpoints') continue
+    const l = XP_TO_LVL(p?.skills?.[sk] ?? 0)
+    if (l > bestLvl) { bestLvl = l; best = sk }
+  }
+  return best === null ? 'newcomer' : CALLINGS[best]
+}
 const SKILL_OF_NODE = { 'tree': 'woodcutting', 'rock': 'mining', 'fishing-spot': 'fishing' }
 
 let myId = null, myName = '', world = null, intent = null, feedLines = []
+let _lastSurveyTick = -1
+const isChart = (item) => typeof item === 'string' && item.startsWith('chart:')
 let lastFeed = { text: '', at: 0 }
 let uid = localStorage.getItem('interval-uid')
 if (!uid) {
@@ -381,24 +426,37 @@ const BRIDGE_TO_INPUT = (a) =>
   : a.do === 'sell' ? { type: 'sell', slot: a.slot }
   : a.do === 'plant' ? { type: 'plant', slot: a.slot }
   : a.do === 'harvest' ? { type: 'harvest', nodeId: a.nodeId }
-  : a.do === 'cast' ? { type: 'cast', spell: 'anchor' }
+  : a.do === 'cast' ? { type: 'cast', spell: a.spell ?? 'anchor' }
+  : a.do === 'survey' ? { type: 'survey' }
+  : a.do === 'read_chart' ? { type: 'read_chart', slot: a.slot }
+  : a.do === 'build_brewpot' ? { type: 'build_brewpot' }
+  : a.do === 'brew' ? { type: 'brew', nodeId: a.nodeId, slot: a.slot }
+  : a.do === 'collect' ? { type: 'collect', nodeId: a.nodeId }
+  : a.do === 'dismantle' ? { type: 'dismantle', nodeId: a.nodeId }
+  : a.do === 'kindle' ? { type: 'kindle' }
+  : a.do === 'stoke' ? { type: 'stoke', nodeId: a.nodeId, slot: a.slot }
   : a.do === 'cook' ? { type: 'cook', slot: a.slot }
   : a.do === 'stop' ? { type: 'stop' }
   : a.do === 'unequip' ? { type: 'unwield', gear: a.gear }
   : null
 
+// signature domains + worldId (fix brief §2.3): the signed bytes are
+// domain-prefixed and the payload names the exact world. These strings
+// must match engine.js SIG_DOMAINS to the byte.
+const DOMAIN_INPUT = 'INTERVAL_INPUT_V1|', DOMAIN_CHAT = 'INTERVAL_CHAT_V1|'
 async function signChat(text) {
-  const msg = { type: 'chat', playerId: ownKey.pub, tick: world?.tick ?? 0, text: String(text).slice(0, 80) }
-  const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode(canonicalJS(msg))))
+  if (!curWorldId) return // no world yet: nothing to bind the signature to
+  const msg = { type: 'chat', worldId: curWorldId, playerId: ownKey.pub, tick: world?.tick ?? 0, text: String(text).slice(0, 80) }
+  const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode(DOMAIN_CHAT + canonicalJS(msg))))
   ws.send(JSON.stringify({ type: 'rawsay', msg: { ...msg, sig } }))
 }
 async function signAndSend(a) {
   const f = BRIDGE_TO_INPUT(a)
-  if (!f) return
+  if (!f || !curWorldId) return
   const tk = a._tick ?? allocTick()
   if (tk === null) return // saturated: the earlier click carries the intent
-  const input = { tick: tk, playerId: ownKey.pub, ...f }
-  const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode(canonicalJS(input))))
+  const input = { worldId: curWorldId, tick: tk, playerId: ownKey.pub, ...f }
+  const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode(DOMAIN_INPUT + canonicalJS(input))))
   ws.send(JSON.stringify({ type: 'raw', input: { ...input, sig } }))
 }
 
@@ -578,6 +636,7 @@ let tickOffset = null  // wall-clock anchor of tick 0 (smoothed)
 let worstFrame = 0, lastFrameAt = 0, worstJitter = 0, meterAt = 0, meterText = ''
 const hitFlash = {}   // pid -> ms timestamp of last damage taken
 let celebrate = null  // { text, at }: level-up banner + sparks
+let announceShow = null, announceQueue = [], _lastAnnounceTick = null // global milestone cries
 const bubbles = {}    // pid -> { text, at } speech bubbles
 const mobFacing = {}  // mobId -> -1 left / 1 right
 const MOB_LEVEL = { goblin: 2, wolf: 5, troll: 9, bear: 7, 'skeleton-knight': 10 } // derived from their stats rows (skeleton: highest atk/def/hit, above the troll)
@@ -621,7 +680,8 @@ function buildMini() {
   miniCv.width = W; miniCv.height = H
   const g = miniCv.getContext('2d')
   const cols = { meadow: '#3d5a23', trail: '#8a7449', cobble: '#7a756b', plaza: '#6e5f3e',
-    scree: '#5d5a52', cave: '#2e2c33', wilds: '#4a3d2e', sea: '#2a5f7d', mountain: '#6e6a60', bridge: '#8a6a3a' }
+    scree: '#5d5a52', cave: '#2e2c33', wilds: '#4a3d2e', sea: '#2a5f7d', mountain: '#6e6a60', bridge: '#8a6a3a',
+    river: '#2f6a86', greenwood: '#26401b', crags: '#6a6358', fens: '#43512f' }
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     g.fillStyle = cols[terrainOf(x, y)] ?? '#3d5a23'
     g.fillRect(x, y, 1, 1)
@@ -706,7 +766,7 @@ function updateGate(s, worldId) {
   const souls = Object.keys(s.players).length
   const awakeN = Object.values(s.players).filter(p => isAwake(p, s.tick)).length
   document.getElementById('gateinfo').textContent =
-    'interval ' + s.tick.toLocaleString() + ' \u00b7 ' + awakeN + ' awake of ' + souls + ' soul' + (souls === 1 ? '' : 's') + ' \u00b7 world ' + worldId
+    'interval ' + s.tick.toLocaleString() + ' \u00b7 ' + awakeN + ' awake of ' + souls + ' soul' + (souls === 1 ? '' : 's') + ' \u00b7 world ' + (worldId ?? '').slice(0, 12) + '\u2026'
   const btn = document.getElementById('gatebtn')
   btn.disabled = !myId
   btn.textContent = me
@@ -727,7 +787,7 @@ function onState(s, worldId) {
   s._waterTiles = new Set()
   for (const n2 of Object.values(s.nodes)) if (n2.type === 'fishing-spot') s._waterTiles.add(n2.x + ',' + n2.y)
   s._nodeTiles = new Set()
-  for (const n2 of Object.values(s.nodes)) s._nodeTiles.add(n2.x + ',' + n2.y) // O(1) blocked-tile checks for pathfinding
+  for (const n2 of Object.values(s.nodes)) if (n2.type !== 'brewpot' && n2.type !== 'watchfire') s._nodeTiles.add(n2.x + ',' + n2.y) // O(1) blocked checks; brewpots are walkable (v0.52)
   for (const n of Object.values(s.nodes)) {
     if (n.type !== 'fishing-spot') continue
     // O(1) Set lookups, not an O(n) scan per neighbour. On the epic world (~800
@@ -758,9 +818,24 @@ function onState(s, worldId) {
   }
   if (!entered) updateGate(s, worldId)
   if (s.genesis && (W !== s.genesis.worldW || !groundReady)) {
-    W = s.genesis.worldW; H = s.genesis.worldH; buildGround()
+    W = s.genesis.worldW; H = s.genesis.worldH
+    GEN = s.genesis.worldGenerator ?? GEN; GSEED = s.genesis.genesisSeed ?? ''
+    _seedNumC = null; _ssE = null
+    buildGround()
   }
   prevState = curState; curState = s; curWorldId = worldId
+  // queue any milestone cries that happened since we last looked — but never
+  // replay history from before we joined (first state sets the watermark)
+  if (_lastAnnounceTick === null) _lastAnnounceTick = s.tick
+  for (const a of s.announce ?? []) if (a.tick > _lastAnnounceTick && a.tick <= s.tick) announceQueue.push(a.text)
+  _lastAnnounceTick = Math.max(_lastAnnounceTick, s.tick)
+  // exploration: standing on a survey marker claims it (instant, per spec 7b)
+  const meMk = s.players[myId]
+  if (meMk && !meMk.action && (s.markers ?? []).some(m => m.x === meMk.x && m.y === meMk.y) && _lastSurveyTick !== s.tick) {
+    _lastSurveyTick = s.tick
+    send({ do: 'survey' })
+    feed('You survey the frontier.')
+  }
   const arrivedAt = performance.now()
   if (stateAt) {
     const dt = arrivedAt - stateAt
@@ -960,7 +1035,8 @@ function onState(s, worldId) {
     // rites and works leave visible traces
     if (me.skills.prayer > old.skills.prayer) effects.push({ kind: 'bury', x: me.x, y: me.y, at: performance.now() })
     if (me.skills.magic === old.skills.magic + 20) effects.push({ kind: 'invoke', x: me.x, y: me.y, at: performance.now() })
-    if (me.skills.magic === old.skills.magic + 30 && (me.x !== old.x || me.y !== old.y))
+    if (me.skills.magic === old.skills.magic + 40) effects.push({ kind: 'mend', x: me.x, y: me.y, at: performance.now() })
+    if (me.skills.magic === old.skills.magic + 30)
       effects.push({ kind: 'cast', x: me.x, y: me.y, at: performance.now() })
     if ((me.skills.ranged === old.skills.ranged + 15 || me.skills.ranged === old.skills.ranged + 5) && !me.action)
       effects.push({ kind: 'fletch', x: me.x, y: me.y, at: performance.now() })
@@ -1038,6 +1114,84 @@ function poly(pts, fill, stroke) {
   cx.closePath(); cx.fillStyle = fill; cx.fill()
   if (stroke) { cx.strokeStyle = stroke; cx.lineWidth = 1; cx.stroke() }
 }
+
+// ---- the expanse (interval-expanse-v1): an exact mirror of worldgen-expanse.mjs ----
+// Integer math only, so this window paints the very tiles the engine placed
+// nodes on. North is wood, east is stone, south is water, west is danger.
+let GEN = 'interval-classic-v1', GSEED = ''
+let _seedNumC = null
+function seedNumC() {
+  if (_seedNumC !== null) return _seedNumC
+  let h = 0
+  for (let i = 0; i < GSEED.length; i++) h = Math.imul(h ^ GSEED.charCodeAt(i), 2654435761) | 0
+  return (_seedNumC = h >>> 0)
+}
+function thashE(x, y, k) {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(k | 0, 2246822519) + seedNumC()) | 0
+  h = Math.imul(h ^ (h >>> 13), 1274126177)
+  return (h ^ (h >>> 16)) >>> 0
+}
+function riverXE(y) {
+  const cx = Math.floor(W / 2)
+  return cx + Math.round(Math.sin(y / 34) * 26 + Math.sin(y / 11) * 5) + (thashE(0, y, 11) % 3) - 1
+}
+function inSeaE(x, y) {
+  const bx = W * 0.80, by = H * 0.74
+  if (x < bx || y < by) return false
+  return (x - bx) / (W - bx) + (y - by) / (H - by) > 0.55
+}
+function inPoolE(x, y) {
+  if (y < H * 0.66) return false
+  const bx = Math.floor(x / 7), by = Math.floor(y / 7)
+  const h = thashE(bx, by, 7)
+  if ((h & 255) > 34) return false
+  const px = bx * 7 + ((h >>> 8) % 5), py = by * 7 + ((h >>> 16) % 5)
+  return Math.abs(x - px) + Math.abs(y - py) <= 2
+}
+const isWaterE = (x, y) => inSeaE(x, y) || inPoolE(x, y) || Math.abs(x - riverXE(y)) <= 1
+function settlementsE() {
+  const cx = Math.floor(W / 2), cy = Math.floor(H / 2)
+  return [
+    { x: cx, y: cy, w: 24, h: 14 },
+    { x: Math.round(W * 0.46), y: Math.round(H * 0.14), w: 14, h: 10 },
+    { x: Math.round(W * 0.72), y: Math.round(H * 0.24), w: 14, h: 10 },
+    { x: Math.round(W * 0.86), y: Math.round(H * 0.50), w: 14, h: 10 },
+    { x: Math.round(W * 0.74), y: Math.round(H * 0.70), w: 14, h: 10 },
+    { x: Math.round(W * 0.44), y: Math.round(H * 0.84), w: 14, h: 10 },
+    { x: Math.round(W * 0.26), y: Math.round(H * 0.46), w: 16, h: 12 },
+  ]
+}
+let _ssE = null
+const ssE = () => (_ssE ??= settlementsE())
+function onRoadE(x, y) {
+  const ss = ssE(), a = ss[0]
+  for (let i = 1; i < ss.length; i++) {
+    const t2 = ss[i], vx = t2.x - a.x, vy = t2.y - a.y, L2 = vx * vx + vy * vy
+    const t = ((x - a.x) * vx + (y - a.y) * vy) / L2
+    if (t < 0 || t > 1) continue
+    if (Math.abs(x - (a.x + vx * t)) + Math.abs(y - (a.y + vy * t)) * 0.6 <= 1.6) return true
+  }
+  return false
+}
+function biomeAtE(x, y) {
+  if (x <= Math.round(W * 0.19)) return 'wilds'
+  const cx = Math.floor(W / 2), cy = Math.floor(H / 2)
+  const dx = (x - cx) / W, dy = (y - cy) / H
+  if (dx * dx + dy * dy < 0.019) return 'meadow'
+  if (y <= H * 0.32) return 'greenwood'
+  if (x >= W * 0.70) return 'crags'
+  if (y >= H * 0.70) return 'fens'
+  return 'meadow'
+}
+function terrainOfE(x, y) {
+  if (inSeaE(x, y)) return 'sea'
+  if (inPoolE(x, y) || Math.abs(x - riverXE(y)) <= 1) return 'river'
+  for (const t2 of ssE()) {
+    if (Math.abs(x - t2.x) <= (t2.w >> 1) && Math.abs(y - t2.y) <= (t2.h >> 1)) return 'cobble'
+  }
+  if (onRoadE(x, y)) return 'trail'
+  return biomeAtE(x, y)
+}
 function tileHash(x, y, k) { // integer avalanche: adjacent tiles decorrelate
   let h = (x * 374761393 + y * 668265263 + (k ?? 0) * 2246822519) | 0
   h = Math.imul(h ^ (h >>> 13), 1274126177)
@@ -1070,7 +1224,7 @@ function hazardClosenessC(x, y) { // mirror of worldgen's hazardCloseness (spec 
     closeness(rectDist(x, y, { x0: 1, x1: 34, y0: 1, y1: 22 }), 16),
     closeness(rectDist(x, y, { x0: W - 30, x1: W - 10, y0: 5, y1: 16 }), 14))
 }
-function terrainOf(x, y) {
+function terrainOfClassic(x, y) {
   const ty = trailYOf()
   const cx2 = Math.floor(W / 2)
   const cy0 = 2, cy1 = 10 // city rect y-bounds (engine cityRectOf)
@@ -1097,8 +1251,15 @@ function terrainOf(x, y) {
   if (hazardClosenessC(x, y) > 0.55) return 'scree' // the ground turns before the mob does (spec 2j)
   return 'meadow'
 }
+function terrainOf(x, y) {
+  return GEN === 'interval-expanse-v1' ? terrainOfE(x, y) : terrainOfClassic(x, y)
+}
 function tileShade(x, y) {
   const t = terrainOf(x, y)
+  if (t === 'river') return ['#2f6a86', '#356f8d', '#2b6280'][tileHash(x, y, 0) % 3]
+  if (t === 'greenwood') return ['#26401b', '#2b4a1f', '#223a18', '#294518'][tileHash(x, y, 0) % 4]
+  if (t === 'crags') return ['#6a6358', '#726b5f', '#625b50'][tileHash(x, y, 0) % 3]
+  if (t === 'fens') return ['#43512f', '#4a5836', '#3c4a2a', '#465330'][tileHash(x, y, 0) % 4]
   if (t === 'sea') return ['#2a5f7d', '#2f6889', '#265a76'][tileHash(x, y, 0) % 3]
   if (t === 'mountain') return ['#6e6a60', '#787468', '#666258'][tileHash(x, y, 0) % 3]
   if (t === 'bridge') return ['#8a6a3a', '#93733f', '#816236'][tileHash(x, y, 0) % 3]
@@ -1347,7 +1508,7 @@ function drawCitizen(X, Y, o) {
     const CF = o.face ?? 1
     poly([[X + 20 - CF * 6, Y + 15], [X + 20 - CF * 9, Y + 16],
           [X + 20 - CF * (10 + Math.abs(sway)), Y + 30 + sway * 0.4],
-          [X + 20 - CF * 5, Y + 29]], capeC, o.cape.trim ? '#ffcc33' : undefined)
+          [X + 20 - CF * 5, Y + 29]], capeC, o.cape.trim ? '#e2b63e' : undefined)
   }
   const flash = o.hitAt && now - o.hitAt < 220
   const tunic = flash ? '#ffffff' : look.tunic
@@ -1407,6 +1568,11 @@ function drawCitizen(X, Y, o) {
     } else if (o.wepItem === 'bronze-hatchet') {
       cx.fillStyle = '#5c4023'; cx.fillRect(-0.8, -1, 1.6, 9)
       cx.fillStyle = '#c9862a'; cx.fillRect(F > 0 ? 0.5 : -4.5, -1, 4, 3.4)
+    } else if (o.wepItem === 'star-dagger') {
+      // a short starmetal blade — cyan, gleaming, half a sword
+      cx.fillStyle = '#8ce0ff'; cx.fillRect(-0.7, 0, 1.4, 6)
+      cx.fillStyle = '#dffaff'; cx.fillRect(-0.35, 0, 0.7, 6)
+      cx.fillStyle = '#3a5a6a'; cx.fillRect(-2, -1, 4, 1.4)
     }
     cx.restore()
   }
@@ -1426,7 +1592,7 @@ function drawCitizen(X, Y, o) {
   cx.fillRect(X + (F > 0 ? 21.5 : 17), Y + 10, 1.6, 1.6)
 
   // name + hp (your own name reads white so you can find yourself in a crowd)
-  cx.fillStyle = o.branded ? '#e8452e' : o.mine ? '#ffffff' : '#ffcc33'
+  cx.fillStyle = o.branded ? '#e8452e' : o.mine ? '#ffffff' : '#e2b63e'
   cx.font = 'bold 10px Verdana'; cx.textAlign = 'center'
   cx.fillText(o.name, X + 20, Y + 2)
   if (o.hp < o.maxHp || o.anim === 'fight') {
@@ -1468,17 +1634,44 @@ function drawScene(now) {
     cx.fillStyle = 'rgba(0,0,0,.25)'
     cx.beginPath(); cx.ellipse(X + 20, Y + 33, rx, rx * 0.34, 0, 0, 7); cx.fill()
   }
+  // held fast by the star-dagger: crystalline cyan shards bind the feet
+  const rootBind = (X, Y) => {
+    const pulse = 0.6 + 0.4 * Math.sin(now / 150)
+    cx.save()
+    cx.globalAlpha = 0.45 + 0.3 * pulse
+    cx.strokeStyle = '#bfefff'; cx.lineWidth = 1.4
+    cx.beginPath(); cx.ellipse(X + 20, Y + 33, 11, 4, 0, 0, 7); cx.stroke()
+    cx.fillStyle = '#8ce0ff'
+    for (let k = 0; k < 5; k++) {
+      const ang = k * 1.3 + 0.4, sx = X + 20 + Math.cos(ang) * 9, sy = Y + 33 + Math.sin(ang) * 3.6
+      cx.globalAlpha = 0.65 + 0.35 * pulse
+      cx.beginPath(); cx.moveTo(sx - 1.6, sy); cx.lineTo(sx, sy - 6 - (k % 2) * 2); cx.lineTo(sx + 1.6, sy); cx.closePath(); cx.fill()
+    }
+    cx.restore(); cx.globalAlpha = 1
+  }
 
   // gold frame on your active target: on the ground, under everything
   const meP = s.players[myId]
   if (meP?.action) {
     const tgt = s.nodes[meP.action.nodeId] ?? s.mobs[meP.action.mobId]
     if (tgt) {
-      cx.strokeStyle = 'rgba(255,204,51,' + (0.65 + Math.sin(now / 250) * 0.3) + ')'
+      cx.strokeStyle = 'rgba(226,182,62,' + (0.65 + Math.sin(now / 250) * 0.3) + ')'
       cx.lineWidth = 2; cx.strokeRect(px(tgt.x) + 2, py(tgt.y) + 2, TILE - 4, TILE - 4)
     }
   }
 
+  // survey markers: pins the explorer walks to and claims (spec 7a)
+  for (const mk of (s.markers ?? [])) {
+    layer.push({ z: Z(mk.y, 1), draw: () => {
+      const X = px(mk.x), Y = py(mk.y), bob = Math.sin(now / 500 + mk.x) * 1.5, gold = mk.kind === 'ws'
+      cx.strokeStyle = gold ? 'rgba(226,182,62,.5)' : 'rgba(127,208,255,.4)'; cx.lineWidth = 1.5
+      cx.beginPath(); cx.ellipse(X + 20, Y + 31, 9, 3.5, 0, 0, 7); cx.stroke()
+      cx.strokeStyle = '#6b5a3a'; cx.lineWidth = 2
+      cx.beginPath(); cx.moveTo(X + 20, Y + 30); cx.lineTo(X + 20, Y + 8 + bob); cx.stroke()
+      cx.fillStyle = gold ? '#e2b63e' : '#7fd0ff'
+      cx.beginPath(); cx.moveTo(X + 20, Y + 8 + bob); cx.lineTo(X + 32, Y + 12 + bob); cx.lineTo(X + 20, Y + 16 + bob); cx.closePath(); cx.fill()
+    } })
+  }
   for (const [id, n] of (s._nodesE ?? Object.entries(s.nodes))) {
     const X = px(n.x), Y = py(n.y), dep = n.depletedUntil > s.tick
     if (n.type === 'fishing-spot') {
@@ -1599,6 +1792,36 @@ function drawScene(now) {
         poly([[X+8,Y+30],[X+14,Y+12],[X+26,Y+9],[X+34,Y+24],[X+28,Y+33]], c, '#2c2c2c')
         poly([[X+8,Y+30],[X+28,Y+33],[X+34,Y+24],[X+26,Y+27]], cd) // underside
         if (!dep) { cx.fillStyle = 'rgba(255,255,255,.2)'; cx.fillRect(X+16, Y+13, 6, 3) }
+      }
+      if (n.type === 'watchfire') {
+        const lit = n.fuelUntil > s.tick
+        const low = lit && (n.fuelUntil - s.tick) < 300
+        shadow(X, Y, 14)
+        // a cairn of stones holding the fire up off the ground
+        cx.fillStyle = '#4a4038'; cx.beginPath(); cx.ellipse(X+20, Y+28, 13, 6, 0, 0, 7); cx.fill()
+        cx.fillStyle = '#3a322a'; cx.beginPath(); cx.ellipse(X+20, Y+26, 10, 4.5, 0, 0, 7); cx.fill()
+        // the stacked wood
+        cx.strokeStyle = '#5c4023'; cx.lineWidth = 3
+        cx.beginPath(); cx.moveTo(X+13, Y+27); cx.lineTo(X+24, Y+14); cx.moveTo(X+27, Y+27); cx.lineTo(X+16, Y+14); cx.stroke()
+        if (lit) {
+          const f = (low ? 0.55 : 1) * (0.85 + Math.sin(now / 130 + n.x) * 0.15)
+          cx.globalAlpha = f
+          const H = low ? 16 : 30
+          const grd = cx.createLinearGradient(X+20, Y+24, X+20, Y+24-H)
+          grd.addColorStop(0, 'rgba(255,220,120,.95)'); grd.addColorStop(0.5, 'rgba(230,126,34,.8)')
+          grd.addColorStop(1, 'rgba(200,60,20,0)')
+          cx.fillStyle = grd
+          cx.beginPath(); cx.moveTo(X+11, Y+25); cx.quadraticCurveTo(X+20, Y+24-H, X+29, Y+25); cx.closePath(); cx.fill()
+          // sparks rising into the dark
+          cx.fillStyle = 'rgba(255,200,110,.75)'
+          for (let k = 0; k < 4; k++) { const t3 = ((now / 900 + k * 0.31 + n.x * 0.07) % 1)
+            cx.globalAlpha = f * (1 - t3) * 0.9
+            cx.fillRect(X + 14 + ((k * 5 + n.y) % 12), Y + 22 - t3 * 34, 1.8, 1.8) }
+          cx.globalAlpha = 1
+        } else { // gone cold: ash
+          cx.fillStyle = 'rgba(150,150,150,.35)'
+          cx.beginPath(); cx.ellipse(X+20, Y+24, 8, 3, 0, 0, 7); cx.fill()
+        }
       }
       if (n.type === 'campfire' || n.type === 'fire') {
         const dying = n.type === 'fire' && n.expiresAt - s.tick < 20
@@ -1776,7 +1999,7 @@ function drawScene(now) {
         poly([[X+6,Y+34],[X+34,Y+34],[X+34,Y+14],[X+6,Y+14]], '#3d3529', '#1c1710')
         poly([[X+6,Y+14],[X+34,Y+14],[X+34,Y+34],[X+30,Y+30],[X+30,Y+18],[X+10,Y+18],[X+10,Y+30],[X+6,Y+34]], '#493f30')
         poly([[X+4,Y+14],[X+36,Y+14],[X+32,Y+8],[X+8,Y+8]], '#55483a', '#1c1710')
-        cx.fillStyle = '#ffcc33'; cx.fillRect(X+17, Y+22, 6, 12)
+        cx.fillStyle = '#e2b63e'; cx.fillRect(X+17, Y+22, 6, 12)
         cx.fillStyle = '#8a6d1f'; cx.fillRect(X+21, Y+27, 1.6, 3)
         cx.fillStyle = '#d9c9a3'; cx.font = 'bold 7px Verdana'; cx.textAlign = 'center'
         cx.fillText('BANK', X+20, Y+13)
@@ -1787,6 +2010,45 @@ function drawScene(now) {
         poly([[X+13,Y+27],[X+27,Y+27],[X+26,Y+22],[X+14,Y+22]], '#55504a')
         poly([[X+10,Y+22],[X+30,Y+22],[X+30,Y+17],[X+16,Y+17],[X+10,Y+19]], '#66625c', '#2c2a26')
         cx.fillStyle = 'rgba(255,255,255,.14)'; cx.fillRect(X+12, Y+18, 10, 1.6)
+      }
+      if (n.type === 'watchfire') {
+        if (!adj(n) && !(me.x === n.x && me.y === n.y)) { intent = { kind: 'walk', x: n.x, y: n.y + 1 }; return }
+        const li = me.inventory.findIndex(sl => sl?.item === 'logs')
+        const lit = n.fuelUntil > (world?.tick ?? 0)
+        const mins = Math.max(0, Math.round((n.fuelUntil - (world?.tick ?? 0)) * 0.6 / 60))
+        const opts = []
+        if (li !== -1) opts.push({ label: 'stoke the fire (1 log)', act: () => {
+          send({ do: 'stoke', nodeId: id, slot: li })
+          feed('You feed the watchfire. It answers.')
+          tone(180, 0.22, { type: 'sawtooth', vol: 0.04 })
+        } })
+        opts.push({ label: lit ? 'leave it burning (' + mins + ' min of wood)' : 'it has gone cold', act: () => {
+          feed(lit ? 'The watchfire burns. Its light is nobody\u2019s and everybody\u2019s.'
+                   : 'Cold ash. It wants wood.')
+        } })
+        chooseAction(opts); return
+      }
+      if (n.type === 'brewpot') {
+        shadow(X, Y, 10)
+        const fermenting = n.readyAt !== undefined && (world?.tick ?? 0) < n.readyAt
+        const ready = n.readyAt !== undefined && (world?.tick ?? 0) >= n.readyAt
+        // a little cauldron on legs
+        cx.fillStyle = '#2b2622'; cx.fillRect(X+16, Y+29, 2, 3); cx.fillRect(X+22, Y+29, 2, 3)
+        cx.fillStyle = '#4a423a'; cx.beginPath(); cx.ellipse(X+20, Y+24, 9, 7, 0, 0, 7); cx.fill()
+        cx.fillStyle = '#2f2a24'; cx.beginPath(); cx.ellipse(X+20, Y+19, 8, 3, 0, 0, 7); cx.fill()
+        if (fermenting || ready) { // the brew within
+          cx.fillStyle = n.brewKind === 'broth' ? '#b9843a' : '#caa23e'
+          cx.beginPath(); cx.ellipse(X+20, Y+19, 6.5, 2.2, 0, 0, 7); cx.fill()
+        }
+        if (fermenting) { // bubbles rising
+          cx.fillStyle = 'rgba(255,255,255,.5)'
+          for (let k = 0; k < 3; k++) { const t2 = ((now / 900 + k * 0.4) % 1); cx.globalAlpha = 0.6 * (1 - t2)
+            cx.beginPath(); cx.arc(X+16+k*4, Y+18 - t2*12, 1.3, 0, 7); cx.fill() }
+          cx.globalAlpha = 1
+        } else if (ready) { // a warm glow: come collect
+          cx.strokeStyle = 'rgba(255,210,120,' + (0.4 + 0.3 * Math.sin(now / 260)) + ')'; cx.lineWidth = 1.5
+          cx.beginPath(); cx.ellipse(X+20, Y+19, 10, 4, 0, 0, 7); cx.stroke()
+        }
       }
     }})
   }
@@ -1849,6 +2111,7 @@ function drawScene(now) {
       cx.fillStyle = '#ffe08a'; cx.fillText(plate, X + 20, Y - 3)
       const hop = engaged ? Math.abs(Math.sin(now / 160)) * 2 : Math.sin(now / 700 + m.x) * 0.7
       shadow(X, Y, 9)
+      if ((m.rootedUntil ?? 0) > s.tick) rootBind(X, Y)
       if (m.type === 'troll') {
         const heave = Math.sin(now / 800 + m.x) * 1
         poly([[X+6,Y+33],[X+8,Y+12+heave],[X+20,Y+6+heave],[X+32,Y+12+heave],[X+34,Y+33]], '#5c6b52', '#2a3324')
@@ -2003,11 +2266,11 @@ function drawScene(now) {
       starHelm: p.equipment?.head?.item === 'star-helm',
       starPlate: p.equipment?.body?.item === 'star-plate',
         sword: wep === 'bronze-sword', wepItem: wep, bronzeTool,
-        name: (p.name ?? pid.slice(0, 6)) + ' (lvl '
-        + Math.floor((XP_TO_LVL(p.skills.attack) + XP_TO_LVL(p.skills.defence) + XP_TO_LVL(p.skills.hitpoints)) / 3) + ')',
+        name: (p.name ?? pid.slice(0, 6)) + ' \u00b7 ' + callingOf(p) + ' (' + standingOf(p) + ')',
       hp: p.hp, maxHp: XP_TO_LVL(p.skills.hitpoints),
         hitAt: hitFlash[pid], branded: (p.brandedUntil ?? 0) > s.tick,
       })
+      if ((p.rootedUntil ?? 0) > s.tick) rootBind(px(ix), py(iy))
       if ((p.brandedUntil ?? 0) > s.tick) {
         // The Brand (spec 6u): a citizen who struck the unprovoked in the Wilds
         // wears a hot-iron mark. No mechanical weight — the state records it, the
@@ -2085,15 +2348,37 @@ function drawScene(now) {
       cx.fillStyle = '#e8e4d0'
       for (let k = 0; k < 5; k++) cx.fillRect(EX - 10 + k * 5 + Math.sin(p2 * 6 + k) * 2, EY + 8 - p2 * 22 - k * 2, 1.8, 1.8)
     } else if (ef.kind === 'invoke') {
+      // three stones remember being one: motes spiral INWARD, then a cold flash
       cx.fillStyle = '#8ce0ff'
-      for (let k = 0; k < 6; k++) {
-        const ang = k * 1.05 + p2 * 5, r = 16 * (1 - p2)
-        cx.fillRect(EX + Math.cos(ang) * r, EY + Math.sin(ang) * r - 4, 2.2, 2.2)
+      for (let k = 0; k < 8; k++) {
+        const ang = k * 0.9 - p2 * 4, r = 20 * (1 - p2)
+        cx.globalAlpha = 0.4 + 0.6 * p2
+        cx.fillRect(EX + Math.cos(ang) * r - 1, EY - 4 + Math.sin(ang) * r, 2.4, 2.4)
       }
+      if (p2 > 0.75) { cx.globalAlpha = (1 - p2) / 0.25; cx.fillStyle = '#dffaff'
+        cx.beginPath(); cx.arc(EX, EY - 4, 3 + (p2 - 0.75) * 40, 0, 7); cx.fill() }
+      cx.globalAlpha = 1
+    } else if (ef.kind === 'mend') {
+      // knit whole: a warm GREEN pulse + a plus of light + rising motes —
+      // unmistakable mid-fight, never confused with the cyan of a spell
+      cx.globalAlpha = (1 - p2) * 0.9
+      cx.strokeStyle = '#5ef08a'; cx.lineWidth = 2.5
+      cx.beginPath(); cx.arc(EX, EY - 2, 4 + p2 * 16, 0, 7); cx.stroke()
+      cx.fillStyle = '#baffce'; const pl = 5 * (1 - p2)
+      cx.fillRect(EX - pl, EY - 3, pl * 2, 2.6); cx.fillRect(EX - 1.3, EY - 3 - pl, 2.6, pl * 2)
+      cx.fillStyle = '#7ef29a'
+      for (let k = 0; k < 5; k++) { cx.globalAlpha = (1 - p2) * 0.8
+        cx.fillRect(EX + ((k * 37) % 20) - 10, EY + 6 - p2 * 26 - k * 2, 2, 2) }
+      cx.globalAlpha = 1
     } else if (ef.kind === 'cast') {
+      // return to Anchor: expanding rings + a rising column of light
+      cx.globalAlpha = 1 - p2
       cx.strokeStyle = '#8ce0ff'; cx.lineWidth = 2
-      cx.beginPath(); cx.arc(EX, EY, 6 + p2 * 22, 0, 7); cx.stroke()
-      cx.beginPath(); cx.arc(EX, EY, 2 + p2 * 14, 0, 7); cx.stroke()
+      cx.beginPath(); cx.arc(EX, EY, 6 + p2 * 26, 0, 7); cx.stroke()
+      cx.beginPath(); cx.arc(EX, EY, 2 + p2 * 16, 0, 7); cx.stroke()
+      cx.fillStyle = 'rgba(140,224,255,' + (0.5 * (1 - p2)) + ')'
+      cx.fillRect(EX - 3, EY - 40 * p2, 6, 40 * p2)
+      cx.globalAlpha = 1
     } else if (ef.kind === 'arrowshot') {
       const fx2 = px(ef.x) + 20, fy2 = py(ef.y) + 16
       const tx2 = px(ef.tx) + 20, ty2 = py(ef.ty) + 16
@@ -2131,7 +2416,7 @@ function drawScene(now) {
   for (const d of xpDrops) {
     const age = (now - d.at) / 1100
     cx.globalAlpha = 1 - age
-    cx.fillStyle = '#ffcc33'; cx.font = 'bold 11px Verdana'; cx.textAlign = 'center'
+    cx.fillStyle = '#e2b63e'; cx.font = 'bold 11px Verdana'; cx.textAlign = 'center'
     cx.fillText('+' + d.amt + ' xp', px(d.x) + 20, py(d.y) - 6 - age * 16)
     cx.globalAlpha = 1
   }
@@ -2147,7 +2432,7 @@ function drawScene(now) {
       for (let i = 0; i < 14; i++) {
         const a = (i / 14) * Math.PI * 2 + i
         const d = age * 26 + (i % 3) * 4
-        cx.fillStyle = ['#ffcc33', '#ff6b35', '#fff'][i % 3]
+        cx.fillStyle = ['#e2b63e', '#ff6b35', '#fff'][i % 3]
         cx.globalAlpha = 1 - age
         cx.fillRect(bx + Math.cos(a) * d, by + Math.sin(a) * d - age * 14, 2.4, 2.4)
       }
@@ -2195,7 +2480,8 @@ function drawScene(now) {
       glLights.push({ u, v: v2, r, i: i2, c: c2 })
     }
     for (const n of (s._nodesV ?? Object.values(s.nodes))) {
-      if (n.type === 'campfire' || (n.type === 'fire' && n.expiresAt > s.tick)) push(n.x, n.y, 0.26, 0.75 + glNight * 0.5, [1, 0.62, 0.24])
+      if (n.type === 'watchfire' && n.fuelUntil > s.tick) push(n.x, n.y, 0.62, 0.95 + glNight * 0.6, [1, 0.68, 0.3])
+      else if (n.type === 'campfire' || (n.type === 'fire' && n.expiresAt > s.tick)) push(n.x, n.y, 0.26, 0.75 + glNight * 0.5, [1, 0.62, 0.24])
       else if (n.type === 'magic-rock' && n.depletedUntil <= s.tick) push(n.x, n.y, 0.13, 0.4, [0.4, 0.85, 1])
     }
     for (const p of Object.values(s.players)) {
@@ -2228,12 +2514,13 @@ function drawScene(now) {
     // (A reset mid-loop once turned every later fire into painted darkness.)
     L.globalCompositeOperation = 'destination-out'
     for (const n of (s._nodesV ?? Object.values(s.nodes))) {
-      const isFire = n.type === 'campfire' || n.type === 'fire'
+      const isWatch = n.type === 'watchfire' && n.fuelUntil > s.tick
+      const isFire = n.type === 'campfire' || n.type === 'fire' || isWatch
       const isGlow = n.type === 'magic-rock' && n.depletedUntil <= s.tick
       if (!isFire && !isGlow) continue
       const fx = px(n.x - cam.x) + 20, fy = py(n.y - cam.y) + (isFire ? 24 : 20)
       if (fx < -120 || fx > cv.width + 120 || fy < -120 || fy > cv.height + 120) continue
-      const r = isFire ? 96 + Math.sin(now / 140 + n.x) * 5 : 42 + Math.sin(now / 600 + n.x) * 4
+      const r = isWatch ? 232 + Math.sin(now / 140 + n.x) * 10 : isFire ? 96 + Math.sin(now / 140 + n.x) * 5 : 42 + Math.sin(now / 600 + n.x) * 4
       const grad = L.createRadialGradient(fx, fy, isFire ? 8 : 4, fx, fy, r)
       grad.addColorStop(0, 'rgba(0,0,0,' + (isFire ? 1 : 0.6) + ')')
       grad.addColorStop(1, 'rgba(0,0,0,0)')
@@ -2273,7 +2560,7 @@ function drawScene(now) {
   const phase = cyc < 0.06 ? 'dawn' : cyc < 0.44 ? 'day' : cyc < 0.56 ? 'dusk'
               : cyc < 0.94 ? 'night' : 'dawn'
   cx.fillStyle = 'rgba(217,201,163,.75)'; cx.font = '10px Verdana'; cx.textAlign = 'left'
-  cx.fillText('world ' + curWorldId + '  \u00b7  tick ' + s.tick + '  \u00b7  ' + phase + '  \u00b7  ' + BUILD + meterText, 6, cv.height - 6)
+  cx.fillText('world ' + curWorldId.slice(0, 12) + '\u2026' + '  \u00b7  tick ' + s.tick + '  \u00b7  ' + phase + '  \u00b7  ' + BUILD + meterText, 6, cv.height - 6)
 }
 requestAnimationFrame(function frame(now) {
   if (document.hidden) { requestAnimationFrame(frame); return }
@@ -2308,9 +2595,9 @@ function panel(s) {
         : Math.floor(100 * (xp - XP_TABLE[lvl]) / (XP_TABLE[lvl + 1] - XP_TABLE[lvl]))
       const hot = k === training
       return '<div' + (hot ? ' style="outline:1px solid var(--gold)"' : '') + '>'
-        + k + ' <b style="' + (lvl >= 99 ? 'color:#ffcc33;text-shadow:0 0 6px rgba(255,204,51,.5)' : '') + '">' + lvl + '</b>'
+        + k + ' <b style="' + (lvl >= 99 ? 'color:#e2b63e;text-shadow:0 0 6px rgba(226,182,62,.5)' : '') + '">' + lvl + '</b>'
         + '<div style="height:3px;background:#1c1710;margin-top:3px">'
-        + '<div style="height:3px;width:' + pct + '%;background:' + (hot ? '#ffcc33' : '#8a7a4a') + '"></div></div></div>'
+        + '<div style="height:3px;width:' + pct + '%;background:' + (hot ? '#e2b63e' : '#8a7a4a') + '"></div></div></div>'
     }).join('')
   // Only rewrite the inventory DOM when it actually changes. It used to be
   // rebuilt every animation frame (~60/s), which destroyed the slot elements
@@ -2370,7 +2657,7 @@ function panel(s) {
   if (hd || bd) gearLine += '<br>' + [hd && ('Head: ' + hd.item.replace(/-/g, ' ')),
     bd && ('Body: ' + bd.item.replace(/-/g, ' '))].filter(Boolean).join(' \u00b7 ')
   document.getElementById('equip').innerHTML = gearLine
-    + '<br>Gold: <b style="color:#ffcc33">' + (me.gold ?? 0) + '</b> ' + ICONS['gold-coin']
+    + '<br>Gold: <b style="color:#e2b63e">' + (me.gold ?? 0) + '</b> ' + ICONS['gold-coin']
   const PRICES_C = { 'logs': 2, 'ore': 5, 'raw-fish': 3, 'cooked-fish': 6, 'bones': 2, 'arrows': 1,
     'magic-stone': 20, 'bronze-sword': 15, 'bronze-hatchet': 10, 'bronze-pickaxe': 10,
     'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8 }
@@ -2534,13 +2821,34 @@ function drawBanner(now) {
   const g = bannerCtx
   g.setTransform(1, 0, 0, 1, 0, 0)
   g.clearRect(0, 0, 1120, 800)
+  // global milestone cries take the stage first — they outrank a personal level-up
+  if (!announceShow && announceQueue.length) announceShow = { text: announceQueue.shift(), at: now }
+  if (announceShow && now - announceShow.at >= 4800) announceShow = null
+  if (announceShow) {
+    const a = (now - announceShow.at) / 4800
+    const grand = /FIRST|Master of Interval/.test(announceShow.text)
+    const bw = grand ? 760 : 620, bh = 78, bx2 = (1120 - bw) / 2, by2 = 16
+    g.globalAlpha = a < 0.9 ? 1 : (1 - a) / 0.1
+    g.fillStyle = grand ? "#2a1c10" : "#332a1c"; g.fillRect(bx2, by2, bw, bh)
+    g.strokeStyle = grand ? "#ffd24a" : "#c9a24a"; g.lineWidth = grand ? 5 : 3; g.strokeRect(bx2, by2, bw, bh)
+    if (grand) { // a shimmering inner rule for the great honors
+      g.strokeStyle = "rgba(255,210,74," + (0.4 + 0.3 * Math.sin(now / 200)) + ")"; g.lineWidth = 1.5
+      g.strokeRect(bx2 + 5, by2 + 5, bw - 10, bh - 10)
+    }
+    g.fillStyle = grand ? "#ffe08a" : "#e2b63e"
+    g.font = "bold " + (grand ? 30 : 24) + "px Verdana"; g.textAlign = "center"
+    g.fillText("\u2728 " + announceShow.text + " \u2728", 560, by2 + 50)
+    g.globalAlpha = 1
+    return
+  }
+  // personal level-up banner
   if (!(celebrate && now - celebrate.at < 2400)) return
   const age = (now - celebrate.at) / 2400
   const bw = 440, bh = 68, bx2 = (1120 - bw) / 2, by2 = 18
   g.globalAlpha = age < 0.85 ? 1 : (1 - age) / 0.15
   g.fillStyle = "#494034"; g.fillRect(bx2, by2, bw, bh)
-  g.strokeStyle = "#ffcc33"; g.lineWidth = 4; g.strokeRect(bx2, by2, bw, bh)
-  g.fillStyle = "#ffcc33"; g.font = "bold 28px Verdana"; g.textAlign = "center"
+  g.strokeStyle = "#e2b63e"; g.lineWidth = 4; g.strokeRect(bx2, by2, bw, bh)
+  g.fillStyle = "#e2b63e"; g.font = "bold 28px Verdana"; g.textAlign = "center"
   g.fillText("\u2728 " + celebrate.text + " \u2728", 560, by2 + 44)
   g.globalAlpha = 1
 }
@@ -2575,11 +2883,11 @@ function drawSunMap(s, now) {
     if (pid === myId) continue
     const [dx, dy] = at(p.x, p.y); g.fillStyle = "#e8e0d0"; g.fillRect(dx - 1, dy - 1, 2, 2)
   }
-  g.fillStyle = "#ffcc33"; g.fillRect(CX - 1.5, CY - 1.5, 3, 3)  // YOU, centre
+  g.fillStyle = "#e2b63e"; g.fillRect(CX - 1.5, CY - 1.5, 3, 3)  // YOU, centre
   g.restore()
   // the frame: bevel, gold border, inset dark line, corner brackets
   g.strokeStyle = "rgba(255,255,255,.10)"; g.lineWidth = 1; g.strokeRect(1.5, 1.5, MW - 3, MH - 3)
-  g.strokeStyle = "#ffcc33"; g.lineWidth = 2; g.strokeRect(pad - 1.5, pad - 1.5, MW - (pad - 1.5) * 2, MH - (pad - 1.5) * 2)
+  g.strokeStyle = "#e2b63e"; g.lineWidth = 2; g.strokeRect(pad - 1.5, pad - 1.5, MW - (pad - 1.5) * 2, MH - (pad - 1.5) * 2)
   g.strokeStyle = "rgba(20,16,10,.7)"; g.lineWidth = 1; g.strokeRect(pad + 0.5, pad + 0.5, MW - (pad + 0.5) * 2, MH - (pad + 0.5) * 2)
   g.strokeStyle = "#ffe08a"; g.lineWidth = 2; g.lineCap = "round"
   const cl = 7, cp = pad - 1.5
@@ -2657,25 +2965,38 @@ document.getElementById('inv').addEventListener('click', (e) => {
     const count = me.inventory.filter(sl => sl?.item === 'magic-stone').length
     chooseAction([
       { label: 'invoke sigil (' + count + '/3 stones)', act: () => {
-        const cyc2 = ((world?.tick ?? 0) % 2400) / 2400
-        const nightNow = (Math.sin(cyc2 * Math.PI * 2) + 1) / 2 < 0.42
-        if (!nightNow) { feed('The stones are dull in daylight. Magic waits for the dark half of the interval.'); return }
         if (count < 3) { feed('Three stones make a sigil. You carry ' + count + '.'); return }
         send({ do: 'invoke' })
-        feed('You press the stones together in the dark. They remember being one.')
+        feed('You press the stones together. They remember being one.')
       } },
       { label: 'drop', act: () => { send({ do: 'drop', slot: +i }); feed('You drop the magic stone.') } },
     ]); return
   }
-  if (it.item === 'sigil') {
+  if (isChart(it.item)) {
+    const wsName = it.item.slice(6).replace('waystone-', '')
     chooseAction([
-      { label: 'cast: return to Anchor', act: () => {
-        send({ do: 'cast' })
-        feed('You speak the founding moment aloud. The world agrees you were always here.')
-        tone(700, 0.4, { type: 'sine', vol: 0.05 }); tone(1050, 0.5, { type: 'sine', vol: 0.04, at: 0.1 })
+      { label: 'read chart (attune to ' + wsName + ')', act: () => {
+        send({ do: 'read_chart', slot: +i })
+        feed('You read the chart. The way to ' + wsName + ' opens to you — you may recall there now.')
+        tone(600, 0.25, { type: 'sine', vol: 0.045 }); tone(900, 0.3, { type: 'sine', vol: 0.04, at: 0.08 })
       } },
-      { label: 'keep', act: () => feed('A compressed piece of night. It hums faintly.') },
+      { label: 'keep', act: () => feed('A surveyed chart to ' + wsName + '. Worth something to someone who would rather not walk.') },
     ]); return
+  }
+  if (it.item === 'sigil') {
+    const opts = []
+    if (lvl('magic') >= 20) opts.push({ label: 'cast: mend (heal)', act: () => {
+      send({ do: 'cast', spell: 'mend' })
+      feed('You spend the sigil to knit yourself whole.')
+      tone(520, 0.18, { type: 'sine', vol: 0.05 }); tone(780, 0.22, { type: 'sine', vol: 0.045, at: 0.08 })
+    } })
+    opts.push({ label: 'cast: return to Anchor', act: () => {
+      send({ do: 'cast', spell: 'anchor' })
+      feed('You speak the founding moment aloud. The world agrees you were always here.')
+      tone(700, 0.4, { type: 'sine', vol: 0.05 }); tone(1050, 0.5, { type: 'sine', vol: 0.04, at: 0.1 })
+    } })
+    opts.push({ label: 'keep', act: () => feed('A compressed piece of night. It hums faintly.') })
+    chooseAction(opts); return
   }
   if (it.item === 'arrows') {
     chooseAction([
@@ -2695,13 +3016,33 @@ document.getElementById('inv').addEventListener('click', (e) => {
       { label: 'fletch bow', act: () => send({ do: 'fletch', slot: +i, make: 'bow' }) },
     ]); return
   }
-  if (it.item === 'logs') { send({ do: 'light', slot: +i }); feed('You attempt to light a fire\u2026'); return }
+  if (it.item === 'logs') {
+    const wt = world?.genesis?.watch
+    const logs = meNow.inventory.filter(sl => sl?.item === 'logs').length
+    const owned = Object.values(world?.nodes ?? {}).filter(n => n.type === 'watchfire' && n.by === myId).length
+    if (wt && lvl('firemaking') >= wt.level && logs >= wt.kindleLogs && owned < wt.maxOwned) {
+      chooseAction([
+        { label: 'kindle a watchfire (' + wt.kindleLogs + ' logs)', act: () => {
+          send({ do: 'kindle' }); feed('You build the wood high and set it alight. The country will see this.')
+          tone(140, 0.5, { type: 'sawtooth', vol: 0.05 }); tone(220, 0.6, { type: 'sine', vol: 0.04, at: 0.12 })
+        } },
+        { label: 'light a small fire', act: () => { send({ do: 'light', slot: +i }); feed('You attempt to light a fire\u2026') } },
+      ]); return
+    }
+    send({ do: 'light', slot: +i }); feed('You attempt to light a fire\u2026'); return
+  }
   if (EQUIPPABLE.has(it.item)) { send({ do: 'wield', slot: +i }); feed('You wield the ' + it.item.replace('-', ' ') + '.') }
   else if (it?.item === 'cooked-fish') {
     const foe = meNow.action?.type === 'attack' ? meNow.action.mobId : null
     send({ do: 'eat', slot: +i })
     if (foe) { intent = { kind: 'attack', id: foe }; feed('You wolf it down and raise your sword again.') }
     else feed('You eat the fish.')
+  }
+  else if (it?.item === 'ale' || it?.item === 'broth') {
+    const foe = meNow.action?.type === 'attack' ? meNow.action.mobId : null
+    send({ do: 'eat', slot: +i })
+    if (foe) { intent = { kind: 'attack', id: foe }; feed('You down it and fight on.') }
+    else feed(it.item === 'ale' ? 'You drink the ale. Steadier now.' : 'You sip the broth. Warmth returns.')
   }
   else if (it?.item === 'raw-fish') { send({ do: 'cook', slot: +i }); feed('You attempt to cook\u2026') }
   else if (it) { send({ do: 'drop', slot: +i }); feed('You drop the ' + it.item.replace('-', ' ') + '.') }
@@ -2965,6 +3306,32 @@ cv.addEventListener('click', (e) => {
         const i = me.inventory.findIndex(s => s && s.item === 'raw-fish')
         if (i !== -1) { intent = { kind: 'cookall' }; feed('You start cooking your catch\u2026') }
         else feed('You have nothing to cook.')
+        return
+      }
+      if (n.type === 'brewpot') {
+        if (n.by !== myId) { feed('This brewpot belongs to another brewer.'); return }
+        if (!adj(n) && !(me.x === n.x && me.y === n.y)) { intent = { kind: 'walk', x: n.x, y: n.y + 1 }; return }
+        if (n.readyAt !== undefined && (world?.tick ?? 0) >= n.readyAt) { send({ do: 'collect', nodeId: id }); feed('You draw off the finished ' + (n.brewKind ?? 'brew') + '.'); return }
+        if (n.readyAt !== undefined) { feed('Still fermenting \\u2014 come back when it\\u2019s ready.'); return }
+        const gi = me.inventory.findIndex(s => s?.item === 'grain'), fi = me.inventory.findIndex(s => s?.item === 'raw-fish')
+        const opts = []
+        if (gi !== -1) opts.push({ label: 'brew ale (grain)', act: () => { send({ do: 'brew', nodeId: id, slot: gi }); feed('You set grain to ferment. Ale, in time.') } })
+        if (fi !== -1) opts.push({ label: 'brew broth (fish)', act: () => { send({ do: 'brew', nodeId: id, slot: fi }); feed('You set fish to steep. Broth, in time.') } })
+        opts.push({ label: 'dismantle brewpot', act: () => { send({ do: 'dismantle', nodeId: id }); feed('You take the brewpot apart, recovering some of its makings.') } })
+        opts.push({ label: 'never mind', act: () => {} }); chooseAction(opts); return
+      }
+      if (n.type === 'house') {
+        if (!adj(n)) { intent = { kind: 'walk', x: n.x, y: n.y + 1 }; feed('You approach the house.'); return }
+        const bc = world?.genesis?.brew
+        const owned = Object.values(world.nodes).filter(nn => nn.type === 'brewpot' && nn.by === myId).length
+        const logs = me.inventory.filter(s => s?.item === 'logs').length, ore = me.inventory.filter(s => s?.item === 'ore').length
+        if (bc && owned < bc.potCap && logs >= bc.buildLogs && ore >= bc.buildOre) {
+          chooseAction([
+            { label: 'build brewpot (' + bc.buildLogs + ' logs, ' + bc.buildOre + ' ore)', act: () => { send({ do: 'build_brewpot' }); feed('You raise a brewpot by the house. A brewhouse begins.') } },
+            { label: 'never mind', act: () => {} },
+          ]); return
+        }
+        feed(bc && owned >= bc.potCap ? 'You already run ' + bc.potCap + ' brewpots.' : 'A brewpot needs ' + (bc?.buildLogs ?? 4) + ' logs and ' + (bc?.buildOre ?? 2) + ' ore, raised beside a house.')
         return
       }
       if (!me.inventory.some(sl => sl === null)) {

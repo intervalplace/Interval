@@ -13,6 +13,7 @@ const SEED = 'interval-genesis-0001';
 // The rules hash: SHA-256 of the constitution itself (spec §9).
 const RULES_HASH = E.sha256(fs.readFileSync('./SPEC.md')).toString('hex');
 const GENESIS = E.makeGenesis(SEED, RULES_HASH, 0);
+const WID = E.worldId(GENESIS);
 
 // real ed25519 identities
 const alice = E.generateIdentity();
@@ -37,10 +38,10 @@ function buildInputLog() {
     const a = state.players[alice.playerId];
     const b = state.players[bob.playerId];
     if (!a.action) inputs.push(E.signInput(
-      { tick: state.tick, playerId: alice.playerId, type: 'gather', nodeId: 'tree-1' },
+      { worldId: WID, tick: state.tick, playerId: alice.playerId, type: 'gather', nodeId: 'tree-1' },
       alice.privateKey));
     if (!b.action) inputs.push(E.signInput(
-      { tick: state.tick, playerId: bob.playerId, type: 'gather', nodeId: 'rock-1' },
+      { worldId: WID, tick: state.tick, playerId: bob.playerId, type: 'gather', nodeId: 'rock-1' },
       bob.privateKey));
     log.push(inputs);
     state = E.nextState(state, inputs, E.beaconValue(SEED, state.tick));
@@ -81,7 +82,7 @@ let pass = agree;
 // 1. Forged input: mallory signs an input claiming to be alice
 const mallory = E.generateIdentity();
 const forged = E.signInput(
-  { tick: 0, playerId: alice.playerId, type: 'move', dx: 1, dy: 0 },
+  { worldId: WID, tick: 0, playerId: alice.playerId, type: 'move', dx: 1, dy: 0 },
   mallory.privateKey);
 const forgedOk = E.verifyInputSig(forged);
 console.log(`Forged signature (mallory as alice): ${forgedOk ? 'ACCEPTED (bad!)' : 'rejected ✓'}`);
@@ -89,7 +90,7 @@ pass = pass && !forgedOk;
 
 // 2. Tampered input: valid signature, then payload altered
 const legit = E.signInput(
-  { tick: 0, playerId: alice.playerId, type: 'move', dx: 1, dy: 0 },
+  { worldId: WID, tick: 0, playerId: alice.playerId, type: 'move', dx: 1, dy: 0 },
   alice.privateKey);
 const tampered = { ...legit, dx: -1 };
 const tamperedOk = E.verifyInputSig(tampered);
@@ -120,8 +121,8 @@ pass = pass && !cheatHidden;
 
 // 6. Names (spec §5a): conflict resolution, one-name rule, validity
 const nw = buildWorld();
-const claimA = E.signInput({ tick: 0, playerId: alice.playerId, type: 'claim_name', name: 'zezima' }, alice.privateKey);
-const claimB = E.signInput({ tick: 0, playerId: bob.playerId, type: 'claim_name', name: 'zezima' }, bob.privateKey);
+const claimA = E.signInput({ worldId: WID, tick: 0, playerId: alice.playerId, type: 'claim_name', name: 'zezima' }, alice.privateKey);
+const claimB = E.signInput({ worldId: WID, tick: 0, playerId: bob.playerId, type: 'claim_name', name: 'zezima' }, bob.privateKey);
 const ns = E.nextState(nw, [claimA, claimB], E.beaconValue(SEED, 0));
 const oneOwner = Object.values(ns.names).length === 1 && 'zezima' in ns.names;
 console.log(`Simultaneous name claims resolve to one owner: ${oneOwner ? '✓' : '✗ (bad!)'}`);
@@ -129,7 +130,7 @@ pass = pass && oneOwner;
 
 const owner = ns.names['zezima'];
 const ownerKey = owner === alice.playerId ? alice.privateKey : bob.privateKey;
-const second = E.nextState(ns, [E.signInput({ tick: 1, playerId: owner, type: 'claim_name', name: 'other' }, ownerKey)], E.beaconValue(SEED, 1));
+const second = E.nextState(ns, [E.signInput({ worldId: WID, tick: 1, playerId: owner, type: 'claim_name', name: 'other' }, ownerKey)], E.beaconValue(SEED, 1));
 const oneNameRule = !('other' in second.names);
 console.log(`Second name for same player refused: ${oneNameRule ? '✓' : '✗ (bad!)'}`);
 pass = pass && oneNameRule;

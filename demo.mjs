@@ -12,6 +12,7 @@ const TICKS = 12
 const SEED = 'interval-genesis-0001'
 const RULES_HASH = E.sha256(fs.readFileSync('./SPEC.md')).toString('hex')
 const GENESIS = E.makeGenesis(SEED, RULES_HASH, 0)
+const WID = E.worldId(GENESIS)
 
 // identities: alice plays via node A, bob plays via node B
 const alice = E.generateIdentity()
@@ -71,11 +72,11 @@ for (let t = 0; t < TICKS; t++) {
   const bState = B.state.players[bob.playerId]
   if (!aState.action) {
     await A.submitInput(E.signInput(
-      { tick, playerId: alice.playerId, type: 'gather', nodeId: 'tree-1' }, alice.privateKey))
+      { worldId: WID, tick, playerId: alice.playerId, type: 'gather', nodeId: 'tree-1' }, alice.privateKey))
   }
   if (!bState.action) {
     await B.submitInput(E.signInput(
-      { tick, playerId: bob.playerId, type: 'gather', nodeId: 'rock-1' }, bob.privateKey))
+      { worldId: WID, tick, playerId: bob.playerId, type: 'gather', nodeId: 'rock-1' }, bob.privateKey))
   }
 
   await sleep(E.TICK_MS) // the interval: inputs propagate during the tick window

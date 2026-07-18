@@ -14,6 +14,7 @@ import fs from 'fs'
 import { multiaddr } from '@multiformats/multiaddr'
 import E from './engine.js'
 import { IntervalNode } from './node.mjs'
+import { DEFAULT_STARTUP_VERIFY_RECENT_N } from './errors.mjs'
 import { IntervalClient } from './sdk.mjs'
 import { buildWorld } from './worldgen.mjs'
 
@@ -56,7 +57,10 @@ try {
 }
 const proto = /^\d+\.\d+\.\d+\.\d+$/.test(host) ? 'ip4' : 'dns4' // names resolve via dns4
 const pillarAddr = multiaddr(`/${proto}/${host}/tcp/${info.p2pPort}/p2p/${info.peerId}`)
-console.log(`world ${info.genesis.rulesHash.slice(0, 12)}… · joining as a full peer`)
+// the world is the COMPLETE genesis hash (fix brief §2.1): the rules hash
+// only names the constitution; this names the exact founded world we join
+const WORLD_ID = E.worldId(info.genesis)
+console.log(`world ${WORLD_ID.slice(0, 12)}… (constitution ${info.genesis.rulesHash.slice(0, 12)}…) · joining as a full peer`)
 
 // 2. verify we run the same constitution before anything else
 const myRulesHash = E.sha256(fs.readFileSync(new URL('./SPEC.md', import.meta.url))).toString('hex')
@@ -71,8 +75,34 @@ if (myRulesHash !== info.genesis.rulesHash) {
 const me = E.loadOrCreateIdentity(fs, `identities/join-${NAME || 'wanderer'}.json`)
 console.log(`your key: ${me.playerId.slice(0, 12)}… (identities/join-${NAME || 'wanderer'}.json: guard it)`)
 
+// 3b. witness or observer (Milestone 4): pass --witness=identities/w.json
+// to attest, IF that key is in the founding witness set. Everyone else is
+// an observer: verifying every certified bundle, attesting to none.
+const W_ARG = process.argv.find(a => a.startsWith('--witness='))
+let witnessKey = null
+if (W_ARG) {
+  const wk = E.loadOrCreateIdentity(fs, W_ARG.split('=')[1])
+  if ((info.genesis.witnesses ?? []).includes(wk.playerId)) {
+    witnessKey = wk
+    console.log(`witness key accepted: ${wk.playerId.slice(0, 12)}… (in the founding set)`)
+  } else console.log(`witness key ${wk.playerId.slice(0, 12)}… is NOT in this world's founding set — joining as observer`)
+}
+
 // 4. own node: sync the world, then march in lockstep
-const node = await new IntervalNode({ peerKeyFile: 'identities/peer-' + (NAME || 'wanderer') + '.json', genesis: info.genesis, buildWorld, name: 'join', listen: '/ip4/0.0.0.0/tcp/' + P2P_PORT }).start()
+let node
+try {
+  node = await new IntervalNode({ peerKeyFile: 'identities/peer-' + (NAME || 'wanderer') + '.json', genesis: info.genesis, buildWorld, name: 'join', witnessKey,
+    safetyDir: witnessKey ? 'witness-safety' : null, // world-namespaced vote lock + frontier (rev5 §1)
+    finalityBackend: process.env.INTERVAL_FINALITY_BACKEND || 'sqlite', // SQLite production default (final review §3)
+    startupVerifyRecentN: process.env.INTERVAL_STARTUP_VERIFY_RECENT ? Number(process.env.INTERVAL_STARTUP_VERIFY_RECENT) : DEFAULT_STARTUP_VERIFY_RECENT_N, // §2 shared bounded default; env can override
+    listen: '/ip4/0.0.0.0/tcp/' + P2P_PORT }).start()
+} catch (e) {
+  if (e.code === 'ERR_WITNESS_LOCK_HELD') {
+    console.error(`\n${e.message}\n\nAnother witness process is already operating this identity. Stop it first.`)
+    process.exit(1)
+  }
+  throw e
+}
 console.log('[join] listening for peers on tcp/' + node.listenPort() + (P2P_PORT ? '' : ' (random; use --port=4601 and open it in your firewall to be dialable)'))
 
 // the peer book: every door we ever opened, remembered on disk
@@ -128,6 +158,18 @@ const syncSources = (pillarUp ? [pillarAddr] : []).concat(book.map(a => multiadd
 await node.syncFromPeers(syncSources, { allowSingle: true })
 console.log(node.log[node.log.length - 1])
 node.startTicking()
+
+// Milestone 5: if we drift behind the finalized frontier (stall, missed
+// proposals), recover by CERTIFIED replay — every fetched record carries
+// its own quorum proof and is recomputed locally before adoption.
+if (node.agreement) setInterval(async () => {
+  const behind = node.scheduledTick - node.state.tick
+  if (behind <= 10 || node.agreement.halted || node._catchingUp) return
+  node._catchingUp = true
+  try { await node.catchUpFrom(pillarAddr, node.scheduledTick - 1) }
+  catch (e) { console.log('[sync] certified catch-up: ' + e.message) }
+  node._catchingUp = false
+}, 5000)
 
 const client = new IntervalClient({ node, identity: me })
 

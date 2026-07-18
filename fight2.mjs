@@ -31,7 +31,7 @@ const info = await (await fetch(URL_.replace(/\/$/, '') + '/api/genesis')).json(
 const host = new URL(URL_).hostname
 const proto = /^\d+\.\d+\.\d+\.\d+$/.test(host) ? 'ip4' : 'dns4' // names resolve via dns4
 const pillarAddr = multiaddr(`/${proto}/${host}/tcp/${info.p2pPort}/p2p/${info.peerId}`)
-console.log(`world ${info.genesis.rulesHash.slice(0, 12)}… · joining as a full peer`)
+console.log(`world ${E.worldId(info.genesis).slice(0, 12)}… · joining as a full peer`)
 
 // 2. verify we run the same constitution before anything else
 const myRulesHash = E.sha256(fs.readFileSync(new URL('./SPEC.md', import.meta.url))).toString('hex')
