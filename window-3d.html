@@ -218,7 +218,24 @@
      painting them 60–90% horizon-white at their distance: the material
      now mixes real rock in the hour's light with only as much haze as
      the murk earns, so blue-gray slopes carry white caps by day, warm
-     at the horizon hours, and go near-black against the night. -->
+     at the horizon hours, and go near-black against the night.
+
+     Then the tools learned their handedness and the frame found its
+     edge. The rod was held UPSIDE DOWN — thin tip in the fist, butt
+     swinging in the air, line knotted mid-shaft — a spear with a bead
+     on it; rebuilt: butt in the fist, shaft tapering away down the
+     cast, the arm raised to carry it out over the water, and the line
+     group counter-rotated to hang plumb from the very tip, bobber at
+     its end. The pick turned a quarter: its tines now ride IN the
+     swing plane instead of striking the rock broadside. Bare fists
+     draw the bronze sword when the fighting starts — the reference
+     window always showed a blade for the unarmed, and the two windows
+     now agree (the swing was already the unarmed default; only the eye
+     needed convincing). The walk-lean eased from a headwind to a hint.
+     And the grade grew an unsharp mask — four neighbours make a blur
+     and the frame is pushed away from it, edges biting at every
+     pixel-ratio the governor chooses — while the rim fringe pulled
+     back from smear to character. -->
 <html>
 <head>
 <meta charset="utf-8">
@@ -1178,20 +1195,28 @@ const V3A = new THREE.Vector3(), V3B = new THREE.Vector3(), V3C = new THREE.Vect
 let composer = null, bloomPass = null, gradePass = null, fxaaPass = null, shaftPass = null
 const GradeShader = {
   uniforms: { tDiffuse: { value: null }, uSat: { value: 1.14 }, uVig: { value: 0.36 }, uNight: { value: 0 },
-    uWarm: { value: 0 }, uTime: { value: 0 } },
+    uWarm: { value: 0 }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1 / 1920, 1 / 1080) },
+    uSharp: { value: 0.45 } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform float uSat; uniform float uVig; uniform float uNight;
-    uniform float uWarm; uniform float uTime;
+    uniform float uWarm; uniform float uTime; uniform vec2 uRes; uniform float uSharp;
     varying vec2 vUv;
     void main() {
       vec2 q = vUv - 0.5;
       float r2 = dot(q, q);
-      vec2 ca = q * r2 * r2 * 0.055;                       // fringe only at the very rim now
+      vec2 ca = q * r2 * r2 * 0.020;                       // the fringe pulled back: character, not smear
       vec3 c;
       c.r = texture2D(tDiffuse, vUv + ca).r;
       c.g = texture2D(tDiffuse, vUv).g;
       c.b = texture2D(tDiffuse, vUv - ca).b;
+      // ---- the unsharp mask: four neighbours make a blur, and the
+      // frame is pushed away from it. Edges bite; flats stay flat. ----
+      vec3 nb = texture2D(tDiffuse, vUv + vec2(uRes.x, 0.0)).rgb
+              + texture2D(tDiffuse, vUv - vec2(uRes.x, 0.0)).rgb
+              + texture2D(tDiffuse, vUv + vec2(0.0, uRes.y)).rgb
+              + texture2D(tDiffuse, vUv - vec2(0.0, uRes.y)).rgb;
+      c = max(c + (c - nb * 0.25) * uSharp, vec3(0.0));
       float l = dot(c, vec3(0.299, 0.587, 0.114));
       c = mix(vec3(l), c, uSat);
       c = (c - 0.5) * 1.10 + 0.5;                         // a little contrast, against the haze
@@ -1266,6 +1291,8 @@ function buildComposer() {
   shaftPass = new THREE.ShaderPass(SunShaftShader) // after bloom: the rays inherit the halo
   composer.addPass(shaftPass)
   gradePass = new THREE.ShaderPass(GradeShader)
+  { const pr0 = Math.min(devicePixelRatio, 2)
+    gradePass.uniforms.uRes.value.set(1 / (innerWidth * pr0), 1 / (innerHeight * pr0)) }
   composer.addPass(gradePass)
   fxaaPass = new THREE.ShaderPass(THREE.FXAAShader)
   const pr = Math.min(devicePixelRatio, 2)
@@ -1281,6 +1308,7 @@ addEventListener('resize', () => {
     composer.setSize(innerWidth, innerHeight)
     const pr = Math.min(devicePixelRatio, 2)
     if (fxaaPass) fxaaPass.material.uniforms.resolution.value.set(1 / (innerWidth * pr), 1 / (innerHeight * pr))
+    if (gradePass) gradePass.uniforms.uRes.value.set(1 / (innerWidth * pr), 1 / (innerHeight * pr))
   }
 })
 
@@ -3641,19 +3669,30 @@ function beingMesh(kind, id, thing) {
         tine.rotation.z = -sx3 * (Math.PI / 2 + 0.3)
         pick.add(tine)
       } }
+    pick.rotation.y = Math.PI / 2 // the tines ride IN the swing plane: the old pick struck the rock broadside
     pick.scale.setScalar(TOOL_SCALE)
     pick.visible = false; hand.add(pick); g.userData.pick = pick
     const rod = new THREE.Group()
-    { const rh = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.014, 0.52, 5), M(0x8a5a2a, 0.7)))
-      rh.position.y = -0.34; rh.rotation.x = -0.5; rod.add(rh)
-      const grip2 = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.018, 0.12, 6), wrapM)
-      grip2.rotation.x = -0.5; grip2.position.set(0, -0.515, 0.096); rod.add(grip2)
-      const reel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.016, 8), metal(0x8a8a82, 0.4, 0.6))
-      reel.rotation.z = Math.PI / 2; reel.position.set(0, -0.46, 0.06); rod.add(reel)
-      const line = new THREE.Mesh(new THREE.CylinderGeometry(0.002, 0.002, 0.3, 3), M(0xd9d3c0, 0.4))
-      line.position.set(0, -0.26, -0.125); rod.add(line) // the line hangs from the tip
-      const bob = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 5), M(0xc0392b, 0.5))
-      bob.position.set(0, -0.41, -0.125); rod.add(bob) } // and the bobber waits
+    { // the rod REBUILT: the old one was held upside down — thin tip at
+      // the fist, butt swinging in the air, line knotted mid-shaft — a
+      // spear with a bead on it. Now the butt sits in the fist, the
+      // shaft tapers AWAY down the cast, and the line group is
+      // counter-rotated so it hangs plumb at the fishing arm's angle,
+      // bobber waiting at its end.
+      const rh = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.005, 0.85, 6), M(0x8a5a2a, 0.7)))
+      rh.position.y = -0.445; rod.add(rh)
+      const grip2 = new THREE.Mesh(new THREE.CylinderGeometry(0.019, 0.02, 0.14, 6), wrapM)
+      grip2.position.y = -0.09; rod.add(grip2)
+      const reel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.016, 8), metal(0x8a8a82, 0.4, 0.6))
+      reel.rotation.z = Math.PI / 2; reel.position.set(0, -0.18, 0.035); rod.add(reel)
+      const lineGrp = new THREE.Group()
+      lineGrp.position.set(0, -0.86, 0)  // from the very tip
+      lineGrp.rotation.x = 1.8           // plumb, once the arm is raised to its cast
+      const line = new THREE.Mesh(new THREE.CylinderGeometry(0.0018, 0.0018, 0.62, 3), M(0xd9d3c0, 0.4))
+      line.position.y = -0.31; lineGrp.add(line)
+      const bob = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 5), M(0xc0392b, 0.5))
+      bob.position.y = -0.62; lineGrp.add(bob) // and the bobber waits
+      rod.add(lineGrp) }
     rod.scale.setScalar(TOOL_SCALE)
     rod.visible = false; hand.add(rod); g.userData.rod = rod
     // sword: the blade, its tip and its fuller SHARE one material, so the
@@ -4037,7 +4076,7 @@ function syncBeings(s, prev) {
         // ---- the body means its movement: lean into the walk and the
         // strike, roll into the turn, dip when the axe lands ----
         an.turn = (an.turn ?? 0) * 0.9
-        const leanTgt = mvA * 0.13 + imp * 0.1 + (fighting ? 0.05 + strikeT2 * 0.12 : 0)
+        const leanTgt = mvA * 0.055 + imp * 0.1 + (fighting ? 0.05 + strikeT2 * 0.12 : 0) // a hint of intent, not a headwind
         an.lean = lerp(an.lean, leanTgt, 1 - Math.exp(-dt3 * 8))
         an.roll = lerp(an.roll, Math.max(-0.16, Math.min(0.16, -an.turn * 1.4)) + s5 * 0.02 * mvA, 1 - Math.exp(-dt3 * 8))
         m.rotation.x = an.lean
@@ -4098,7 +4137,7 @@ function syncBeings(s, prev) {
               : -s5 * 0.5 * mvA + idleSw
         m.userData.arms[1].rotation.x = fighting ? strikeA
           : (working && !fishingW) ? chopA
-            : fishingW ? (-1.25 + Math.sin(nowMs / 1300 + an.seed) * 0.06)
+            : fishingW ? (-1.3 + Math.sin(nowMs / 1300 + an.seed) * 0.05) // the cast held out over the water
               : s5 * 0.5 * mvA + idleSw
         // the felling swing owns the lateral axis; every other state
         // hands it back at zero so the arms hang honest
@@ -4144,7 +4183,12 @@ function syncBeings(s, prev) {
         // sword growing from the same fist.
         const toolOut = !!(m.userData.hatchet?.visible || m.userData.pick?.visible || m.userData.rod?.visible)
         const wep = toolOut ? null : thing.equipment?.weapon?.item
-        m.userData.sword.visible = wep === 'bronze-sword' || wep === 'star-sword'
+        // bare fists still show a blade — the reference window draws a
+        // sword for the unarmed, and the two windows should agree. The
+        // swing style is already the unarmed default, so only the eye
+        // needed convincing.
+        const bareBlade = fighting && !toolOut && !thing.equipment?.weapon?.item
+        m.userData.sword.visible = wep === 'bronze-sword' || wep === 'star-sword' || bareBlade
         m.userData.sword.material.color.set(wep === 'star-sword' ? 0x8ce0ff : 0xc9c2b2)
         m.userData.sword.material.emissive.set(wep === 'star-sword' ? 0x1c6a8e : 0x000000) // starlight in the steel
         m.userData.sword.material.emissiveIntensity = wep === 'star-sword' ? 0.9 : 0
@@ -5313,11 +5357,13 @@ function animate(now) {
   else { slowStreak = 0; fastStreak = 0 }
   if (slowStreak > 90 && quality > 0.5) {
     quality = 0.5; renderer.setPixelRatio(1); if (composer) composer.setPixelRatio(1); slowStreak = 0
+    if (gradePass) gradePass.uniforms.uRes.value.set(1 / innerWidth, 1 / innerHeight) // the sharpen follows the true pixel
     if (shaftPass) shaftPass.enabled = false // the rays are the first luxury surrendered
     feed('easing the graphics for a smoother frame')
   } else if (fastStreak > 200 && quality < 1) {
     quality = 1; const pr = Math.min(devicePixelRatio, 2)
     renderer.setPixelRatio(pr); if (composer) composer.setPixelRatio(pr); fastStreak = 0
+    if (gradePass) gradePass.uniforms.uRes.value.set(1 / (innerWidth * pr), 1 / (innerHeight * pr))
     if (shaftPass) shaftPass.enabled = true // and the first restored
   }
   // ---- the shafts: find the sun on the screen and rake the light from it.
