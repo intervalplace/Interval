@@ -95,6 +95,7 @@ function itemSprite(item) {
       g.strokeStyle = '#6b6b62'; g.lineWidth = 1
       g.beginPath(); g.ellipse(8, 24, 2.6, 3.4, -0.78, 0, 7); g.stroke()
       break }
+    case 'cooked-fish': fishBody('#d9a05e', '#96622a'); break
   }
   ICON_CV[item] = c
   return c

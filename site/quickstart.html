@@ -34,9 +34,14 @@
   Manual</a> has all sixteen skills and everything else.</p>
 
   <h2>Join the live world with your own node</h2>
-  <p>The browser window above plays through this site's node, which holds
-  your key for you. To hold your own key and verify every tick yourself,
-  run a full peer. Your machine computes the whole world independently,
+  <p>The browser window above already makes your key on your own machine
+  and keeps it there: it is generated in the browser, never sent anywhere,
+  and every deed you commit is signed locally before it is gossiped. (Only
+  if your browser cannot do Ed25519 at all does the node sign on your
+  behalf, and it will say so.) What the window does not do is verify: it
+  trusts this site's node to tell it the truth about the world. To check
+  every tick yourself instead of taking anyone's word for it, run a full
+  peer. Your machine computes the whole world independently,
   checks each finalized interval against the constitution, and never
   trusts a state it did not recompute.</p>
   <pre>git clone https://github.com/intervalplace/interval
