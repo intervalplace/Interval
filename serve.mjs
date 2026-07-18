@@ -162,7 +162,8 @@ function hiscores() {
 }
 
 const PAGES = { '/': 'index.html', '/quickstart': 'quickstart.html',
-                '/manual': 'manual.html', '/hiscores': 'hiscores.html' }
+                '/manual': 'manual.html', '/hiscores': 'hiscores.html',
+                '/play': 'windows.html', '/windows': 'windows.html' }
 const MIME = { html: 'text/html', css: 'text/css', js: 'text/javascript' }
 
 const server = http.createServer((req, res) => {
@@ -217,8 +218,10 @@ const server = http.createServer((req, res) => {
       return json({ playerId: hit[0], ...hit[1] })
     }
     const NC = { 'Cache-Control': 'no-cache' } // stale windows caused ghost bugs
-    if (path === '/play') { res.writeHead(200, { 'Content-Type': 'text/html', ...NC }); return res.end(fs.readFileSync(new URL('./window-web.html', import.meta.url))) }
-    if (path === '/deluxe') { res.writeHead(200, { 'Content-Type': 'text/html', ...NC }); return res.end(fs.readFileSync(new URL('./window-3d.html', import.meta.url))) }
+    // /play is the doorway: a window is a choice, and the choice is shown.
+    // The old paths keep working, since links live longer than layouts.
+    if (path === '/play/flat' || path === '/window-web') { res.writeHead(200, { 'Content-Type': 'text/html', ...NC }); return res.end(fs.readFileSync(new URL('./window-web.html', import.meta.url))) }
+    if (path === '/play/deep' || path === '/deluxe') { res.writeHead(200, { 'Content-Type': 'text/html', ...NC }); return res.end(fs.readFileSync(new URL('./window-3d.html', import.meta.url))) }
     if (path.startsWith('/site/')) {
       const f = path.slice(6).replace(/[^a-z0-9.-]/g, '')
       const ext = f.split('.').pop()

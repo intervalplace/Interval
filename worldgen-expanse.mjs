@@ -33,6 +33,21 @@ export function seedNum(g) {
   _seedNums.set(g.genesisSeed, v)
   return v
 }
+// Land must be grown identically by every implementation, so terrain uses only
+// operations IEEE-754 requires to be exactly rounded: + - * / and Math.sqrt.
+// NOT Math.sin: ECMA-262 leaves the transcendentals implementation-defined, so
+// two engines may differ in the last place, and one tile of disagreement about
+// where the river runs is two different worlds. A meander is built instead from
+// hashed control points, smoothly joined — which is also closer to how water
+// and footpaths actually behave than a sine wave is.
+export function meander(g, tag, u, seg, amp) {
+  const k = Math.floor(u / seg)
+  const f = (u - k * seg) / seg
+  const a = (thash(g, k, 0, tag) % (2 * amp + 1)) - amp
+  const b = (thash(g, k + 1, 0, tag) % (2 * amp + 1)) - amp
+  const sf = f * f * (3 - 2 * f) // smoothstep: eased bends, exact arithmetic
+  return a + (b - a) * sf
+}
 export function thash(g, x, y, k) {
   let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(k | 0, 2246822519) + seedNum(g)) | 0
   h = Math.imul(h ^ (h >>> 13), 1274126177)
@@ -48,7 +63,7 @@ export const wildsX1 = (g) => Math.round(g.worldW * 0.19)
 // terrain is asked for the same row hundreds of thousands of times per build.
 export function riverX(g, y) {
   const cx = Math.floor(g.worldW / 2)
-  return cx + Math.round(Math.sin(y / 34) * 26 + Math.sin(y / 11) * 5) + (thash(g, 0, y, 11) % 3) - 1
+  return cx + Math.round(meander(g, 21, y, 46, 26) + meander(g, 22, y, 14, 5))
 }
 // The bay: the southeast is open water.
 export function inSea(g, x, y) {
@@ -92,19 +107,63 @@ export const rectOf = (s) => ({
 
 // Roads: every road leads to Anchor. Spokes, not a maze — a world you can
 // navigate by memory. Roads carry no nodes, so they cost the tick nothing.
-export function onRoad(g, x, y) {
+// Where a trail bends, and what it bends around. A path that wanders for no
+// reason is noise; a path that wanders around a boulder is a landmark, and
+// "left at the split rock" is how people actually navigate. So the bends are
+// computed first, and the thing being avoided is placed where the trail WOULD
+// have run had it gone straight, which is the physically true position for it.
+export function roadBendsOf(g) {
   const ss = settlementsOf(g), a = ss[0]
+  const out = []
   for (let i = 1; i < ss.length; i++) {
     const s = ss[i]
     const vx = s.x - a.x, vy = s.y - a.y
-    const L2 = vx * vx + vy * vy
-    let t = ((x - a.x) * vx + (y - a.y) * vy) / L2
-    if (t < 0 || t > 1) continue
-    const px = a.x + vx * t, py = a.y + vy * t
-    if (Math.abs(x - px) + Math.abs(y - py) * 0.6 <= 1.6) return true
+    const L = Math.sqrt(vx * vx + vy * vy)
+    const segs = Math.max(2, Math.round(L / 26))
+    for (let k = 1; k < segs; k++) {
+      const u = k * 26
+      const t = u / L
+      if (t <= 0.08 || t >= 0.92) continue // the trail runs straight into a gate
+      const taper = Math.min(1, Math.min(t, 1 - t) * 6)
+      const off = meander(g, 90 + i, u, 26, 9) * taper
+      if (Math.abs(off) < 4) continue // too slight a bend to have a cause
+      // the straight line the trail declined to take: that is where the
+      // obstacle stands, and the trail is bending around it
+      out.push({ x: Math.round(a.x + vx * t), y: Math.round(a.y + vy * t), off })
+    }
   }
-  return false
+  return out
 }
+
+const _roadMemo = new Map()
+export function roadTilesOf(g) {
+  const key = g.genesisSeed + ':' + g.worldW + 'x' + g.worldH
+  const hit = _roadMemo.get(key)
+  if (hit) return hit
+  const ss = settlementsOf(g), a = ss[0]
+  const set = new Set()
+  for (let i = 1; i < ss.length; i++) {
+    const s = ss[i]
+    const vx = s.x - a.x, vy = s.y - a.y
+    const L = Math.sqrt(vx * vx + vy * vy)
+    const nx = -vy / L, ny = vx / L // the direction "sideways" from the straight run
+    const steps = Math.ceil(L * 2)
+    for (let stp = 0; stp <= steps; stp++) {
+      const t = stp / steps
+      // a trail wanders where the country is open and straightens as it comes
+      // in to a gate, so roads still meet their towns square on
+      const taper = Math.min(1, Math.min(t, 1 - t) * 6)
+      const o = meander(g, 90 + i, t * L, 26, 9) * taper
+      const px = Math.round(a.x + vx * t + nx * o)
+      const py = Math.round(a.y + vy * t + ny * o)
+      set.add(px + ',' + py)
+      set.add((px + 1) + ',' + py) // two tiles wide: a road, not a scratch
+    }
+  }
+  _roadMemo.set(key, set)
+  return set
+}
+export const onRoad = (g, x, y) => roadTilesOf(g).has(x + ',' + y)
 
 // ---------- the five countries ----------
 export function biomeAt(g, x, y) {
@@ -233,6 +292,24 @@ export function buildWorld(genesis) {
     }
   }
 
+  // ---- what the trails go around ----
+  // Placed before the country is scattered, so a waymark keeps its ground: an
+  // old boulder in stone country, an old tree in green country. Both are
+  // ordinary resources, so a landmark is also somewhere to work.
+  let wm = 0
+  for (const b of roadBendsOf(g)) {
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, -1]]) {
+      const x = b.x + dx, y = b.y + dy
+      if (!free(x, y)) continue
+      const bi = biomeAt(g, x, y)
+      const stone = bi === 'crags' || bi === 'wilds' || (thash(g, x, y, 61) % 3) === 0
+      taken.add(key(x, y))
+      E.addNode(w, 'waymark-' + (wm++), stone ? 'rock' : 'tree', x, y)
+      break
+    }
+  }
+  const _waymarks = wm
+
   // ---- the country itself: each biome's signature ----
   const scatter = (tag, want, pred, place) => {
     let n = 0
@@ -249,7 +326,7 @@ export function buildWorld(genesis) {
   const rock = (id, x, y) => E.addNode(w, id, 'rock', x, y)
   const mrock = (id, x, y) => E.addNode(w, id, 'magic-rock', x, y)
 
-  const counts = {}
+  const counts = { waymarks: _waymarks }
   counts.greenwoodTrees = scatter('gwtree', 620, (x, y) => B(x, y) === 'greenwood', tree)
   counts.heartTrees     = scatter('httree', 210, (x, y) => B(x, y) === 'heartlands', tree)
   counts.fenTrees       = scatter('fntree', 130, (x, y) => B(x, y) === 'fens', tree)

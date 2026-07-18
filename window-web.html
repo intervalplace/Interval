@@ -279,6 +279,50 @@ function itemSprite(item) {
       pl([[9,6],[23,6],[26,12],[24,26],[8,26],[6,12]], '#5cb8d9', '#2a7d9e')
       g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(15.2, 6, 1.6, 20)
       g.fillStyle = 'rgba(255,255,255,.3)'; g.fillRect(9, 7.5, 14, 1.6); break
+    // ---- the shapes (v0.66): each reads as itself at a glance ----
+    case 'bronze-dagger': case 'star-dagger': {
+      const star = item.startsWith('star-')
+      const blade = star ? '#c8f0ff' : '#e4ddc9', edge = star ? '#54a8cc' : '#9a927e'
+      pl([[15,26],[17,26],[18,12],[16,5],[14,12]], blade, edge)   // short leaf blade
+      g.fillStyle = '#5c4023'; g.fillRect(13.5, 25.5, 5, 2.4)      // guard
+      g.fillStyle = '#3b2a16'; g.fillRect(15, 27.6, 2, 3.4)        // stub grip
+      if (star) { g.fillStyle = 'rgba(120,220,255,.35)'; g.fillRect(15.4, 8, 1.2, 16) }
+      break }
+    case 'bronze-spear': case 'star-spear': {
+      const star = item.startsWith('star-')
+      const head = star ? '#c8f0ff' : '#e4ddc9', edge = star ? '#54a8cc' : '#9a927e'
+      g.strokeStyle = '#7a5124'; g.lineWidth = 2.6                 // the long haft
+      g.beginPath(); g.moveTo(9, 30); g.lineTo(21, 8); g.stroke()
+      g.strokeStyle = '#5c3d1b'; g.lineWidth = 1
+      g.beginPath(); g.moveTo(9, 30); g.lineTo(21, 8); g.stroke()
+      pl([[21,8],[24,1],[26,9],[22,11]], head, edge)               // narrow point
+      g.fillStyle = '#4a4a52'; g.fillRect(18.5, 10.5, 4.6, 2.2)    // collar
+      if (star) { g.fillStyle = 'rgba(120,220,255,.4)'; g.fillRect(22.6, 3, 1, 6) }
+      break }
+    case 'bronze-maul': case 'star-maul': {
+      const star = item.startsWith('star-')
+      const head = star ? '#bfe6f5' : '#d8d1bc', edge = star ? '#4c98bb' : '#8b846f'
+      g.strokeStyle = '#6b4720'; g.lineWidth = 3                   // heavy haft
+      g.beginPath(); g.moveTo(11, 30); g.lineTo(18, 14); g.stroke()
+      pl([[9,15],[20,9],[25,15],[23,20],[12,21]], head, edge)      // the great block
+      g.fillStyle = edge; g.fillRect(12.5, 12.5, 3, 7)             // banded face
+      if (star) { g.fillStyle = 'rgba(140,225,255,.4)'; g.fillRect(19, 11, 2, 8) }
+      g.fillStyle = '#3b2a16'; g.fillRect(9.5, 28, 3.4, 3.4)       // butt
+      break }
+    case 'horn-bow': {
+      g.strokeStyle = '#6b5238'; g.lineWidth = 3.4                 // recurved horn limbs
+      g.beginPath(); g.arc(13, 16, 11.5, -1.35, 1.35); g.stroke()
+      g.strokeStyle = '#3f3020'; g.lineWidth = 1.2
+      g.beginPath(); g.arc(13, 16, 11.5, -1.35, 1.35); g.stroke()
+      g.strokeStyle = '#c9a86a'; g.lineWidth = 2.4                 // horn tips, paler
+      for (const a of [-1.35, 1.35]) {
+        g.beginPath(); g.arc(13, 16, 11.5, a - 0.28, a); g.stroke()
+      }
+      g.strokeStyle = '#efe7cf'; g.lineWidth = 1                   // the string
+      g.beginPath(); g.moveTo(13 + Math.cos(-1.35) * 11.5, 16 + Math.sin(-1.35) * 11.5)
+      g.lineTo(13 + Math.cos(1.35) * 11.5, 16 + Math.sin(1.35) * 11.5); g.stroke()
+      g.fillStyle = '#8a6a3a'; g.fillRect(23, 14, 3, 4)            // the grip
+      break }
     case 'old-chain': {
       g.strokeStyle = '#8a8a82'; g.lineWidth = 2
       for (let li = 0; li < 5; li++) {
@@ -310,25 +354,38 @@ const ICONS = new Proxy({}, { get: (t, item) => typeof item === 'string'
   ? '<img src="' + itemSprite(item).toDataURL() + '" style="width:24px;height:24px;image-rendering:pixelated;vertical-align:middle">'
   : undefined, has: () => true })
 const EQUIPPABLE = new Set(['bronze-sword', 'bronze-hatchet', 'bronze-pickaxe', 'bronze-helm', 'bronze-plate', 'wooden-bow', 'star-sword', 'star-dagger', 'star-helm', 'star-plate', 'old-chain'])
-const XP_TABLE = (() => { const t = [0, 0]; let pts = 0
-  for (let l = 2; l <= 99; l++) { pts += Math.floor((l-1) + 300 * Math.pow(2, (l-1)/7)); t[l] = Math.floor(pts/4) }
-  return t })()
-const XP_TO_LVL = xp => {
+// >>> CONSTITUTIONAL IDENTITY BLOCK (spec 4b, spec 10) — character for
+// character the same in every window and in engine.js. test/identity.test.mjs
+// extracts this block from each window and compares it against the engine, so
+// no window can quietly invent its own idea of what a citizen is again.
+// the constitutional thresholds themselves, copied not recomputed (spec 4b)
+const XP_TABLE = [0,0,83,174,276,388,512,650,801,969,1154,1358,1584,1833,2107,2411,2746,3115,3523,3973,4470,5018,5624,6291,7028,7842,8740,9730,10824,12031,13363,14833,16456,18247,20224,22406,24815,27473,30408,33648,37224,41171,45529,50339,55649,61512,67983,75127,83014,91721,101333,111945,123660,136594,150872,166636,184040,203254,224466,247886,273742,302288,333804,368599,407015,449428,496254,547953,605032,668051,737627,814445,899257,992895,1096278,1210421,1336443,1475581,1629200,1798808,1986068,2192818,2421087,2673114,2951373,3258594,3597792,3972294,4385776,4842295,5346332,5902831,6517253,7195629,7944614,8771558,9684577,10692629,11805606,13034431];
+const XP_TO_LVL = (xp) => {
   let l = 1
   while (l < 99 && xp >= XP_TABLE[l+1]) l++
   if (l < 99 || xp < XP_TABLE[99]) return l
   let points = XP_TABLE[99] * 4
   while (true) { // beyond mastery: honor without bound (spec 4b)
-    points += Math.floor(l + 300 * Math.pow(2, l / 7))
+    points += xpStepAt(l)
     if (xp < Math.floor(points / 4)) return l
     l++
   }
 }
-
-// ---- who a citizen is (spec 10): derived, never invented by a window ----
-// Windows once each had their own idea of "level" and disagreed about the same
-// public state. These are the constitutional definitions, character for
-// character the same in every window and in engine.js.
+// 2^(r/7) scaled by 2^96, as exact integers. ECMA-262 does not require
+// Math.pow to be correctly rounded, so the curve past mastery is computed from
+// these rather than from a float power: two engines that disagreed in the last
+// place would report different standings for the same citizen. (Verified: this
+// reproduces every one of the 98 constitutional thresholds exactly, and V8's
+// own Math.pow already differs from the true value at 15 levels past 267.)
+const POW2_SEVENTHS = [
+  79228162514264337593543950336n, 87474983419643881438334899625n,
+  96580211902419410754522887331n, 106633199189855989094361944303n,
+  117732597035010858756489598210n, 129987325803940059419872279709n,
+  143517643330631577550838571505n]
+function xpStepAt(lvl) { // floor(lvl + 300 * 2^(lvl/7)), exactly
+  const q = BigInt(Math.floor(lvl / 7)), r = lvl % 7
+  return lvl + Number((300n * (1n << q) * POW2_SEVENTHS[r]) >> 96n)
+}
 const CALLINGS = {
   woodcutting: 'forester', mining: 'miner', fishing: 'fisher', cooking: 'cook',
   smithing: 'smith', firemaking: 'firekeeper', prayer: 'mourner', ranged: 'archer',
@@ -343,15 +400,20 @@ function standingOf(p) { // the sum of true levels: mastery is a milestone, not 
   for (const sk of SKILL_ORDER) n += XP_TO_LVL(p?.skills?.[sk] ?? 0)
   return n
 }
-function callingOf(p) { // the trade you are best at, as a word
-  let best = null, bestLvl = 1
+function callingOf(p) { // the trade you have the most experience in, as a word
+  let best = null, bestXp = -1
   for (const sk of SKILL_ORDER) {
     if (sk === 'hitpoints') continue
-    const l = XP_TO_LVL(p?.skills?.[sk] ?? 0)
-    if (l > bestLvl) { bestLvl = l; best = sk }
+    const xp = p?.skills?.[sk] ?? 0
+    if (xp > bestXp) { bestXp = xp; best = sk }
   }
-  return best === null ? 'newcomer' : CALLINGS[best]
+  if (best === null || XP_TO_LVL(bestXp) <= 1) return 'newcomer'
+  // all sixteen: what the world announces as Master of Interval
+  if (SKILL_ORDER.every(sk => (p?.skills?.[sk] ?? 0) >= XP_TABLE[99])) return 'Master of Interval'
+  // mastery is the milestone the world announces, so the calling says it
+  return (bestXp >= XP_TABLE[99] ? 'master ' : '') + CALLINGS[best]
 }
+// <<< CONSTITUTIONAL IDENTITY BLOCK
 const SKILL_OF_NODE = { 'tree': 'woodcutting', 'rock': 'mining', 'fishing-spot': 'fishing' }
 
 let myId = null, myName = '', world = null, intent = null, feedLines = []
@@ -820,7 +882,7 @@ function onState(s, worldId) {
   if (s.genesis && (W !== s.genesis.worldW || !groundReady)) {
     W = s.genesis.worldW; H = s.genesis.worldH
     GEN = s.genesis.worldGenerator ?? GEN; GSEED = s.genesis.genesisSeed ?? ''
-    _seedNumC = null; _ssE = null
+    _seedNumC = null; _ssE = null; _roadSet = null
     buildGround()
   }
   prevState = curState; curState = s; curWorldId = worldId
@@ -1131,9 +1193,17 @@ function thashE(x, y, k) {
   h = Math.imul(h ^ (h >>> 13), 1274126177)
   return (h ^ (h >>> 16)) >>> 0
 }
+function meander(tag, u, seg, amp) {
+  const k = Math.floor(u / seg)
+  const f = (u - k * seg) / seg
+  const a = (thashE(k, 0, tag) % (2 * amp + 1)) - amp
+  const b = (thashE(k + 1, 0, tag) % (2 * amp + 1)) - amp
+  const sf = f * f * (3 - 2 * f)
+  return a + (b - a) * sf
+}
 function riverXE(y) {
   const cx = Math.floor(W / 2)
-  return cx + Math.round(Math.sin(y / 34) * 26 + Math.sin(y / 11) * 5) + (thashE(0, y, 11) % 3) - 1
+  return cx + Math.round(meander(21, y, 46, 26) + meander(22, y, 14, 5))
 }
 function inSeaE(x, y) {
   const bx = W * 0.80, by = H * 0.74
@@ -1163,16 +1233,29 @@ function settlementsE() {
 }
 let _ssE = null
 const ssE = () => (_ssE ??= settlementsE())
-function onRoadE(x, y) {
+let _roadSet = null
+function roadTilesE() {
+  if (_roadSet) return _roadSet
   const ss = ssE(), a = ss[0]
+  const set = new Set()
   for (let i = 1; i < ss.length; i++) {
-    const t2 = ss[i], vx = t2.x - a.x, vy = t2.y - a.y, L2 = vx * vx + vy * vy
-    const t = ((x - a.x) * vx + (y - a.y) * vy) / L2
-    if (t < 0 || t > 1) continue
-    if (Math.abs(x - (a.x + vx * t)) + Math.abs(y - (a.y + vy * t)) * 0.6 <= 1.6) return true
+    const s = ss[i]
+    const vx = s.x - a.x, vy = s.y - a.y
+    const L = Math.sqrt(vx * vx + vy * vy)
+    const nx = -vy / L, ny = vx / L
+    const steps = Math.ceil(L * 2)
+    for (let stp = 0; stp <= steps; stp++) {
+      const t = stp / steps
+      const taper = Math.min(1, Math.min(t, 1 - t) * 6)
+      const o = meander(90 + i, t * L, 26, 9) * taper
+      const px = Math.round(a.x + vx * t + nx * o)
+      const py = Math.round(a.y + vy * t + ny * o)
+      set.add(px + ',' + py); set.add((px + 1) + ',' + py)
+    }
   }
-  return false
+  return (_roadSet = set)
 }
+const onRoadE = (x, y) => roadTilesE().has(x + ',' + y)
 function biomeAtE(x, y) {
   if (x <= Math.round(W * 0.19)) return 'wilds'
   const cx = Math.floor(W / 2), cy = Math.floor(H / 2)
@@ -2859,7 +2942,8 @@ function drawSunMap(s, now) {
   if (now - _miniAt < 66) return   // ~15fps is plenty for a map
   _miniAt = now
   const g = sunCtx, MW = 104, MH = 64, SS = 3, pad = 4, CX = MW / 2, CY = MH / 2
-  if (sunCv.width !== MW * SS) { sunCv.width = MW * SS; sunCv.height = MH * SS; sunCv.style.width = MW + "px"; sunCv.style.height = MH + "px" }
+  const NAMEH = 13 // a strip beneath the map: the country you are standing in
+  if (sunCv.width !== MW * SS) { sunCv.width = MW * SS; sunCv.height = (MH + NAMEH) * SS; sunCv.style.width = MW + "px"; sunCv.style.height = (MH + NAMEH) + "px" }
   const me = s.players[myId]; if (!me) return
   const o = prevState?.players[myId], tt = renderT(now)
   const pxr = o ? lerp(o.x, me.x, tt) : me.x
@@ -2869,6 +2953,19 @@ function drawSunMap(s, now) {
   g.imageSmoothingEnabled = false
   g.clearRect(0, 0, MW, MH)
   g.fillStyle = "#494034"; g.fillRect(0, 0, MW, MH)
+  g.clearRect(0, MH, MW, NAMEH)
+  // the country, named. Geography is law (spec 9d): every window reads the
+  // same boundary from the same founding record, so "meet me at the fens edge"
+  // means one place to everyone who hears it.
+  {
+    const rn = regionNameAt(Math.round(pxr), Math.round(pyr))
+    g.fillStyle = "#181209"; g.fillRect(0, MH, MW, NAMEH)
+    g.fillStyle = "#55462d"; g.fillRect(0, MH, MW, 1)
+    g.font = "bold 8px Verdana"; g.textAlign = "center"; g.textBaseline = "middle"
+    g.fillStyle = "#c6941e"
+    g.fillText(rn, MW / 2, MH + NAMEH / 2 + 0.5)
+    g.textAlign = "left"; g.textBaseline = "alphabetic"
+  }
   g.save(); g.beginPath(); g.rect(pad, pad, MW - pad * 2, MH - pad * 2); g.clip()
   g.fillStyle = "#0e120b"; g.fillRect(0, 0, MW, MH)
   g.drawImage(miniCv, CX - pxr * scale, CY - pyr * scale, W * scale, H * scale)
@@ -2947,10 +3044,32 @@ document.getElementById('offers').addEventListener('click', (e) => {
 })
 
 document.getElementById('say').addEventListener('keydown', (e) => {
+  e.stopPropagation() // while typing, the world hears nothing
+  if (e.key === 'Escape') { e.target.blur(); return }
   if (e.key !== 'Enter') return
   const t = e.target.value.trim()
   if (t) send({ do: 'chat', text: t })
   e.target.value = ''
+  e.target.blur() // hands back to the world, so the next keystroke is speech again
+})
+
+// ---- speak without stopping ----
+// You should not have to put down what you are doing and find a box with the
+// mouse in order to say something. This window walks by tapping, so no letter
+// is spoken for by movement: begin typing and you are simply talking. Enter
+// opens an empty line, Escape steps back out.
+document.addEventListener('keydown', (e) => {
+  const say = document.getElementById('say')
+  if (!say || say.offsetParent === null) return          // not in the world yet
+  const el = document.activeElement
+  if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return
+  if (e.ctrlKey || e.metaKey || e.altKey) return         // leave shortcuts alone
+  if (e.key === 'Enter') { e.preventDefault(); say.focus(); return }
+  if (e.key === 'Escape') { say.value = ''; say.blur(); return }
+  if (e.key.length !== 1) return                         // not a printable key
+  e.preventDefault()
+  say.focus()
+  if (say.value.length < say.maxLength) say.value += e.key
 })
 
 document.getElementById('inv').addEventListener('click', (e) => {

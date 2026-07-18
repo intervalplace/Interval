@@ -1559,9 +1559,17 @@ function thashE(x, y, k) {
   h = Math.imul(h ^ (h >>> 13), 1274126177)
   return (h ^ (h >>> 16)) >>> 0
 }
+function meander(tag, u, seg, amp) {
+  const k = Math.floor(u / seg)
+  const f = (u - k * seg) / seg
+  const a = (thashE(k, 0, tag) % (2 * amp + 1)) - amp
+  const b = (thashE(k + 1, 0, tag) % (2 * amp + 1)) - amp
+  const sf = f * f * (3 - 2 * f)
+  return a + (b - a) * sf
+}
 function riverXE(y) {
   const cx = Math.floor(W / 2)
-  return cx + Math.round(Math.sin(y / 34) * 26 + Math.sin(y / 11) * 5) + (thashE(0, y, 11) % 3) - 1
+  return cx + Math.round(meander(21, y, 46, 26) + meander(22, y, 14, 5))
 }
 function inSeaE(x, y) {
   const bx = W * 0.80, by = H * 0.74
@@ -1590,16 +1598,29 @@ function settlementsE() {
   ]
 }
 const ssE = () => (_ssE ??= settlementsE())
-function onRoadE(x, y) {
+let _roadSet = null
+function roadTilesE() {
+  if (_roadSet) return _roadSet
   const ss = ssE(), a = ss[0]
+  const set = new Set()
   for (let i = 1; i < ss.length; i++) {
-    const t2 = ss[i], vx = t2.x - a.x, vy = t2.y - a.y, L2 = vx * vx + vy * vy
-    const t = ((x - a.x) * vx + (y - a.y) * vy) / L2
-    if (t < 0 || t > 1) continue
-    if (Math.abs(x - (a.x + vx * t)) + Math.abs(y - (a.y + vy * t)) * 0.6 <= 1.6) return true
+    const s = ss[i]
+    const vx = s.x - a.x, vy = s.y - a.y
+    const L = Math.sqrt(vx * vx + vy * vy)
+    const nx = -vy / L, ny = vx / L
+    const steps = Math.ceil(L * 2)
+    for (let stp = 0; stp <= steps; stp++) {
+      const t = stp / steps
+      const taper = Math.min(1, Math.min(t, 1 - t) * 6)
+      const o = meander(90 + i, t * L, 26, 9) * taper
+      const px = Math.round(a.x + vx * t + nx * o)
+      const py = Math.round(a.y + vy * t + ny * o)
+      set.add(px + ',' + py); set.add((px + 1) + ',' + py)
+    }
   }
-  return false
+  return (_roadSet = set)
 }
+const onRoadE = (x, y) => roadTilesE().has(x + ',' + y)
 function biomeAtE(x, y) {
   if (x <= Math.round(W * 0.19)) return 'wilds'
   const cx = Math.floor(W / 2), cy = Math.floor(H / 2)
@@ -2678,23 +2699,54 @@ function spawnXp(amt, skill, pos, stack) {
 // stands — in the inventory's own chrome. ----
 const SKILLS3 = ['woodcutting', 'mining', 'fishing', 'cooking', 'smithing', 'firemaking', 'prayer',
   'ranged', 'magic', 'farming', 'fletching', 'attack', 'defence', 'hitpoints', 'exploration']
+// how each shape moves. Mirrors engine WEAPONS: the rhythm is constitutional,
+// the choreography is this window's own.
+const WEAPON_LOOK = {
+  'bronze-dagger': { every: 2, ranged: false, style: 'quick' },
+  'bronze-sword':  { every: 2, ranged: false, style: 'swing' },
+  'bronze-spear':  { every: 2, ranged: false, style: 'thrust' },
+  'bronze-maul':   { every: 3, ranged: false, style: 'heave' },
+  'star-dagger':   { every: 2, ranged: false, style: 'quick' },
+  'star-sword':    { every: 2, ranged: false, style: 'swing' },
+  'star-spear':    { every: 2, ranged: false, style: 'thrust' },
+  'star-maul':     { every: 3, ranged: false, style: 'heave' },
+  'old-chain':     { every: 1, ranged: false, style: 'whip' },
+  'wooden-bow':    { every: 2, ranged: true,  style: 'draw' },
+  'horn-bow':      { every: 2, ranged: true,  style: 'draw' },
+}
+const lookOf = (it) => WEAPON_LOOK[it] ?? { every: 2, ranged: false, style: 'swing' }
+
 // >>> CONSTITUTIONAL IDENTITY BLOCK (spec 4b, spec 10) — character for
 // character the same in every window and in engine.js. test/identity.test.mjs
 // extracts this block from each window and compares it against the engine, so
 // no window can quietly invent its own idea of what a citizen is again.
-const XP_TABLE = (() => { const t = [0, 0]; let pts = 0
-  for (let l = 2; l <= 99; l++) { pts += Math.floor((l-1) + 300 * Math.pow(2, (l-1)/7)); t[l] = Math.floor(pts/4) }
-  return t })()
+// the constitutional thresholds themselves, copied not recomputed (spec 4b)
+const XP_TABLE = [0,0,83,174,276,388,512,650,801,969,1154,1358,1584,1833,2107,2411,2746,3115,3523,3973,4470,5018,5624,6291,7028,7842,8740,9730,10824,12031,13363,14833,16456,18247,20224,22406,24815,27473,30408,33648,37224,41171,45529,50339,55649,61512,67983,75127,83014,91721,101333,111945,123660,136594,150872,166636,184040,203254,224466,247886,273742,302288,333804,368599,407015,449428,496254,547953,605032,668051,737627,814445,899257,992895,1096278,1210421,1336443,1475581,1629200,1798808,1986068,2192818,2421087,2673114,2951373,3258594,3597792,3972294,4385776,4842295,5346332,5902831,6517253,7195629,7944614,8771558,9684577,10692629,11805606,13034431];
 const XP_LVL = (xp) => {
   let l = 1
   while (l < 99 && xp >= XP_TABLE[l+1]) l++
   if (l < 99 || xp < XP_TABLE[99]) return l
   let points = XP_TABLE[99] * 4
   while (true) { // beyond mastery: honor without bound (spec 4b)
-    points += Math.floor(l + 300 * Math.pow(2, l / 7))
+    points += xpStepAt(l)
     if (xp < Math.floor(points / 4)) return l
     l++
   }
+}
+// 2^(r/7) scaled by 2^96, as exact integers. ECMA-262 does not require
+// Math.pow to be correctly rounded, so the curve past mastery is computed from
+// these rather than from a float power: two engines that disagreed in the last
+// place would report different standings for the same citizen. (Verified: this
+// reproduces every one of the 98 constitutional thresholds exactly, and V8's
+// own Math.pow already differs from the true value at 15 levels past 267.)
+const POW2_SEVENTHS = [
+  79228162514264337593543950336n, 87474983419643881438334899625n,
+  96580211902419410754522887331n, 106633199189855989094361944303n,
+  117732597035010858756489598210n, 129987325803940059419872279709n,
+  143517643330631577550838571505n]
+function xpStepAt(lvl) { // floor(lvl + 300 * 2^(lvl/7)), exactly
+  const q = BigInt(Math.floor(lvl / 7)), r = lvl % 7
+  return lvl + Number((300n * (1n << q) * POW2_SEVENTHS[r]) >> 96n)
 }
 const CALLINGS = {
   woodcutting: 'forester', mining: 'miner', fishing: 'fisher', cooking: 'cook',
@@ -2710,14 +2762,18 @@ function standingOf(p) { // the sum of true levels: mastery is a milestone, not 
   for (const sk of SKILL_ORDER) n += XP_LVL(p?.skills?.[sk] ?? 0)
   return n
 }
-function callingOf(p) { // the trade you are best at, as a word
-  let best = null, bestLvl = 1
+function callingOf(p) { // the trade you have the most experience in, as a word
+  let best = null, bestXp = -1
   for (const sk of SKILL_ORDER) {
     if (sk === 'hitpoints') continue
-    const l = XP_LVL(p?.skills?.[sk] ?? 0)
-    if (l > bestLvl) { bestLvl = l; best = sk }
+    const xp = p?.skills?.[sk] ?? 0
+    if (xp > bestXp) { bestXp = xp; best = sk }
   }
-  return best === null ? 'newcomer' : CALLINGS[best]
+  if (best === null || XP_LVL(bestXp) <= 1) return 'newcomer'
+  // all sixteen: what the world announces as Master of Interval
+  if (SKILL_ORDER.every(sk => (p?.skills?.[sk] ?? 0) >= XP_TABLE[99])) return 'Master of Interval'
+  // mastery is the milestone the world announces, so the calling says it
+  return (bestXp >= XP_TABLE[99] ? 'master ' : '') + CALLINGS[best]
 }
 // <<< CONSTITUTIONAL IDENTITY BLOCK
 function XP_AT(l) { // xp at the foot of level l, past mastery included
@@ -2732,13 +2788,10 @@ function XP_AT(l) { // xp at the foot of level l, past mastery included
 const ICON_URL = {}
 const iconUrl = (item) => ICON_URL[item] ?? (ICON_URL[item] = itemSprite(item).toDataURL())
 const STORE_SELLS3 = { seeds: 15 } // what the store offers (engine STORE_SELLS)
-const RECIPES3 = { 'bronze-sword': { ore: 2, logs: 1 }, 'bronze-hatchet': { ore: 1, logs: 1 },
-  'bronze-pickaxe': { ore: 1, logs: 1 }, 'bronze-helm': { ore: 1, logs: 1 }, 'bronze-plate': { ore: 3, logs: 1 },
-  'star-sword': { 'magic-stone': 3, ore: 2 }, 'star-helm': { 'magic-stone': 2, ore: 1 },
-  'star-plate': { 'magic-stone': 4, ore: 3 }, 'star-dagger': { 'magic-stone': 2, ore: 1 } }
+const RECIPES3 = { 'bronze-dagger': {"ore": 1}, 'bronze-spear': {"ore": 1, "logs": 1}, 'bronze-maul': {"ore": 2, "logs": 1}, 'star-spear': {"magic-stone": 2, "ore": 1, "logs": 1}, 'star-maul': {"magic-stone": 3, "ore": 2, "logs": 1}, 'bronze-sword': {"ore": 2, "logs": 1}, 'bronze-hatchet': {"ore": 1, "logs": 1}, 'bronze-pickaxe': {"ore": 1, "logs": 1}, 'bronze-helm': {"ore": 1, "logs": 1}, 'bronze-plate': {"ore": 3, "logs": 1}, 'star-sword': {"magic-stone": 3, "ore": 2}, 'star-helm': {"magic-stone": 2, "ore": 1}, 'star-plate': {"magic-stone": 4, "ore": 3}, 'star-dagger': {"magic-stone": 2, "ore": 1} }
 const SMITH_REQS3 = { 'star-sword': { smithing: 20, magic: 10 }, 'star-helm': { smithing: 15, magic: 5 },
   'star-plate': { smithing: 30, magic: 15 }, 'star-dagger': { smithing: 20, magic: 15 } }
-const PRICES3 = { 'logs': 2, 'ore': 5, 'raw-fish': 3, 'cooked-fish': 6, 'bones': 2, 'arrows': 1, 'magic-stone': 20, 'bronze-sword': 15, 'bronze-hatchet': 10, 'bronze-pickaxe': 10, 'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8, 'grain': 4, 'star-sword': 120, 'star-helm': 60, 'star-plate': 200 } // mirrors engine PRICES
+const PRICES3 = { 'bronze-dagger': 8, 'bronze-spear': 14, 'bronze-maul': 22, 'star-spear': 100, 'star-maul': 160, 'horn-bow': 90, 'logs': 2, 'ore': 5, 'raw-fish': 3, 'cooked-fish': 6, 'bones': 2, 'arrows': 1, 'magic-stone': 20, 'bronze-sword': 15, 'bronze-hatchet': 10, 'bronze-pickaxe': 10, 'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8, 'grain': 4, 'star-sword': 120, 'star-helm': 60, 'star-plate': 200 } // mirrors engine PRICES
 function nearNodeOf(me2, tt) {
   return Object.values(world?.nodes ?? {}).some((n2) => n2.type === tt && Math.abs(n2.x - me2.x) <= 1 && Math.abs(n2.y - me2.y) <= 1)
 }
@@ -3359,7 +3412,7 @@ function beingMesh(kind, id, thing) {
     const bronzeM = metal(0xb07a34, 0.38, 0.6)
     const bronzeHiM = metal(0xd8a050, 0.28, 0.75)
     const hatchet = new THREE.Group()
-    { const hh = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.024, 0.34, 7), woodM))
+    { const hh = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.024, 0.34, 7), shapeWood))
       hh.position.y = -0.3; hatchet.add(hh)
       const wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.021, 0.06, 7), wrapM)
       wrap.position.y = -0.43; hatchet.add(wrap)
@@ -3371,7 +3424,7 @@ function beingMesh(kind, id, thing) {
       poll.position.set(-0.02, -0.44, 0); hatchet.add(poll) }
     hatchet.visible = false; hand.add(hatchet); g.userData.hatchet = hatchet
     const pick = new THREE.Group()
-    { const ph2 = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.024, 0.36, 7), woodM))
+    { const ph2 = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.024, 0.36, 7), shapeWood))
       ph2.position.y = -0.32; pick.add(ph2)
       const wrap2 = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.021, 0.06, 7), wrapM)
       wrap2.position.y = -0.45; pick.add(wrap2)
@@ -3444,6 +3497,48 @@ function beingMesh(kind, id, thing) {
         chain.add(link)
       } }
     chain.visible = false; hand.add(chain); g.userData.chain = chain
+    // ---- the other shapes, in hand (v0.66) ----
+    const shapeSteel = (star) => new THREE.MeshStandardMaterial({
+      color: star ? 0xc8f0ff : 0xe4ddc9, roughness: 0.34, metalness: 0.72,
+      emissive: star ? 0x1d5570 : 0x000000, emissiveIntensity: star ? 0.5 : 0 })
+    const shapeWood = new THREE.MeshStandardMaterial({ color: 0x6b4720, roughness: 0.9 })
+    const shapes = {}
+    for (const star of [false, true]) {
+      const tag = star ? 'star' : 'bronze'
+      // dagger: a short blade, close to the fist
+      const dg = new THREE.Group()
+      const dgB = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.34, 0.015), shapeSteel(star))
+      dgB.position.y = 0.2; dg.add(dgB)
+      dg.add(new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.03, 0.04), shapeWood))
+      shapes[tag + '-dagger'] = dg
+      // spear: a long haft and a narrow head
+      const sp = new THREE.Group()
+      const hf = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 1.5, 6), shapeWood)
+      hf.position.y = 0.45; sp.add(hf)
+      const hd = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.28, 6), shapeSteel(star))
+      hd.position.y = 1.3; sp.add(hd)
+      shapes[tag + '-spear'] = sp
+      // maul: a great block on a heavy haft
+      const ml = new THREE.Group()
+      const mh = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.85, 6), shapeWood)
+      mh.position.y = 0.3; ml.add(mh)
+      const blk = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, 0.2), shapeSteel(star))
+      blk.position.y = 0.8; ml.add(blk)
+      shapes[tag + '-maul'] = ml
+    }
+    // the horn-bow: recurved, paler at the tips
+    const hb = new THREE.Group()
+    const limb = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.028, 6, 16, Math.PI * 1.1),
+      new THREE.MeshStandardMaterial({ color: 0x6b5238, roughness: 0.75 }))
+    limb.rotation.z = Math.PI / 2; limb.position.y = 0.45; hb.add(limb)
+    const strg = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.82, 4),
+      new THREE.MeshStandardMaterial({ color: 0xefe7cf }))
+    strg.position.set(0.16, 0.45, 0); hb.add(strg)
+    shapes['horn-bow'] = hb
+    for (const [k, mesh] of Object.entries(shapes)) {
+      mesh.visible = false; hand.add(mesh)
+    }
+    g.userData.shapes = shapes
     // the swing leaves its light: an arc that flares with the whip
     const trail = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.46, 12, 1, -0.4, 1.9),
       new THREE.MeshBasicMaterial({ color: 0xfff2d9, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }))
@@ -3632,27 +3727,63 @@ function syncBeings(s, prev) {
         const working = thing.action?.type === 'gather'
         const nd2 = working ? s.nodes[thing.action.nodeId] : null
         const fishingW = nd2?.type === 'fishing-spot'
-        const exch = fighting && ((s.tick - (thing.action.since ?? 0)) % 2 === 0
-          || thing.equipment?.weapon?.item === 'old-chain')
+        const look0 = lookOf(thing.equipment?.weapon?.item)
+        const exch = fighting && ((s.tick - (thing.action.since ?? 0)) % look0.every === 0)
         // ---- the strike, in three acts: a slow coiling windup, a whip
         // past vertical, a recovery that eases home. Not a metronome. ----
         let strikeA = -1.1, strikeT2 = 0 // the guard between exchanges
         if (exch) {
-          if (t2 < 0.42) { const u = t2 / 0.42, e = u * u * (3 - 2 * u); strikeA = -1.1 - e * 1.4 }
-          else if (t2 < 0.6) { const u = (t2 - 0.42) / 0.18; strikeA = -2.5 + u * u * 2.9 }
-          else { const u = (t2 - 0.6) / 0.4; strikeA = 0.4 - u * u * (3 - 2 * u) * 1.5 }
-          strikeT2 = Math.max(0, Math.sin(Math.min(1, Math.max(0, (t2 - 0.3) / 0.5)) * Math.PI))
-        }
+          const st = look0.style
+          if (st === 'heave') {
+            // the maul: a long coil, a heavy fall, a slow recovery. You feel the weight.
+            if (t2 < 0.55) { const u = t2 / 0.55, e = u * u * (3 - 2 * u); strikeA = -1.1 - e * 1.9 }
+            else if (t2 < 0.7) { const u = (t2 - 0.55) / 0.15; strikeA = -3.0 + u * u * 3.7 }
+            else { const u = (t2 - 0.7) / 0.3; strikeA = 0.7 - u * u * (3 - 2 * u) * 1.8 }
+            strikeT2 = Math.max(0, Math.sin(Math.min(1, Math.max(0, (t2 - 0.5) / 0.4)) * Math.PI))
+          } else if (st === 'quick') {
+            // the dagger: barely a windup, back on guard before you saw it
+            if (t2 < 0.16) { const u = t2 / 0.16; strikeA = -1.1 - u * 0.5 }
+            else if (t2 < 0.3) { const u = (t2 - 0.16) / 0.14; strikeA = -1.6 + u * u * 1.9 }
+            else { const u = Math.min(1, (t2 - 0.3) / 0.35); strikeA = 0.3 - u * u * (3 - 2 * u) * 1.4 }
+            strikeT2 = Math.max(0, Math.sin(Math.min(1, Math.max(0, (t2 - 0.14) / 0.3)) * Math.PI))
+          } else if (st === 'thrust') {
+            // the spear: no arc at all. It draws back level and goes straight in.
+            const u = t2 < 0.4 ? t2 / 0.4 : Math.max(0, 1 - (t2 - 0.4) / 0.45)
+            strikeA = -1.35 + (t2 < 0.4 ? -0.25 * u : 0.5 * (1 - u))
+            m.userData.lunge = t2 >= 0.4 && t2 < 0.62 ? 0.22 : 0
+            strikeT2 = Math.max(0, Math.sin(Math.min(1, Math.max(0, (t2 - 0.38) / 0.28)) * Math.PI))
+          } else {
+            if (t2 < 0.42) { const u = t2 / 0.42, e = u * u * (3 - 2 * u); strikeA = -1.1 - e * 1.4 }
+            else if (t2 < 0.6) { const u = (t2 - 0.42) / 0.18; strikeA = -2.5 + u * u * 2.9 }
+            else { const u = (t2 - 0.6) / 0.4; strikeA = 0.4 - u * u * (3 - 2 * u) * 1.5 }
+            strikeT2 = Math.max(0, Math.sin(Math.min(1, Math.max(0, (t2 - 0.3) / 0.5)) * Math.PI))
+          }
+        } else if (m.userData.lunge) m.userData.lunge = 0
         const wep0 = thing.equipment?.weapon?.item
+        if (m.userData.lunge) { // the spear steps INTO the thrust
+          const fp = m.userData.foePos
+          if (fp) {
+            const ax = wx(fp.x) - m.position.x, az = wz(fp.y) - m.position.z
+            const L = Math.hypot(ax, az) || 1
+            m.position.x += (ax / L) * m.userData.lunge
+            m.position.z += (az / L) * m.userData.lunge
+          }
+        }
         if (m.userData.trail) { // the arc of the whip, drawn in light
-          const whipK = exch && wep0 !== 'wooden-bow'
-            ? Math.max(0, Math.sin(Math.min(1, Math.max(0, (t2 - 0.42) / 0.33)) * Math.PI)) : 0
-          m.userData.trail.material.opacity = whipK * 0.45
+          const lk = lookOf(wep0)
+          const win = lk.style === 'heave' ? [0.55, 0.34] : lk.style === 'quick' ? [0.16, 0.24]
+            : lk.style === 'thrust' ? [0.40, 0.20] : [0.42, 0.33]
+          const amp = lk.style === 'heave' ? 0.62 : lk.style === 'quick' ? 0.34
+            : lk.style === 'thrust' ? 0.20 : 0.45
+          const whipK = exch && !lk.ranged
+            ? Math.max(0, Math.sin(Math.min(1, Math.max(0, (t2 - win[0]) / win[1])) * Math.PI)) : 0
+          m.userData.trail.material.opacity = whipK * amp
+          m.userData.trail.scale.setScalar(lk.style === 'heave' ? 1.35 : lk.style === 'quick' ? 0.7 : 1)
           m.userData.trail.rotation.x = -0.7 + t2 * 1.5 // it travels with the blade
         }
         if (exch && t2 > 0.45 && an.shotTick !== s.tick) { // once per exchange, at the whip
           an.shotTick = s.tick
-          if (wep0 === 'wooden-bow' && m.userData.foePos) {
+          if (lookOf(wep0).ranged && m.userData.foePos) {
             spawnArrow(V3A.set(m.position.x, m.position.y + 0.85, m.position.z),
               V3B.set(wx(m.userData.foePos.x), m.position.y + 0.55, wz(m.userData.foePos.y)))
             snd('twang', m.position)
@@ -3775,6 +3906,8 @@ function syncBeings(s, prev) {
         m.userData.sword.material.emissiveIntensity = wep === 'star-sword' ? 0.9 : 0
         m.userData.bow.visible = wep === 'wooden-bow'
         m.userData.chain.visible = wep === 'old-chain'
+        // each shape shows only when it is the one being carried
+        if (m.userData.shapes) for (const [k, mesh] of Object.entries(m.userData.shapes)) mesh.visible = (wep === k)
         const hd = thing.equipment?.head?.item
         m.userData.helm.visible = !!hd
         m.userData.helm.material.color.set(hd === 'star-helm' ? 0x5cb8d9 : 0xa3743a)
@@ -4054,7 +4187,7 @@ ws.onmessage = async (ev) => {
       W = m.state.genesis.worldW; H = m.state.genesis.worldH
       GEN = m.state.genesis.worldGenerator ?? GEN
       GSEED = m.state.genesis.genesisSeed ?? ''
-      _seedNumC = null; _ssE = null
+      _seedNumC = null; _ssE = null; _roadSet = null
       buildGround(m.state)
       buildMinimap()
       buildSkillsUI()

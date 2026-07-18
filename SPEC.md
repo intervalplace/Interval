@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.55 ("The Constitution")
+# Interval: Protocol Specification v0.66 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -423,16 +423,30 @@ level 99 = 13,034,431. Levels range 1–99.
 ## 4b. Beyond mastery
 
 The level function does not stop at 99: it continues by the same
-recurrence, without bound. Every mechanic that reads a level reads
-`min(level, 99)`: mastery is the ceiling of power, and nothing past it
-buys a stronger swing or a faster axe. Levels past 99 are honor, proof
-of intervals spent. A bot can reach them; so can you. The ledger does
-not care, and that is the point.
+recurrence. Every mechanic that reads a level reads `min(level, 99)`:
+mastery is the ceiling of power, and nothing past it buys a stronger
+swing or a faster axe. Levels past 99 are honor, proof of intervals
+spent. A bot can reach them; so can you. The ledger does not care, and
+that is the point.
+
+The recurrence is not literally infinite, and the constitution should
+not pretend otherwise. Experience is a state field, and every state
+field is bounded so that a hostile checkpoint cannot carry an absurd
+number and so that all arithmetic stays exactly representable: the bound
+is `MAX_XP`, 10^12, which is **level 212**, one hundred and thirteen
+levels above mastery. This is a bound on what a number can *be*, not a
+wall the design puts in anyone's way. Mastery costs 13,034,431
+experience; the ceiling is 76,720 times that, some four centuries of
+unbroken play in a single skill at a rate nobody sustains. It is written
+down here because a constitution that claims "without bound" and means
+"bounded at 212" is lying in a way that would eventually have to be
+corrected, and corrections cost forks.
 
 ## 4c. Mastery and the cape
 
-**Mastery** is level 99 in a skill: the ceiling of power (4b). XP
-itself has no ceiling; the recurrence runs as long as anyone does.
+**Mastery** is level 99 in a skill: the ceiling of power (4b). The
+recurrence runs far past it, to the representational bound of §4b, which
+no amount of play reaches.
 
 The mastery cape is not an item. It cannot be bought, traded, dropped,
 or lost to death, because it is not a thing: it is a fact about a
@@ -946,10 +960,11 @@ error. Both are derived here instead.
 standing = sum over SKILLS of levelForXp(xp)
 ```
 
-It is `levelForXp`, the *unbounded* level of §4b, and deliberately not
+It is `levelForXp`, the continuing level of §4b, and deliberately not
 `effLevel`: mastery at 99 is a milestone, not a ceiling, and a citizen
-who keeps going past it keeps rising. Standing therefore has no maximum
-to write down. It privileges no profession: an explorer who never draws
+who keeps going past it keeps rising. The only limit on standing is the
+representational one of §4b, which puts it near 3,392 and which nobody
+will approach. It privileges no profession: an explorer who never draws
 a sword and a knight who never brews are measured by the same rule,
 which is the only honest measure in a world of sixteen trades.
 
@@ -957,14 +972,40 @@ There is deliberately **no combat level.** Combat is three skills of
 sixteen. A world whose countries are wood, stone, water, danger, and
 home does not rank its people by their capacity for violence.
 
-**Calling** is the trade a citizen is best at, rendered as a word:
-forester, miner, fisher, cook, smith, firekeeper, mourner, archer,
-sigilist, farmer, fletcher, fighter, warden, cartographer, brewer.
+**Calling** is the trade a citizen has the most **experience** in,
+rendered as a word: forester, miner, fisher, cook, smith, firekeeper,
+mourner, archer, sigilist, farmer, fletcher, fighter, warden,
+cartographer, brewer.
+
+Experience, not level, is what decides it. Levels are a step function of
+experience, so the trade with the most experience always holds the
+highest level as well: comparing experience gives the same answer
+wherever the levels differ, and settles a tie between two equal levels
+the way the citizen expects, in favour of the one they are further
+along. Two skills at level 8 are not really equal to the person who
+spent the evening at one of them. Only a tie in raw experience falls to
+the constitutional skill order, so every node still answers identically.
+
 Hitpoints is excluded, being a consequence of fighting rather than a
 trade, and starting at 10 — without that exclusion every citizen would
-be born a fighter. Ties fall to the constitutional skill order, so every
-node answers identically. A citizen whose every trade is still level 1
-has no calling yet and is a **newcomer**.
+be born a fighter. A citizen whose every trade is still level 1 has no
+calling yet and is a **newcomer**.
+
+A citizen who has mastered all sixteen has a calling of their own:
+**Master of Interval**, the same condition the world announces. It is
+written now, while nobody is close to it, for a constitutional reason
+rather than an aesthetic one: every rule change is a fork, and the day
+someone approaches total mastery is the worst possible day to need one.
+
+A calling at mastery reads as one: **master brewer**, **master smith**.
+Mastery is the single milestone this world already stops to announce, so
+the word a citizen is known by says it. This needs no second rule, and
+covers no second case: because the calling is the *most-experienced*
+trade, a citizen who has mastered anything at all necessarily has at
+least that much experience in their calling, so the word turns to master
+exactly when they have mastered something. Past mastery it does not
+change again; standing carries the rest. Hitpoints being
+excluded, no amount of surviving makes anyone a master of anything.
 
 Together they read as an introduction rather than a score:
 
@@ -981,6 +1022,85 @@ tavern you are standing in.
 
 Both are pure functions of public state. Neither is stored, so neither
 can drift from the skills it describes.
+
+### 4c. The curve is computed exactly (v0.60)
+
+The ninety-eight thresholds of §4b are constants, written out, not
+recomputed. Past mastery the curve continues by the same recurrence, and
+that continuation is evaluated in exact integer arithmetic rather than
+with `Math.pow`, which ECMA-262 leaves implementation-defined. The same
+rule governs terrain (§9b) and for the same reason: anything two
+implementations could round differently is a place where one world can
+quietly become two. A window that recomputes the thresholds instead of
+copying them is making the same mistake more cheaply, and is equally
+forbidden.
+
+### 7c. The Reading Rule reaches loot (v0.64)
+
+The rule of §7 is that chance may only judge deeds whose lots are not yet
+drawn, because the beacon for a tick is public during that tick. It was
+first applied to instant deeds: cooking and firemaking are counted, not
+rolled, so no one can wait for a kind tick to light a fire.
+
+Loot was not, and it should have been. A drop judged by the beacon can be
+**timed**: fight the beast to its last point of life, read the beacon,
+and withhold the killing blow until a favourable tick comes round. The
+wait for a one-in-thirty-two drop is about twenty seconds, which makes it
+not a rare drop but a slow certainty, and it rewards the patience to
+exploit rather than the work.
+
+Loot is therefore counted, on the same accumulator: the tally is per
+citizen and per drop, so the thousandth troll yields what a troll owes,
+in a fixed order that no timing can bend.
+
+Something real is lost here and it is worth naming: the lottery. A rare
+drop on the tenth kill is a story, and counting cannot tell it. But in a
+world whose beacon is public, dice do not give that story to everyone
+equally. A patient program reads the lots and lands its killing blows on
+kind ticks; a person swinging in real time cannot. Dice here are not a
+lottery, they are a tax on whoever is not automating, and this world's
+first promise is that the ledger does not care which of the two you are.
+Counting is what makes the rare thing cost the same for a bot and for a
+citizen. Most citizens will not keep the tally anyway, so the moment
+still arrives unannounced for the person actually playing; the program
+knows exactly when it is coming, and feels nothing when it does.
+
+Rates are given out of 65536. The old eight-bit denominator could not
+express anything rarer than one in 256, which is not rare enough for a
+thing that ends a search. Over any span the count
+is exactly the promised rate, with no variance in either direction. The
+rare thing stays rare, and it costs the same thirty-two fights whoever
+you are.
+
+### 6s. Weapons: the metal is the tier, the shape is the choice (v0.65)
+
+There were two weapons worth carrying and everyone carried the same one.
+A world where the only question is *how much ore have you got* answers
+nothing about the person holding the sword.
+
+So the shapes were separated from the tiers. No new material was added,
+and none will be: the same ore and the same star-stone, worked into
+different answers to the same question. A weapon differs along four axes
+and each is a real trade, not a bigger number:
+
+| | max blow | swings every | reach | odds |
+|---|---|---|---|---|
+| dagger | lowest | 2 ticks | 1 | **best** |
+| sword | middling | 2 ticks | 1 | even |
+| spear | modest | 2 ticks | **2** | even |
+| maul | **highest** | 3 ticks | 1 | worst |
+
+A dagger lands often for little, which is what you want against a
+skeleton-knight's guard. A maul lands seldom for a great deal, and misses
+in a way you feel. A spear keeps a tile between you and the troll. A
+sword asks no questions. Bronze asks nothing of the arm; star-steel does.
+
+The **old-chain** remains what it is and stands outside this: it swings
+every tick, and nothing else ever will. The **horn-bow** is the archer's
+equivalent, drawn from a bear about once in a thousand, and it is the
+only reason to hunt one. Neither can be forged, and that is the point:
+almost everything in this world is reachable through a skill, and those
+two are reachable only through patience.
 
 ## 9. A world's geography is its own (v0.54)
 
@@ -1009,6 +1129,61 @@ This is the same principle already governing `survey`, `brew`, and
 `watch`: the *shape* of a rule is constitutional, its *numbers* belong
 to the world that was founded with them.
 
+### 9d. Geography is law
+
+A generator does not merely place nodes: it publishes **named regions**,
+and the boundary between them is a pure function of the founding record
+like everything else. `biomeAt(genesis, x, y)` is as constitutional as
+the terrain it partitions, and windows read it rather than inventing
+their own idea of where the Fens begin.
+
+This is not decoration. A world whose citizens cannot say *where* they
+are cannot coordinate. "Meet me at the fens edge" is only useful if it
+denotes one place to everyone who hears it, and a boundary each client
+guessed at separately would denote as many places as there are clients.
+So the countries are named in the constitution and drawn from the same
+arithmetic everywhere: the Greenwood, the Crags, the Fens, the Wilds,
+the Heartlands, and the seven settlements.
+
+The boundary is a line, not a gradient, and it is crossed before the
+country's heart is reached, exactly as a city limit is. A citizen walking
+south from Anchor is *in* the Fens well before the water and the goblin
+warrens begin, and their window says so, which is the warning and the
+welcome both.
+
+Regions are derived, never stored. Like standing and calling (§10), a
+thing computable from the founding record does not belong in the state.
+
+### 9c. A generator name means one landscape, forever
+
+A founding record names its generator (`interval-expanse-v1`) but does
+not hash the code behind that name. The name is therefore a **promise**:
+whoever publishes a generator id promises that this id builds this
+country, in every implementation, for as long as the world runs. Changing
+what an id builds does not fork the world, which sounds harmless and is
+the opposite: every node goes on claiming the same worldId while building
+a different country, and nothing announces the split.
+
+So a change to a published generator is published as a **new id**. The
+old world keeps its landscape and its name; the new one is a new world,
+and the divergence is visible in the founding record where it belongs. A
+node that meets an id it does not implement refuses to build rather than
+approximating, for the same reason.
+
+### 9b. Terrain must be exactly reproducible
+
+A generator's landscape is not decoration: it decides where nodes stand,
+and those nodes are the founded world. So terrain may use only the
+operations IEEE-754 requires to be **exactly rounded** — addition,
+subtraction, multiplication, division, and square root — and never the
+transcendentals (`Math.sin`, `cos`, `pow`, `exp`, `log`), which ECMA-262
+leaves implementation-defined. Two engines that disagree in the last
+place about a sine would place a river one tile apart and found two
+worlds from one genesis, which no amount of consensus can later
+reconcile. Meanders are built instead from hashed control points joined
+by smoothstep, which is exact, and looks more like real water and real
+footpaths than a sine wave does anyway.
+
 ### 9a. The expanse (`interval-expanse-v1`)
 
 A second generator, and the first world designed for the founding record
@@ -1020,6 +1195,13 @@ countries, seven walled settlements, every road a spoke to Anchor, and
 eighteen waystones. The country is *knowable*: a citizen who learns it
 once still knows it after a year away, which is what a world owes people
 who leave and come back.
+
+Where a trail bends, something stands at the bend. The generator places
+a boulder or an old tree at the straight line the path declined to take,
+so a curve has a cause a traveller can see, and so the country can be
+navigated the way people actually navigate: left at the split rock,
+rather than by counting tiles. A landmark is an ordinary resource too,
+so the thing you steer by is also somewhere to work.
 
 The generator is not part of the rules hash — `SPEC.md` is — but the
 world it founds is named in the genesis, and a node that does not

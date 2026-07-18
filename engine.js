@@ -53,7 +53,7 @@ function ensureEdHash() {
 function initCrypto() { ensureEdHash(); _selectEdBackend(); }
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.55';
+const SPEC_VERSION = '0.66';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 // Typed error codes for the CJS engine (mirrors errors.mjs; kept in sync by
@@ -92,6 +92,7 @@ const NODE_YIELD = {
 // forge; nothing gated the arm. Bronze stays free: the door is open.
 const WIELD_REQS = {
   'star-sword': { attack: 20 }, 'star-dagger': { attack: 20 }, 'old-chain': { attack: 30 },
+  'star-spear': { attack: 20 }, 'star-maul': { attack: 25 }, 'horn-bow': { ranged: 20 },
   'star-helm': { defence: 15 }, 'star-plate': { defence: 30 },
 };
 const STORE_SELLS = { seeds: 15 }; // farming no longer waits on goblin luck
@@ -106,28 +107,61 @@ const XP_COOK = 30;
 const HEAL_FISH = 3;
 const HEAL_BROTH = 5, HEAL_ALE = 4; // brewed restoration (v0.51)
 const HP_START_XP = 1154; // hitpoints level 10
+// ---- weapons (v0.65): the metal is the tier, the shape is the choice ----
+// No new materials. The same ore and star-stone, worked into different answers
+// to the same question, so that how a citizen fights is something they chose
+// rather than something the tier chose for them.
+//   hit   added to the maximum blow
+//   every ticks between swings (combat breathes; the chain does not)
+//   reach how far the weapon touches (1 is arm's length)
+//   acc   added to the odds of landing at all
+// A dagger lands often for little; a maul lands seldom for a lot; a spear
+// keeps its distance; a sword asks no questions. The chain is the chain.
+const WEAPONS = {
+  'bronze-dagger': { hit: 0, every: 2, reach: 1, acc: 24 },
+  'bronze-sword':  { hit: 2, every: 2, reach: 1, acc: 0 },
+  'bronze-spear':  { hit: 1, every: 2, reach: 2, acc: 0 },
+  'bronze-maul':   { hit: 4, every: 3, reach: 1, acc: -24 },
+  'star-dagger':   { hit: 2, every: 2, reach: 1, acc: 24 },
+  'star-sword':    { hit: 4, every: 2, reach: 1, acc: 0 },
+  'star-spear':    { hit: 3, every: 2, reach: 2, acc: 0 },
+  'star-maul':     { hit: 7, every: 3, reach: 1, acc: -24 },
+  'old-chain':     { hit: 1, every: 1, reach: 1, acc: 0 },
+  'wooden-bow':    { hit: 0, every: 2, reach: 4, acc: 0, ranged: true },
+  'horn-bow':      { hit: 2, every: 2, reach: 5, acc: 0, ranged: true },
+};
+const weaponOf = (p) => WEAPONS[p?.equipment?.weapon?.item] ?? null;
+const reachOf = (p) => weaponOf(p)?.reach ?? 1;
+const isRanged = (p) => weaponOf(p)?.ranged === true;
+// a ranged weapon is drawn only at distance; in your face it is a club
+const drawnAt = (p, t) => isRanged(p) && !adjacent(p, t);
+const inReach = (p, t) => Math.max(Math.abs(p.x - t.x), Math.abs(p.y - t.y)) <= reachOf(p);
+
 const MOB_STATS = {
   goblin: { maxHp: 5, atk: 1, def: 1, maxHit: 1, respawn: 16,
-            drops: [{ item: 'bones' }, { item: 'ore', chance: 64 }, { item: 'seeds', chance: 64 }] },
+            drops: [{ item: 'bones' }, { item: 'ore', chance: 16384 }, { item: 'seeds', chance: 16384 }] },
   wolf:   { maxHp: 8, atk: 2, def: 2, maxHit: 2, respawn: 150,
-            drops: [{ item: 'bones' }, { item: 'bones', chance: 96 }] },
+            drops: [{ item: 'bones' }, { item: 'bones', chance: 24576 }] },
   troll:  { maxHp: 20, atk: 4, def: 4, maxHit: 3, respawn: 300,
-            drops: [{ item: 'bones' }, { item: 'ore' }, { item: 'bronze-plate', chance: 24 },
-                    { item: 'old-chain', chance: 5 }] },
+            drops: [{ item: 'bones' }, { item: 'ore' }, { item: 'bronze-plate', chance: 6144 },
+                    { item: 'old-chain', chance: 44 }] },
   bear:   { maxHp: 14, atk: 3, def: 3, maxHit: 2, respawn: 220,
-            drops: [{ item: 'bones' }, { item: 'bones', chance: 128 }, { item: 'bronze-hatchet', chance: 16 }] },
+            drops: [{ item: 'bones' }, { item: 'bones', chance: 32768 }, { item: 'bronze-hatchet', chance: 4096 },
+                    { item: 'horn-bow', chance: 66 }] },
   // the skeleton-knight (v0.42): a horned, shield-bearing warrior of the frontier.
   // Seldom alone — they muster in warbands in and around the Wilds. The round
   // shield makes them hard to strike (high def); the longsword bites back. And
   // their bones are rich: a fallen knight gives up twice what a lesser thing does.
   'skeleton-knight': { maxHp: 18, atk: 5, def: 6, maxHit: 4, respawn: 120,
             drops: [{ item: 'bones' }, { item: 'bones' },   // double bones — the warrior's due
-                    { item: 'ore', chance: 48 },            // scavenged metal
-                    { item: 'star-helm', chance: 5 }] },    // rare: the horned helm itself
+                    { item: 'ore', chance: 12288 },            // scavenged metal
+                    { item: 'star-helm', chance: 328 }] },    // rare: the horned helm itself
 };
 // the store's ledger (spec 6l)
 const GROW_TICKS_RIPE = 1200; // spec 6o: twelve minutes, seed to harvest
 const PRICES = {
+  'bronze-dagger': 8, 'bronze-spear': 14, 'bronze-maul': 22,
+  'star-spear': 100, 'star-maul': 160, 'horn-bow': 90,
   'logs': 2, 'ore': 5, 'raw-fish': 3, 'cooked-fish': 6, 'bones': 2, 'arrows': 1,
   'magic-stone': 20, 'bronze-sword': 15, 'bronze-hatchet': 10, 'bronze-pickaxe': 10,
   'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8, 'grain': 4,
@@ -161,6 +195,11 @@ const inCity = (g, x, y) => {
       || (x >= n.x0 && x <= n.x1 && y >= n.y0 && y <= n.y1);
 };
 const RECIPES = {
+  'bronze-dagger': { ore: 1 },
+  'bronze-spear': { ore: 1, logs: 1 },
+  'bronze-maul': { ore: 2, logs: 1 },
+  'star-spear': { 'magic-stone': 2, ore: 1, logs: 1 },
+  'star-maul': { 'magic-stone': 3, ore: 2, logs: 1 },
   'bronze-sword':   { ore: 2, logs: 1 },
   'bronze-hatchet': { ore: 1, logs: 1 },
   'bronze-pickaxe': { ore: 1, logs: 1 },
@@ -171,7 +210,7 @@ const RECIPES = {
   'star-plate':     { 'magic-stone': 4, ore: 3 },
   'star-dagger':    { 'magic-stone': 2, ore: 1 },
 };
-const EQUIPPABLE = new Set([...Object.keys(RECIPES), 'wooden-bow', 'old-chain']);
+const EQUIPPABLE = new Set([...Object.keys(RECIPES), 'wooden-bow', 'horn-bow', 'old-chain']);
 // The constitutional ITEM vocabulary (rev5 §4): every item the engine can
 // mint, derived from protocol constants plus the base gather/drop set. A
 // syntactically pretty identifier that is not in this set is contraband:
@@ -179,14 +218,15 @@ const EQUIPPABLE = new Set([...Object.keys(RECIPES), 'wooden-bow', 'old-chain'])
 // and imports alike.
 const ITEMS = new Set([
   'seeds', 'grain', 'logs', 'ore', 'raw-fish', 'cooked-fish', 'burnt-fish',
-  'bones', 'arrows', 'wooden-bow', 'magic-stone', 'sigil', 'old-chain', 'ale', 'broth',
+  'bones', 'arrows', 'wooden-bow', 'horn-bow', 'magic-stone', 'sigil', 'old-chain', 'ale', 'broth',
   ...Object.keys(RECIPES),
 ]);
 const EQUIP_SLOT = { 'bronze-helm': 'head', 'bronze-plate': 'body', 'star-helm': 'head', 'star-plate': 'body' }; // default: weapon
 // the first level requirements (spec 6q): an unearned hammer strikes nothing
 const SMITH_REQS = { 'star-sword': { smithing: 20, magic: 10 },
   'star-helm': { smithing: 15, magic: 5 }, 'star-plate': { smithing: 30, magic: 15 },
-  'star-dagger': { smithing: 20, magic: 15 } };
+  'star-dagger': { smithing: 20, magic: 15 },
+  'star-spear': { smithing: 22, magic: 12 }, 'star-maul': { smithing: 28, magic: 15 } };
 const SOAK = (item) => item?.startsWith('star-') ? 2 : 1; // starmetal turns aside more
 const slotOf = (item) => EQUIP_SLOT[item] ?? 'weapon';
 const TOOL_FOR = { tree: 'bronze-hatchet', rock: 'bronze-pickaxe' };
@@ -315,6 +355,21 @@ const spawnOf = (g) => ({ x: Math.floor(g.worldW / 2), y: Math.floor(g.worldH / 
 // ---------- XP table: spec constants (Appendix A). Index = level. ----------
 const XP_TABLE = [0,0,83,174,276,388,512,650,801,969,1154,1358,1584,1833,2107,2411,2746,3115,3523,3973,4470,5018,5624,6291,7028,7842,8740,9730,10824,12031,13363,14833,16456,18247,20224,22406,24815,27473,30408,33648,37224,41171,45529,50339,55649,61512,67983,75127,83014,91721,101333,111945,123660,136594,150872,166636,184040,203254,224466,247886,273742,302288,333804,368599,407015,449428,496254,547953,605032,668051,737627,814445,899257,992895,1096278,1210421,1336443,1475581,1629200,1798808,1986068,2192818,2421087,2673114,2951373,3258594,3597792,3972294,4385776,4842295,5346332,5902831,6517253,7195629,7944614,8771558,9684577,10692629,11805606,13034431];
 
+// 2^(r/7) scaled by 2^96, as exact integers. ECMA-262 does not require
+// Math.pow to be correctly rounded, so the curve past mastery is computed from
+// these rather than from a float power: two engines that disagreed in the last
+// place would report different standings for the same citizen. (Verified: this
+// reproduces every one of the 98 constitutional thresholds exactly, and V8's
+// own Math.pow already differs from the true value at 15 levels past 267.)
+const POW2_SEVENTHS = [
+  79228162514264337593543950336n, 87474983419643881438334899625n,
+  96580211902419410754522887331n, 106633199189855989094361944303n,
+  117732597035010858756489598210n, 129987325803940059419872279709n,
+  143517643330631577550838571505n];
+function xpStepAt(lvl) { // floor(lvl + 300 * 2^(lvl/7)), exactly
+  const q = BigInt(Math.floor(lvl / 7)), r = lvl % 7;
+  return lvl + Number((300n * (1n << q) * POW2_SEVENTHS[r]) >> 96n);
+}
 function levelForXp(xp) {
   let lvl = 1;
   while (lvl < 99 && xp >= XP_TABLE[lvl + 1]) lvl++;
@@ -322,7 +377,7 @@ function levelForXp(xp) {
   // beyond mastery (spec 4b): the same recurrence, continued without bound
   let points = XP_TABLE[99] * 4;
   while (true) {
-    points += Math.floor(lvl + 300 * Math.pow(2, lvl / 7));
+    points += xpStepAt(lvl);
     if (xp < Math.floor(points / 4)) return lvl;
     lvl++;
   }
@@ -354,14 +409,30 @@ const CALLINGS = {
   magic: 'sigilist', farming: 'farmer', fletching: 'fletcher', attack: 'fighter',
   defence: 'warden', exploration: 'cartographer', brewing: 'brewer',
 };
+// Chosen by EXPERIENCE, not by level. Levels are a step function of xp, so the
+// skill with the most experience always holds the highest level too: comparing
+// xp settles ties between equal levels the way a citizen expects, and gives the
+// identical answer everywhere else. Ties in raw xp fall to the constitutional
+// skill order, so every node still answers the same.
 function callingOf(p) {
-  let best = null, bestLvl = 1;
+  let best = null, bestXp = -1;
   for (const sk of SKILLS) {
     if (sk === 'hitpoints') continue;
-    const l = levelForXp(p?.skills?.[sk] ?? 0);
-    if (l > bestLvl) { bestLvl = l; best = sk; }
+    const xp = p?.skills?.[sk] ?? 0;
+    if (xp > bestXp) { bestXp = xp; best = sk; }
   }
-  return best === null ? 'newcomer' : CALLINGS[best];
+  if (best === null || levelForXp(bestXp) <= 1) return 'newcomer';
+  // all sixteen: the same condition the world announces as Master of Interval.
+  // Written now, while nobody is near it, because every rule change is a fork
+  // and the day someone approaches this is the worst possible day to need one.
+  if (SKILLS.every(sk => (p?.skills?.[sk] ?? 0) >= XP_TABLE[99])) return 'Master of Interval';
+  // Mastery is the one milestone this world already stops to announce, so the
+  // calling says it. Note what needs no extra rule: since the calling is the
+  // MOST-experienced trade, a citizen who has mastered anything has at least
+  // that much experience in their calling, so the word turns to master exactly
+  // when they have mastered something. Past mastery it does not change again;
+  // standing carries the rest.
+  return (bestXp >= XP_TABLE[99] ? 'master ' : '') + CALLINGS[best];
 }
 
 // ---------- canonical encoding & hashing ----------
@@ -673,8 +744,13 @@ delayChain._memo = new Map();
 // countedSuccess(n, q256): true iff attempt n (1-based) crosses a new
 // multiple of the rate q/256. Over any window the success count is
 // floor(n*q/256): the promised rate, exactly, with zero variance.
-function countedSuccess(n, q256) {
-  return Math.floor((n * q256) / 256) > Math.floor(((n - 1) * q256) / 256);
+// The tally's denominator. It was 256, an eight-bit rate, whose rarest
+// expressible drop was one in 256: too common for a best-in-world thing, and
+// there was no way to say "one in a thousand" at all. Widened to 65536 (v0.64)
+// so rarity has room. Rates given out of 256 are scaled by DROP_DEN/256.
+const DROP_DEN = 65536;
+function countedSuccess(n, q, den = 256) {
+  return Math.floor((n * q) / den) > Math.floor(((n - 1) * q) / den);
 }
 
 function roll(beacon, playerId, tag) {
@@ -998,7 +1074,7 @@ function validateState(state) {
   const SKILL_SET = SKILLS;                 // shared constitutional tables
   const NODE_TYPE_SET = new Set(NODE_TYPES); // (rev4 §11): defined ONCE, above
   const PLAYER_REQUIRED = ['x', 'y', 'skills', 'hp', 'equipment', 'bank', 'lastInput', 'gold', 'inventory', 'action', 'name', 'trade'];
-  const PLAYER_OPTIONAL = new Set(['attuned', 'brandedUntil', 'cooksTried', 'deadUntil', 'lightsTried', 'rootedUntil', 'rootImmuneUntil', 'rootCdUntil']);
+  const PLAYER_OPTIONAL = new Set(['attuned', 'brandedUntil', 'cooksTried', 'deadUntil', 'lightsTried', 'rootedUntil', 'rootImmuneUntil', 'rootCdUntil', 'slain']);
   const isId = (v) => typeof v === 'string' && /^[a-z0-9_-]{1,64}$/i.test(v);
 
   // Relational rule (rev5 §5), decided explicitly: NO stale references are
@@ -1088,6 +1164,12 @@ function validateState(state) {
     }
     for (const tk of ['brandedUntil', 'deadUntil', 'rootedUntil', 'rootImmuneUntil', 'rootCdUntil']) if (p[tk] !== undefined && !isInt(p[tk], 0, MAX_TIME)) return `${tk} out of bounds`;
     for (const ck of ['cooksTried', 'lightsTried']) if (p[ck] !== undefined && !isInt(p[ck], 0, MAX_TIME)) return `${ck} out of bounds`;
+    if (p.slain !== undefined) { // the loot tally: bounded by the roster, not by time
+      if (typeof p.slain !== 'object' || p.slain === null || Array.isArray(p.slain)) return 'malformed slain tally';
+      const keys = Object.keys(p.slain);
+      if (keys.length > 64) return 'slain tally too large';
+      for (const k of keys) if (!isInt(p.slain[k], 0, MAX_TIME)) return `slain.${k} out of bounds`;
+    }
   }
 
   // mobs: constitutional type table, exact field set
@@ -1362,10 +1444,10 @@ function validInput(state, input, ctx) {
     case 'attack': {
       const m = state.mobs[input.mobId];
       if (!m || m.hp <= 0) return false;
-      if (adjacent(p, m)) return true;
-      // ranged (spec 6j): a wielded bow and a carried arrow reach to 4
+      if (inReach(p, m)) return true;
+      // ranged (spec 6j): a drawn bow and a carried arrow reach further
       const cheb = Math.max(Math.abs(p.x - m.x), Math.abs(p.y - m.y));
-      return cheb <= 4 && p.equipment.weapon?.item === 'wooden-bow'
+      return cheb <= reachOf(p) && isRanged(p)
         && p.inventory.some(sl => sl?.item === 'arrows');
     }
     case 'attackp': {
@@ -1374,9 +1456,9 @@ function validInput(state, input, ctx) {
       const q = state.players[input.targetId];
       if (!q || q.hp <= 0 || input.targetId === input.playerId) return false;
       if (!inWilds(state.genesis, p.x, p.y) || !inWilds(state.genesis, q.x, q.y)) return false;
-      if (adjacent(p, q)) return true;
+      if (inReach(p, q)) return true;
       const cheb = Math.max(Math.abs(p.x - q.x), Math.abs(p.y - q.y));
-      return cheb <= 4 && p.equipment.weapon?.item === 'wooden-bow'
+      return cheb <= reachOf(p) && isRanged(p)
         && p.inventory.some(sl => sl?.item === 'arrows');
     }
     case 'plant': {
@@ -2287,7 +2369,7 @@ function nextState(state, inputs, _legacyBeacon) {
       else if (p.equipment.weapon?.item !== 'old-chain'
         && (s.tick - (p.action.since ?? 0)) % 2 !== 0) { /* combat breathes (6m); the chain does not (6r) */ }
       else {
-        const bowDrawn2 = p.equipment.weapon?.item === 'wooden-bow' && !adjacent(p, q);
+        const bowDrawn2 = drawnAt(p, q);
         let lvl2, tag2;
         if (bowDrawn2) {
           const aSlot = p.inventory.findIndex(sl => sl?.item === 'arrows');
@@ -2297,13 +2379,10 @@ function nextState(state, inputs, _legacyBeacon) {
           lvl2 = effLevel(p.skills.ranged); tag2 = 'ranged';
         } else { lvl2 = effLevel(p.skills.attack); tag2 = 'attack'; }
         const defL = effLevel(q.skills.defence);
-        const Tp = clamp(128 + 4 * (lvl2 - defL), 16, 240);
+        const Tp = clamp(128 + 4 * (lvl2 - defL) + (weaponOf(p)?.acc ?? 0), 16, 240);
         if (roll(beacon, pid, 'atk') < Tp) {
           const maxHit = 1 + Math.floor(lvl2 / (bowDrawn2 ? 12 : 10))
-            + (!bowDrawn2 ? (p.equipment.weapon?.item === 'bronze-sword' ? 2
-              : p.equipment.weapon?.item === 'star-sword' ? 4
-              : p.equipment.weapon?.item === 'star-dagger' ? 2
-              : p.equipment.weapon?.item === 'old-chain' ? 1 : 0) : 0);
+            + (weaponOf(p)?.hit ?? 0);
           const soak = (q.equipment.head ? SOAK(q.equipment.head.item) : 0) + (q.equipment.body ? SOAK(q.equipment.body.item) : 0);
           const dmg = Math.max(0, 1 + (roll(beacon, pid, 'dmg') % maxHit) - soak);
           q.hp -= dmg;
@@ -2339,23 +2418,25 @@ function nextState(state, inputs, _legacyBeacon) {
       const m = s.mobs[p.action.mobId];
       const stats = m && MOB_STATS[m.type];
       if (!m || m.hp <= 0) { p.action = null; continue; }
-      const bowHeld = p.equipment.weapon?.item === 'wooden-bow'
-        && Math.max(Math.abs(p.x - m.x), Math.abs(p.y - m.y)) <= 4;
-      if (!adjacent(p, m) && !bowHeld) { p.action = null; continue; }
-      const chained = p.equipment.weapon?.item === 'old-chain';
-      if (!chained && (s.tick - (p.action.since ?? 0)) % 2 !== 0) continue; // combat breathes (6m); the chain does not (6r)
+      const bowHeld = isRanged(p)
+        && Math.max(Math.abs(p.x - m.x), Math.abs(p.y - m.y)) <= reachOf(p);
+      if (!inReach(p, m) && !bowHeld) { p.action = null; continue; }
+      // every weapon keeps its own rhythm (6m, 6r): a maul is slow, a chain
+      // never rests, everything else breathes
+      const every = weaponOf(p)?.every ?? 2;
+      if ((s.tick - (p.action.since ?? 0)) % every !== 0) continue;
       const mobTurn = (s.tick - (p.action.since ?? 0)) % 2 === 0; // the defender keeps the old rhythm
 
-      const bowDrawn = p.equipment.weapon?.item === 'wooden-bow' && !adjacent(p, m);
+      const bowDrawn = drawnAt(p, m);
       if (bowDrawn) { // ranged (spec 6j): every draw costs an arrow, hit or miss
         const aSlot = p.inventory.findIndex(sl => sl?.item === 'arrows');
         if (aSlot === -1) { p.action = null; continue; }
         p.inventory[aSlot].qty -= 1;
         if (p.inventory[aSlot].qty <= 0) p.inventory[aSlot] = null;
         const rLvl = effLevel(p.skills.ranged);
-        const Tr = clamp(128 + 4 * (rLvl - stats.def), 16, 240);
+        const Tr = clamp(128 + 4 * (rLvl - stats.def) + (weaponOf(p)?.acc ?? 0), 16, 240);
         if (roll(beacon, pid, 'atk') < Tr) {
-          const maxHit = 1 + Math.floor(rLvl / 12);
+          const maxHit = 1 + Math.floor(rLvl / 12) + (weaponOf(p)?.hit ?? 0);
           const dmg = 1 + (roll(beacon, pid, 'dmg') % maxHit);
           m.hp -= dmg;
           p.skills.ranged += 4 * dmg;
@@ -2363,13 +2444,9 @@ function nextState(state, inputs, _legacyBeacon) {
         }
       } else {
       const atkLvl = effLevel(p.skills.attack);
-      const T = clamp(128 + 4 * (atkLvl - stats.def), 16, 240);
+      const T = clamp(128 + 4 * (atkLvl - stats.def) + (weaponOf(p)?.acc ?? 0), 16, 240);
       if (roll(beacon, pid, 'atk') < T) {
-        const maxHit = 1 + Math.floor(atkLvl / 10)
-          + (p.equipment.weapon?.item === 'bronze-sword' ? 2
-            : p.equipment.weapon?.item === 'star-sword' ? 4
-            : p.equipment.weapon?.item === 'star-dagger' ? 2
-            : p.equipment.weapon?.item === 'old-chain' ? 1 : 0);
+        const maxHit = 1 + Math.floor(atkLvl / 10) + (weaponOf(p)?.hit ?? 0);
         const dmg = 1 + (roll(beacon, pid, 'dmg') % maxHit);
         m.hp -= dmg;
         p.skills.attack += 4 * dmg;
@@ -2387,9 +2464,22 @@ function nextState(state, inputs, _legacyBeacon) {
         if (m.type === 'skeleton-knight' && claimFirst(s, 'knightslayer', pid))
           announce(s, (p.name ?? pid.slice(0, 6)) + ' is the FIRST to fell a skeleton-knight.');
         // drops lie where they fall (spec §6e): loot belongs to whoever takes it
+        // The Reading Rule (v0.39) reaches loot too (v0.64). A drop judged by
+        // the tick's beacon could be TIMED: fight the beast to its last point
+        // of life, read the public beacon, and withhold the killing blow until
+        // a kind tick comes round. That turns a one-in-thirty-two drop into a
+        // certainty for anyone willing to wait twenty seconds, which is not a
+        // rare drop at all. Loot is therefore COUNTED, exactly as cooking and
+        // firemaking are: the tally is per citizen and per drop, so the rate is
+        // the promised rate and no timing can bend it.
+        if (!p.slain) p.slain = {};
         for (let di = 0; di < stats.drops.length; di++) {
           const d = stats.drops[di];
-          if (d.chance !== undefined && roll(beacon, pid, 'loot' + di + '-' + d.item) >= d.chance) continue;
+          if (d.chance !== undefined) {
+            const tally = m.type + ':' + di;
+            p.slain[tally] = (p.slain[tally] ?? 0) + 1;
+            if (!countedSuccess(p.slain[tally], d.chance, DROP_DEN)) continue;
+          }
           const gid = 'g' + s.tick + '-' + p.action.mobId + '-' + di + '-' + d.item; // di keeps twin drops distinct
           s.ground[gid] = { item: d.item, x: m.x, y: m.y, expiresAt: s.tick + 100 };
         }
@@ -2518,5 +2608,5 @@ module.exports = {
   },
   signPayload, verifyPayload,
   exportIdentity, importIdentity, loadOrCreateIdentity,
-  SLEEP_AFTER, isAwake, effLevel, standingOf, callingOf, CALLINGS, validateState, validateGenesis, validateImports, validateInputShape, normalizeInput, slotOf, supportsWorldGenerator, minQuorumFor, maxByzantine, byzantineSafe, initCrypto, SKILLS, EQUIP_SLOTS, NODE_TYPES, INV_SLOTS, ITEMS, isValidName, cityRectOf, norwickRectOf, wildsRectOf, inCity, PRICES, inWilds, spawnOf, makeGenesis, newWorld, sameWorld, addPlayer, addNode, addMob, nextState, MOB_STATS, RECIPES, EQUIPPABLE,
+  SLEEP_AFTER, isAwake, effLevel, standingOf, callingOf, CALLINGS, countedSuccess, validateState, validateGenesis, validateImports, validateInputShape, normalizeInput, slotOf, supportsWorldGenerator, minQuorumFor, maxByzantine, byzantineSafe, initCrypto, SKILLS, EQUIP_SLOTS, NODE_TYPES, INV_SLOTS, ITEMS, isValidName, cityRectOf, norwickRectOf, wildsRectOf, inCity, PRICES, inWilds, spawnOf, makeGenesis, newWorld, sameWorld, addPlayer, addNode, addMob, nextState, MOB_STATS, RECIPES, EQUIPPABLE,
 };
