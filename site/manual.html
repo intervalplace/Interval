@@ -1,6 +1,6 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>The Manual: Interval</title>
-<link rel="stylesheet" href="/site/site.css"></head><body>
+<link rel="stylesheet" href="/site/site.css"><script src="/site/items.js" defer></script></head><body>
 <script src="/site/nav.js"></script>
 <div class="page"><main class="stone">
   <h1>The Manual</h1>
@@ -112,6 +112,20 @@
   of it). <b>Armor</b> forged at the anvil (bronze, and the rare
   star plate and helm) soaks every incoming blow. Death destroys
   what you wear and carry, so the Wilds ask you to weigh every piece.</p>
+  <p class="shapes">
+    <span><i data-item="bronze-dagger"></i><b>dagger</b>lands often, for little</span>
+    <span><i data-item="bronze-spear"></i><b>spear</b>strikes from a tile away</span>
+    <span><i data-item="bronze-maul"></i><b>maul</b>lands seldom, for a lot</span>
+    <span><i data-item="horn-bow"></i><b>horn-bow</b>a bear's, not a bowyer's</span>
+    <span><i data-item="old-chain"></i><b>old chain</b>never rests</span>
+  </p>
+  <p>The metal is the tier and the shape is the choice: the same ore and the
+  same star-stone worked into different answers. A dagger suits a
+  skeleton-knight's guard, a maul suits anything slow, a spear keeps a troll at
+  arm's length, and a sword asks no questions. Two weapons cannot be forged at
+  any level: the <b>old chain</b> and the <b>horn-bow</b> are taken from trolls
+  and bears or not at all.</p>
+
   <p>The roster you'll meet: <b>goblins</b> (drop bones, sometimes ore
   and seeds), <b>wolves</b>, <b>bears</b> (a bronze hatchet, if you're
   lucky), <b>trolls</b> (bronze plate, and rarely an old chain), and,
@@ -181,10 +195,11 @@
 
   <h2>Ways to play</h2>
   <div class="cards">
-    <div class="card stone"><b>The browser window</b><p><code>node serve.mjs yourname</code>,
-    open <code>localhost:8787/play</code>. Click-to-everything. The
-    reference window, the founding aesthetic, not the required one.
-    A 3D "deluxe" window renders the same world at <code>/deluxe</code>.</p></div>
+    <div class="card stone"><b>The browser windows</b><p><code>node serve.mjs yourname</code>,
+    open <code>localhost:8787/play</code> and choose a window: the
+    <b>flat</b> one in tiles from above, or the <b>deep</b> one in geometry
+    from behind the shoulder. Both are reference windows, neither is the
+    required one.</p></div>
     <div class="card stone"><b>The terminal window</b><p><code>node play.mjs yourname</code>.
     The whole world in ASCII, because it can be.</p></div>
     <div class="card stone"><b>The SDK</b><p>Write your own hands. <code>sdk.mjs</code>

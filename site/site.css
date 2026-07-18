@@ -143,3 +143,17 @@ h1 {
 .rune { position: absolute; left: 0; top: 2px; width: 16px; height: 16px; color: var(--gold-hi);
   filter: drop-shadow(0 1px 0 rgba(0,0,0,.6)); }
 .rune svg { display: block; }
+
+/* the item marks beside each tenet: the flat window's own sprites, at the size
+   they are drawn, kept crisp rather than smoothed into a smudge */
+.itemicon { image-rendering: pixelated; opacity: .95 }
+.tenet { padding-left: 34px }
+.tenet .itemicon { position: absolute; left: 0; top: -2px; width: 26px; height: 26px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.6)) }
+.card .itemicon { width: 30px; height: 30px; display: block; margin: 0 0 8px }
+
+/* the shapes, in the fighting section: sprite, name, and the trade it makes */
+.shapes { display: flex; flex-wrap: wrap; gap: 14px 20px; margin: 14px 0 16px; padding: 0 }
+.shapes span { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim) }
+.shapes b { color: var(--gold); margin-right: 5px }
+.shapes .itemicon { width: 28px; height: 28px }
