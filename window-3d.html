@@ -235,7 +235,21 @@
      And the grade grew an unsharp mask — four neighbours make a blur
      and the frame is pushed away from it, edges biting at every
      pixel-ratio the governor chooses — while the rim fringe pulled
-     back from smear to character. -->
+     back from smear to character.
+
+     Then the window learned which way was north. The minimap became a
+     COMPASS: a round disc that turns under a fixed cardinal ring, so
+     the way you face is always up, N/E/S/W standing outside it, your
+     own gold chevron at the center pointing where you point — and
+     tapping the map still walks the world, through the same rotation.
+     The area's name rides under it, mirrored tile-for-tile from /play's
+     own region function, so "the Fens" means one place in both windows.
+     The river stopped being a chain of squares: each water tile is a
+     disc now, overlapping its neighbours into one sheet and rounding
+     off wherever the run ends. And the town walls face along their run
+     — a segment with a north-south neighbour but no east-west one turns
+     a quarter, so the short side of a town reads as a wall and not a
+     row of broadside planks. -->
 <html>
 <head>
 <meta charset="utf-8">
@@ -1777,6 +1791,27 @@ function terrainOfE(x, y) {
   if (onRoadE(x, y)) return 'trail'
   return biomeAtE(x, y)
 }
+// ---- the countries by their names, mirrored from /play (spec 9d): a
+// region is a pure function of the world, identical in every window, so
+// "meet me at the fens edge" means one place to everyone. ----
+const REGION_NAMES = { greenwood: 'the Greenwood', crags: 'the Crags', fens: 'the Fens',
+  wilds: 'the Wilds', meadow: 'the Heartlands', heartlands: 'the Heartlands' }
+const SETTLEMENT_NAMES = ['Anchor', 'Greenhollow', 'Millbrook', 'Cragfoot', 'Eastmere', 'Fenmarch', 'Norwick']
+const CLASSIC_NAMES = { wilds: 'the Wilds', cave: 'the Deep', scree: 'the Scree',
+  mountain: 'the Mountains', sea: 'the Sea', bridge: 'the Bridge',
+  cobble: 'the City', plaza: 'the Market', trail: 'the Road', meadow: 'the Meadows' }
+function regionNameAt(x, y) {
+  try {
+    if (GEN !== 'interval-expanse-v1') return CLASSIC_NAMES[terrainOf(x, y)] ?? ''
+    const ss = ssE()
+    for (let i = 0; i < ss.length; i++) {
+      const t = ss[i]
+      if (Math.abs(x - t.x) <= (t.w >> 1) && Math.abs(y - t.y) <= (t.h >> 1))
+        return SETTLEMENT_NAMES[i] ?? 'a settlement'
+    }
+    return REGION_NAMES[biomeAtE(x, y)] ?? ''
+  } catch { return '' } // a nameplate must never stop the world drawing
+}
 // <<< EXPANSE TERRAIN MIRROR
 const inWildsC = (x, y) => x >= 1 && x <= 34 && y >= 1 && y <= 22
 function riverXC(y) { const cx2 = Math.floor(W / 2)
@@ -2404,7 +2439,11 @@ function nodeMesh(n) {
     g.add(pl)
     fireLights.set(n.x + ',' + n.y, pl)
   } else if (n.type === 'fishing-spot') {
-    const wmesh = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1, 3, 3), waterMat)
+    // each water tile was a hard 1.1-square; a winding river became a
+    // chain of them. A circle 1.5 across overlaps its neighbours into
+    // one sheet and, where a tile is exposed at the river's end, shows
+    // a rounded edge instead of a hard corner.
+    const wmesh = new THREE.Mesh(new THREE.CircleGeometry(0.82, 20), waterMat)
     wmesh.rotation.x = -Math.PI / 2; wmesh.position.y = -0.13
     wmesh.renderOrder = 1
     g.add(wmesh); waterMeshes.push(wmesh)
@@ -2565,11 +2604,17 @@ function nodeMesh(n) {
     const cap = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), std(0x4a3419))
     cap.position.y = 0.92; g.add(cap)
   } else if (n.type === 'wall') {
+    // a wall must face along its RUN, not always east-west. The old
+    // segment was a fixed 1×0.35 plank on the X axis, so any north-south
+    // stretch became a row of planks turned broadside — the "short side"
+    // of a town read as a fence of little billboards. Sniff the
+    // neighbours: if the wall continues north-south, turn the segment a
+    // quarter so its long face runs with the wall.
     const wl = cast(new THREE.Mesh(new THREE.BoxGeometry(1, 0.7, 0.35), std(0x7a756b)))
     wl.position.y = 0.35; g.add(wl)
     const capr = cast(new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.14, 0.42), std(0x8a867c)))
     capr.position.y = 0.77; g.add(capr)
-  } else if (n.type === 'plot') {
+    g.userData.wallAlign = { x: n.x, y: n.y } // resolved once the state is known, in syncNodes
     const soil = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 0.9), std(0x4a3520))
     soil.position.y = 0.03; g.add(soil); g.userData.plot = true
     for (const rz of [-0.26, 0, 0.26]) { // tilled ridges
@@ -2725,6 +2770,21 @@ function syncNodes(s) {
     }
     if (m.userData.pulse) m.userData.pulse.material.emissiveIntensity = 0.9 + Math.sin(performance.now() / 700 + n.x) * 0.4
     if (m.userData.canopy) m.userData.canopy.visible = !depleted
+    // ---- the wall faces along its run: a segment with a vertical
+    // neighbour but no horizontal one turns a quarter, so north-south
+    // stretches stop reading as broadside planks. Resolved once. ----
+    if (m.userData.wallAlign) {
+      const { x: wxN, y: wyN } = m.userData.wallAlign
+      if (!s._wallTiles) { // one pass over the nodes, cached on the state
+        s._wallTiles = new Set()
+        for (const nn of Object.values(s.nodes)) if (nn.type === 'wall') s._wallTiles.add(nn.x + ',' + nn.y)
+      }
+      const isWall = (dx, dy) => s._wallTiles.has((wxN + dx) + ',' + (wyN + dy))
+      const horiz = isWall(-1, 0) || isWall(1, 0)
+      const vert = isWall(0, -1) || isWall(0, 1)
+      if (vert && !horiz) m.rotation.y = Math.PI / 2 // it runs north-south: turn to match
+      m.userData.wallAlign = null // the lattice does not move; resolve once
+    }
     // ---- a worked seam LOOKS worked now. The mined boulder collapses
     // to low rubble, darker and duller, its moss torn off with the
     // stone; the mined crystal cluster loses its spikes, its light and
@@ -2804,8 +2864,8 @@ const splats = []
 // every window shares, then living dots painted over it. Tap the map,
 // walk the world. ----
 let miniCv = null, miniCtx = null, miniTerrain = null, miniAt = 0
-const MINI_VW = 48, MINI_VH = 24 // the map is LOCAL now: a window that walks with you
-let miniView = { sx: 0, sy: 0 }
+let miniAreaEl = null, miniLastArea = ''
+const MINI_VW = 48, MINI_VH = 48 // square now: it turns, so it must be round-ish
 function buildMinimap() {
   miniTerrain = document.createElement('canvas'); miniTerrain.width = W; miniTerrain.height = H
   const mg = miniTerrain.getContext('2d')
@@ -2818,62 +2878,105 @@ function buildMinimap() {
   if (miniCv) return
   const wrap = document.createElement('div')
   wrap.id = 'mini3d'
-  wrap.style.cssText = 'position:fixed;top:64px;right:10px;z-index:20;border:2px solid #6b5d43;border-radius:8px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.5);opacity:.92;background:#0a0c08'
+  wrap.style.cssText = 'position:fixed;top:64px;right:10px;z-index:20;display:flex;flex-direction:column;align-items:center;gap:4px'
+  // the disc: a round window on the world that TURNS with you, so up is
+  // always where you're looking. A compass ring stands outside it.
+  const disc = document.createElement('div')
+  disc.style.cssText = 'position:relative;width:150px;height:150px'
   miniCv = document.createElement('canvas')
   miniCv.width = MINI_VW * 2; miniCv.height = MINI_VH * 2
-  miniCv.style.cssText = 'width:168px;height:84px;display:block;image-rendering:pixelated'
-  wrap.appendChild(miniCv)
+  miniCv.style.cssText = 'position:absolute;inset:11px;width:128px;height:128px;border-radius:50%;'
+    + 'border:2px solid #6b5d43;box-shadow:0 2px 10px rgba(0,0,0,.5),inset 0 0 18px rgba(0,0,0,.55);image-rendering:pixelated;background:#0a0c08'
+  disc.appendChild(miniCv)
+  // the cardinal ring: N always at the top of the frame, since the MAP
+  // turns, not the letters — the ring is the fixed compass the disc spins under
+  const ring = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  ring.setAttribute('viewBox', '0 0 150 150')
+  ring.style.cssText = 'position:absolute;inset:0;width:150px;height:150px;pointer-events:none'
+  const card = [['N', 75, 12, '#ffcc55'], ['E', 142, 79, '#d8cfb4'], ['S', 75, 146, '#d8cfb4'], ['W', 8, 79, '#d8cfb4']]
+  for (const [ch, cx, cy, col] of card) {
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+    t.setAttribute('x', cx); t.setAttribute('y', cy); t.setAttribute('fill', col)
+    t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'middle')
+    t.setAttribute('font-family', 'Verdana'); t.setAttribute('font-size', ch === 'N' ? '15' : '13')
+    t.setAttribute('font-weight', 'bold'); t.setAttribute('style', 'text-shadow:0 1px 2px #000')
+    t.textContent = ch; ring.appendChild(t)
+  }
+  disc.appendChild(ring)
+  wrap.appendChild(disc)
+  // the area name, as /play shows it, riding under the disc
+  miniAreaEl = document.createElement('div')
+  miniAreaEl.style.cssText = 'font-family:Verdana;font-size:12px;font-weight:bold;color:#e8dcc0;'
+    + 'background:rgba(20,16,10,.72);border:1px solid #6b5d43;border-radius:6px;padding:2px 10px;text-shadow:0 1px 2px #000;white-space:nowrap'
+  wrap.appendChild(miniAreaEl)
   document.body.appendChild(wrap)
   miniCtx = miniCv.getContext('2d')
-  miniCv.addEventListener('pointerdown', (e) => { // tap the map, walk the world
+  miniCv.addEventListener('pointerdown', (e) => { // tap the map, walk the world — through the SAME rotation
     e.stopPropagation(); e.preventDefault()
     if (!world || !myId || !world.players[myId]) return
     const r = miniCv.getBoundingClientRect()
-    const gx = Math.max(0, Math.min(W - 1, miniView.sx + Math.floor((e.clientX - r.left) / r.width * MINI_VW)))
-    const gy = Math.max(0, Math.min(H - 1, miniView.sy + Math.floor((e.clientY - r.top) / r.height * MINI_VH)))
+    // undo the disc's +heading spin: Rot(-heading) on the screen offset
+    const ux = ((e.clientX - r.left) / r.width - 0.5) * MINI_VW
+    const uy = ((e.clientY - r.top) / r.height - 0.5) * MINI_VH
+    const meM = beings.get(myId); const rot = (meM ? meM.rotation.y : 0) + Math.PI
+    const c = Math.cos(rot), sn = Math.sin(rot)
+    const wxr = ux * c + uy * sn, wyr = -ux * sn + uy * c // Rot(-(heading+π))
+    const gx = Math.max(0, Math.min(W - 1, Math.round(world.players[myId].x + wxr)))
+    const gy = Math.max(0, Math.min(H - 1, Math.round(world.players[myId].y + wyr)))
     walkGoal = { x: gx, y: gy }; huntTarget = null; workTarget = null
     goalRing.material.color.set(0xffe83a)
     goalRing.position.set(wx(gx), 0.03, wz(gy)); goalRing.visible = true
   })
 }
 function paintMinimap(s, now) {
-  if (!miniCtx || now - miniAt < 160) return
+  if (!miniCtx || now - miniAt < 120) return
   miniAt = now
   const meP = s.players[myId]
-  // the viewport rides with you, clamped at the world's rim
-  if (meP) {
-    miniView.sx = Math.max(0, Math.min(W - MINI_VW, Math.round(meP.x - MINI_VW / 2)))
-    miniView.sy = Math.max(0, Math.min(H - MINI_VH, Math.round(meP.y - MINI_VH / 2)))
-  }
-  const { sx, sy } = miniView
-  const px2 = (gx) => (gx - sx) * 2, py2 = (gy) => (gy - sy) * 2
-  const inV = (gx, gy) => gx >= sx - 1 && gx <= sx + MINI_VW && gy >= sy - 1 && gy <= sy + MINI_VH
-  miniCtx.drawImage(miniTerrain, sx, sy, MINI_VW, MINI_VH, 0, 0, MINI_VW * 2, MINI_VH * 2)
-  miniCtx.fillStyle = '#3a6ba8' // the waters
-  for (const nd of Object.values(s.nodes)) if (nd.type === 'fishing-spot' && inV(nd.x, nd.y)) miniCtx.fillRect(px2(nd.x), py2(nd.y), 2, 2)
-  miniCtx.fillStyle = '#2f7a35' // the trees, now that the map is close enough to care
-  for (const nd of Object.values(s.nodes)) if (nd.type === 'tree' && inV(nd.x, nd.y) && !(nd.depletedUntil > s.tick)) miniCtx.fillRect(px2(nd.x), py2(nd.y), 2, 2)
-  miniCtx.fillStyle = '#ff8830' // the fires
+  const meM = beings.get(myId)
+  const heading = meM ? meM.rotation.y : 0
+  // the viewport is CENTERED on you and turns: the world scrolls and
+  // spins beneath a fixed eye, north wherever the ring says north
+  const cxp = meP ? meP.x : W / 2, cyp = meP ? meP.y : H / 2
+  const S = MINI_VW * 2 // canvas is square
+  const R = MINI_VW / 2 // world-tiles from center to edge
+  miniCtx.setTransform(1, 0, 0, 1, 0, 0)
+  miniCtx.clearRect(0, 0, S, S)
+  miniCtx.save()
+  miniCtx.translate(S / 2, S / 2)
+  // rotation.y = atan2(worldDX, worldDY), so the facing vector is
+  // (sin h, cos h) in world (x,y) with y pointing DOWN on the map.
+  // Rotating the canvas by (h + π) sends that vector to screen-up, so
+  // the way you face is always at the top, under the fixed N.
+  miniCtx.rotate(heading + Math.PI)
+  miniCtx.imageSmoothingEnabled = false
+  // draw the terrain patch centered on the player, scaled to the disc
+  const scale = (S / 2) / R
+  miniCtx.drawImage(miniTerrain, cxp - R, cyp - R, R * 2, R * 2, -R * scale, -R * scale, R * 2 * scale, R * 2 * scale)
+  const wpx = (gx, gy) => [(gx - cxp) * scale, (gy - cyp) * scale]
+  const inV = (gx, gy) => Math.abs(gx - cxp) <= R + 1 && Math.abs(gy - cyp) <= R + 1
+  const dot = (gx, gy, col, r) => { const [dx, dy] = wpx(gx, gy); miniCtx.fillStyle = col; miniCtx.fillRect(dx - r, dy - r, r * 2, r * 2) }
+  for (const nd of Object.values(s.nodes)) if (nd.type === 'fishing-spot' && inV(nd.x, nd.y)) dot(nd.x, nd.y, '#3a6ba8', 1.5)
+  for (const nd of Object.values(s.nodes)) if (nd.type === 'tree' && inV(nd.x, nd.y) && !(nd.depletedUntil > s.tick)) dot(nd.x, nd.y, '#2f7a35', 1.5)
   for (const nd of Object.values(s.nodes)) {
     if (nd.type !== 'campfire' && nd.type !== 'fire') continue
     if (nd.type === 'fire' && nd.expiresAt <= s.tick) continue
-    if (inV(nd.x, nd.y)) miniCtx.fillRect(px2(nd.x) - 1, py2(nd.y) - 1, 3, 3)
+    if (inV(nd.x, nd.y)) dot(nd.x, nd.y, '#ff8830', 2)
   }
-  miniCtx.fillStyle = '#d94a3a' // the beasts
-  for (const mb of Object.values(s.mobs)) if (mb.hp > 0 && inV(mb.x, mb.y)) miniCtx.fillRect(px2(mb.x) - 1, py2(mb.y) - 1, 3, 3)
-  miniCtx.fillStyle = '#e8e4d8' // the others
-  for (const [pid, p] of Object.entries(s.players)) if (pid !== myId && p.hp > 0 && inV(p.x, p.y)) miniCtx.fillRect(px2(p.x) - 1, py2(p.y) - 1, 3, 3)
-  if (walkGoal && inV(walkGoal.x, walkGoal.y)) { miniCtx.strokeStyle = '#ffe83a'; miniCtx.lineWidth = 1; miniCtx.strokeRect(px2(walkGoal.x) - 2, py2(walkGoal.y) - 2, 5, 5) }
-  if (meP) { // you, and the way you face
+  for (const mb of Object.values(s.mobs)) if (mb.hp > 0 && inV(mb.x, mb.y)) dot(mb.x, mb.y, '#d94a3a', 2)
+  for (const [pid, p] of Object.entries(s.players)) if (pid !== myId && p.hp > 0 && inV(p.x, p.y)) dot(p.x, p.y, '#e8e4d8', 2)
+  if (walkGoal && inV(walkGoal.x, walkGoal.y)) { const [dx, dy] = wpx(walkGoal.x, walkGoal.y); miniCtx.strokeStyle = '#ffe83a'; miniCtx.lineWidth = 1.5; miniCtx.strokeRect(dx - 3, dy - 3, 6, 6) }
+  miniCtx.restore()
+  if (meP) { // you sit at the center, always pointing UP the disc — a chevron, so facing reads at a glance
     miniCtx.fillStyle = '#ffcc33'
-    miniCtx.fillRect(px2(meP.x) - 1, py2(meP.y) - 1, 4, 4)
-    const meM = beings.get(myId)
-    if (meM) {
-      miniCtx.strokeStyle = '#ffcc33'; miniCtx.lineWidth = 1.5
-      miniCtx.beginPath(); miniCtx.moveTo(px2(meP.x) + 1, py2(meP.y) + 1)
-      miniCtx.lineTo(px2(meP.x) + 1 + Math.sin(meM.rotation.y) * 9, py2(meP.y) + 1 + Math.cos(meM.rotation.y) * 9)
-      miniCtx.stroke()
-    }
+    miniCtx.beginPath()
+    miniCtx.moveTo(S / 2, S / 2 - 6); miniCtx.lineTo(S / 2 - 4, S / 2 + 5); miniCtx.lineTo(S / 2, S / 2 + 2); miniCtx.lineTo(S / 2 + 4, S / 2 + 5)
+    miniCtx.closePath(); miniCtx.fill()
+    miniCtx.strokeStyle = 'rgba(20,16,8,.8)'; miniCtx.lineWidth = 1; miniCtx.stroke()
+  }
+  // the area name, refreshed only when it changes
+  if (miniAreaEl && meP) {
+    const an = regionNameAt(Math.round(meP.x), Math.round(meP.y)) || '…'
+    if (an !== miniLastArea) { miniLastArea = an; miniAreaEl.textContent = an }
   }
 }
 function spawnArrow(from, to) { // the shot, made visible
