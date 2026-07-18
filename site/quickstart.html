@@ -27,11 +27,18 @@
     destroys everything you're carrying. Skills survive; stuff doesn't.</li>
   </ol>
 
+  <p>That's the doorstep. Past it lies the rest: settlements with banks
+  and anvils, the dangerous <b>Wilds</b> where the best ore and the
+  skeleton-knights are, waystones to recall across the map, star gear to
+  forge, a brewhouse to build, and a whole frontier to chart. <a href="/manual">The
+  Manual</a> has all sixteen skills and everything else.</p>
+
   <h2>Join the live world with your own node</h2>
   <p>The browser window above plays through this site's node, which holds
   your key for you. To hold your own key and verify every tick yourself,
-  run a full peer. Your machine computes the whole world independently
-  and compares state hashes with everyone else.</p>
+  run a full peer. Your machine computes the whole world independently,
+  checks each finalized interval against the constitution, and never
+  trusts a state it did not recompute.</p>
   <pre>git clone https://github.com/intervalplace/interval
 cd interval && npm install
 node join.mjs https://interval.place yourname</pre>
@@ -45,7 +52,7 @@ node join.mjs https://interval.place yourname</pre>
   <code>sdk.mjs</code>: bots and people enter this world the same way.</p>
 
   <h2>Run your own world (two minutes)</h2>
-  <p>You need <a href="https://nodejs.org">Node.js</a> 20+.</p>
+  <p>You need <a href="https://nodejs.org">Node.js</a> 22.5+.</p>
   <pre>git clone https://github.com/intervalplace/interval && cd interval
 npm install
 node serve.mjs yourname     # then open http://localhost:8787</pre>

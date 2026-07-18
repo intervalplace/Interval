@@ -12,35 +12,41 @@
 
   <h2>What is this?</h2>
   <p>Interval is a small online world in the spirit of early-2000s
-  browser games: chop trees, catch fish, burn half of them on a
-  campfire, fight goblins, trade with whoever is standing next to you.
-  Every 600 milliseconds the world advances one interval, and everything
-  that ever happens, happens on one.</p>
+  browser games. North is forest, east is stone, south is water, west is
+  danger, and the middle is home. Cut timber in the Greenwood, dig the
+  Crags, fish the Fens, fight the skeleton-knights that muster in the
+  Wilds, forge star gear, brew ale in a house you have made your own,
+  chart the frontier and sell the way, and raise a watchfire so the road
+  is lit for whoever comes after you. Every 600 milliseconds the world
+  advances one interval, and everything that ever happens, happens on
+  one.</p>
   <p>The difference is underneath. There is no game server. The rules
-  are written in a public constitution, every player's computer enforces
-  them independently, and anyone whose world disagrees with the rules is
-  simply ignored by everyone else. Nobody can shut it down, charge for
-  it, or change it out from under you. An update you don't like is just
-  a different world you don't have to move to.</p>
+  are written in a public constitution, every node computes the world
+  independently, and a quorum of witnesses named in that constitution
+  certifies each interval, producing a proof of what happened that
+  anyone can check against the founding record alone. Under a network
+  split the world stops rather than fork: a stopped world, never two
+  worlds. Nobody can shut it down, charge for it, or change it out from
+  under you. An update you don't like is just a different world you don't
+  have to move to.</p>
 
-  <div class="cards">
-    <div class="card stone"><b>Free forever</b><p>No company, no servers, no
-    subscription. The world runs on the computers of the people playing
-    in it, and stays alive as long as anyone cares.</p></div>
-    <div class="card stone"><b>Your key is your character</b><p>Your character
-    is a cryptographic keypair on your machine. No account, no password
-    reset, no one to confiscate it.</p></div>
-    <div class="card stone"><b>Any window you like</b><p>There is no official
-    look. This site's client is one window among many, the same world
-    renders in a terminal, in ASCII, or in whatever anyone builds.</p></div>
-    <div class="card stone"><b>Bots run the streetlights</b><p>In every
-    other MMO, bots are criminals: they burn a company's servers and
-    give nothing back. Here a serious bot runs its own node, so the
-    same script that grinds woodcutting is also verifying every tick
-    and enforcing the constitution on everyone, including itself. The
-    rules never ask whether a player is human; automation is priced
-    into the economy, and presence cannot be automated.</p></div>
-  </div>
+  <p class="tenet"><span class="rune"><svg viewBox="0 0 16 16"><path d="M5 2 V14 M5 5 L11 2 M5 8 L11 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><b>Free forever.</b> No company, no servers, no
+  subscription. The world runs on the computers of the people playing
+  in it, and stays alive as long as anyone cares.</p>
+  <p class="tenet"><span class="rune"><svg viewBox="0 0 16 16"><path d="M4 2 V14 M4 2 L10 5 L4 8 M4 8 L11 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><b>Your key is your character.</b> A cryptographic keypair
+  on your machine. No account, no password reset, no one to confiscate it.</p>
+  <p class="tenet"><span class="rune"><svg viewBox="0 0 16 16"><path d="M8 2 V14 M8 6 L3 2 M8 6 L13 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><b>Any window you like.</b> There is no official
+  look. This site's client is one window among many; the same world
+  renders in a terminal, in ASCII, or in whatever anyone builds.</p>
+  <p class="tenet"><span class="rune"><svg viewBox="0 0 16 16"><path d="M3 13 L8 3 L13 13 M5.5 9 H10.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><b>No combat level.</b> A citizen is
+  introduced by their <b>standing</b>, the sum of all sixteen skills, and their
+  <b>calling</b>, the trade they are best at. Combat is three skills of sixteen,
+  and this world does not rank its people by their capacity for violence.</p>
+  <p class="tenet"><span class="rune"><svg viewBox="0 0 16 16"><path d="M4 2 V14 M4 5 L9 8 L4 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><b>Bots hold the lanterns.</b> A serious bot runs its own
+  node, so the same script that grinds woodcutting is also verifying every
+  interval and enforcing the constitution on everyone, itself included. The
+  rules never ask whether a player is human; automation is priced into the
+  economy, and presence cannot be automated.</p>
 
   <h2>Start here</h2>
   <p><a href="/play"><b>Play in this browser</b></a>: the reference window,

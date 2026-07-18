@@ -1,8 +1,9 @@
 /* Interval site: the reference window's aesthetic, page-sized.
    Stone bevel chrome, gold-on-brown text, parchment body. */
 :root {
-  --ink: #16120c; --stone: #494034; --stone-dk: #2e2820; --stone-lt: #6b5f4a;
-  --gold: #ffcc33; --parch: #d9c9a3; --dim: #9a8a68; --fire: #e67e22; --grass: #3d5a23;
+  --ink: #0b0703; --stone: #291f12; --stone-dk: #191108; --stone-lt: #55462d;
+  --gold: #c6941e; --gold-hi: #e2b63e; --glow: 198,148,30;
+  --parch: #d6c49c; --dim: #94805a; --fire: #e67e22; --grass: #3d5a23;
 }
 * { box-sizing: border-box; margin: 0; }
 body {
@@ -65,7 +66,7 @@ li { margin-bottom: 6px; }
 
 /* the gate's language, brought to the site */
 h1 {
-  text-shadow: 0 0 14px rgba(255,204,51,.35), 0 2px 0 #1c1710;
+  text-shadow: 0 0 14px rgba(198,148,30,.35), 0 2px 0 #1c1710;
   letter-spacing: 4px;
 }
 .page > main.stone { position: relative; }
@@ -85,7 +86,7 @@ h1 {
   to { transform: scaleY(1.22) skewX(4deg); opacity: 1; }
 }
 a { color: var(--gold); }
-a:hover { text-shadow: 0 0 8px rgba(255,204,51,.5); }
+a:hover { text-shadow: 0 0 8px rgba(198,148,30,.5); }
 pre, code {
   background: #241f18; border: 1px solid #3a332a;
   border-radius: 2px; color: #d9c9a3;
@@ -103,8 +104,42 @@ main.stone > .tick { display: block; width: fit-content; margin: 12px auto 6px; 
 #board th { text-transform: capitalize; font-size: 11px; letter-spacing: .3px; }
 #board tr:nth-child(even) td { background: rgba(0,0,0,.10); }
 #board tr:nth-child(even) td:nth-child(2) { background: #3f382e; }
-#board tr:hover td { background: rgba(255,204,51,.06); }
+#board tr:hover td { background: rgba(198,148,30,.06); }
 #board td:nth-child(3) { color: var(--gold); font-weight: bold; }
-#board tr:nth-child(2) td:first-child { color: #ffcc33; font-weight: bold; }
+#board tr:nth-child(2) td:first-child { color: #e2b63e; font-weight: bold; }
 #board tr:nth-child(3) td:first-child { color: #c0c0c0; font-weight: bold; }
 #board tr:nth-child(4) td:first-child { color: #b08d57; font-weight: bold; }
+
+
+/* ---- v0.52 palette: earthen stone, grained and cracked, metal-gold ---- */
+body {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E");
+}
+.stone {
+  background-color: var(--stone);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23g)' opacity='0.10'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 26% 8%, rgba(255,238,196,.055), transparent 55%),
+    radial-gradient(ellipse at 88% 96%, rgba(0,0,0,.3), transparent 55%);
+}
+main.stone {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='840' height='920'%3E%3Cg fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M120 40 L146 96 L128 128 L168 176 L150 214 L188 270 L172 322 L206 388 M146 96 L192 112 M168 176 L126 200 M610 430 L646 494 L620 548 L672 620 L648 690 L704 766 M646 494 L696 512 M620 548 L578 566' opacity='0.09' stroke-width='3.6'/%3E%3Cpath d='M120 40 L146 96 L128 128 L168 176 L150 214 L188 270 L172 322 L206 388 M146 96 L192 112 M168 176 L126 200 M610 430 L646 494 L620 548 L672 620 L648 690 L704 766 M646 494 L696 512 M620 548 L578 566' opacity='0.26' stroke-width='1.1'/%3E%3C/g%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23g)' opacity='0.10'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 26% 8%, rgba(255,238,196,.055), transparent 55%),
+    radial-gradient(ellipse at 88% 96%, rgba(0,0,0,.3), transparent 55%);
+}
+h1 {
+  background: linear-gradient(180deg, #f2d574 0%, #c6941e 50%, #855c10 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 0 11px rgba(var(--glow),.38)) drop-shadow(0 1px 0 rgba(0,0,0,.6));
+}
+.tick { color: var(--gold-hi); }
+/* the creed: bold gold lines marked by small carved runes, no boxes */
+.tenet { margin: 0 0 11px; padding-left: 28px; position: relative; }
+.tenet b { color: var(--gold); }
+.rune { position: absolute; left: 0; top: 2px; width: 16px; height: 16px; color: var(--gold-hi);
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.6)); }
+.rune svg { display: block; }

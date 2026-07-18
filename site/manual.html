@@ -8,76 +8,200 @@
 
   <h2>The world in one paragraph</h2>
   <p>Interval is a deterministic world: fixed rules, integer numbers,
-  time in 600ms intervals. Every player's node computes the same next
-  state from the same inputs, so the network needs no referee: a state
-  that disagrees with the rules simply doesn't match anyone else's hash
-  and is ignored. The rules live in <code>SPEC.md</code>, the constitution.
-  Changing them creates a new world; nobody is ever force-updated.</p>
+  time in 600ms intervals. Every node computes the same next state from
+  the same inputs, so no one is the referee. A quorum of witnesses named
+  in the constitution certifies each interval, they recompute the
+  transition themselves and attest to the <i>result</i>, not merely the
+  proposal, so a finalized interval carries a portable proof anyone can
+  check against the founding record alone. Under partition the world
+  <b>stops finalizing rather than fork</b>: a stopped world, never two
+  worlds. The rules live in <code>SPEC.md</code>, the constitution; the
+  finality machinery in <code>CONSENSUS.md</code>. Changing either
+  creates a new world, and nobody is ever force-updated.</p>
 
-  <h2>Skills</h2>
+  <h2>The sixteen skills</h2>
+  <p>Levels run 1 to 99 on the classic exponential curve (level 99 =
+  13,034,431 xp). Reaching it is meant to take a very long time. Master
+  all sixteen and the whole world hears of it.</p>
   <table>
     <tr><th>Skill</th><th>Kind</th><th>How it trains</th></tr>
-    <tr><td>Woodcutting</td><td>Gathering</td><td>Chop trees → logs (25 xp)</td></tr>
-    <tr><td>Mining</td><td>Gathering</td><td>Mine rocks → ore (35 xp)</td></tr>
-    <tr><td>Fishing</td><td>Gathering</td><td>Fish spots → raw fish (30 xp)</td></tr>
-    <tr><td>Smithing</td><td>Processing</td><td>Forge tools and weapons at an anvil from ore + logs (30 xp per ore). Bronze sword: +2 max hit. Bronze hatchet/pickaxe: gather faster.</td></tr>
-    <tr><td>Firemaking</td><td>Processing</td><td>Light logs where you stand (40 xp): a fire that cooks and glows for a minute. Success rises with level.</td></tr>
-    <tr><td>Cooking</td><td>Processing</td><td>Cook raw fish at a campfire (30 xp on success; failures burn: the fish is consumed either way)</td></tr>
-    <tr><td>Attack</td><td>Combat</td><td>4 xp per damage dealt</td></tr>
-    <tr><td>Defence</td><td>Combat</td><td>4 xp per enemy blow you avoid</td></tr>
-    <tr><td>Hitpoints</td><td>Combat</td><td>1 xp per damage dealt; starts at level 10; max HP equals its level</td></tr>
+    <tr><td>Woodcutting</td><td>Gathering</td><td>Chop trees &rarr; logs</td></tr>
+    <tr><td>Mining</td><td>Gathering</td><td>Mine rocks &rarr; ore; magic-rocks &rarr; magic-stone</td></tr>
+    <tr><td>Fishing</td><td>Gathering</td><td>Fish the water's edge &rarr; raw fish</td></tr>
+    <tr><td>Farming</td><td>Gathering</td><td>Sow seeds on a plot, let them grow, harvest &rarr; grain</td></tr>
+    <tr><td>Cooking</td><td>Processing</td><td>Cook raw fish at a fire (failures burn; the fish is spent either way)</td></tr>
+    <tr><td>Firemaking</td><td>Processing</td><td>Light logs where you stand. At high level, raise and feed a <b>watchfire</b>: public light that lasts</td></tr>
+    <tr><td>Smithing</td><td>Processing</td><td>Forge at an anvil from ore + logs: bronze tools and armor, and star gear from magic-stone</td></tr>
+    <tr><td>Fletching</td><td>Processing</td><td>Cut logs into a bow and arrows</td></tr>
+    <tr><td>Attack</td><td>Combat</td><td>4 xp per point of melee damage dealt</td></tr>
+    <tr><td>Defence</td><td>Combat</td><td>Soak and survive; armor reduces every blow</td></tr>
+    <tr><td>Hitpoints</td><td>Combat</td><td>Rises as you fight; starts at level 10; max HP equals its level</td></tr>
+    <tr><td>Ranged</td><td>Combat</td><td>Loose arrows from a wooden bow at distance</td></tr>
+    <tr><td>Magic</td><td>Combat</td><td>Press three magic-stones into a sigil; cast <i>mend</i> (heal) or <i>anchor</i> (recall home)</td></tr>
+    <tr><td>Prayer</td><td>Support</td><td>Bury the bones of the fallen</td></tr>
+    <tr><td>Exploration</td><td>Profession</td><td>Survey markers the beacon scatters across the world; paid in distance travelled</td></tr>
+    <tr><td>Brewing</td><td>Profession</td><td>Ferment grain into ale, fish into broth, at a brewpot raised beside a house</td></tr>
   </table>
-  <p>Levels run 1–99 on the classic exponential curve (level 99 =
-  13,034,431 xp). Reaching it is meant to take a very long time.</p>
+
+  <h2>Standing and calling</h2>
+  <p>A citizen is introduced by two things, and neither is a score. <b>Standing</b>
+  is the sum of your true level in all sixteen skills, so it privileges no
+  profession: an explorer who never draws a sword and a knight who never brews
+  are measured by the same rule. It has no ceiling, because mastery at 99 is a
+  milestone rather than a limit, and a citizen who keeps going keeps rising.
+  <b>Calling</b> is the trade you are best at, said as a word: forester, miner,
+  fisher, cook, smith, firekeeper, mourner, archer, sigilist, farmer, fletcher,
+  fighter, warden, cartographer, brewer. Together they read as an introduction:</p>
+  <pre>Erik &middot; brewer (412)</pre>
+  <p>The number says how much of the world you have touched. The word says who
+  you are, and it is the more useful half: it tells you who to ask for a
+  smithing job, who sells charts, and whose tavern you are standing in. There
+  is deliberately no combat level. Combat is three skills of sixteen, and a
+  world whose countries are wood, stone, water, danger and home does not rank
+  its people by their capacity for violence. Because both are derived from
+  public state by a rule in the constitution, every window shows you the same
+  citizen.</p>
+
+  <h2>Watchfires</h2>
+  <p>An experienced firemaker can <b>kindle a watchfire</b>: a great fire on a
+  cairn of stones, bought with a heap of logs, that throws light across the
+  country for everyone who passes. Nobody owns the light. Anyone may
+  <b>stoke</b> any watchfire with a log, and the wood they give both extends
+  the burn and pays them Firemaking experience, so feeding a neighbour's fire
+  is not charity. While it burns, its keeper earns a slow trickle for the
+  vigil. Because burn time is only ever bought with wood, nobody earns
+  anything a forester did not first cut.</p>
+  <p>A fire left cold long enough crumbles to ash and returns its ground to the
+  commons, and watchfires can be walked through, so no arrangement of them can
+  wall a door. Nobody is assigned to light the long road between two towns. If
+  it gets lit, it is because somebody decided it should be, and every traveller
+  after them walks in a light they did not build.</p>
+
+  <h2>The shape of the world</h2>
+  <p>The map is not uniform. At its heart sit <b>settlements</b>,
+  Anchor and its lesser kin, safe ground thick with banks, anvils,
+  stores, and the resources of a settled life. Push outward and the
+  land grows wilder and richer, until you reach <b>the Wilds</b>: the
+  frontier, where the best ore and the rarest quarry lie, and where the
+  world stops protecting you. Danger rises with distance, and so does
+  reward.</p>
+  <p>The founding world of the expanse is built so that <b>every direction
+  means something</b>. North is the <b>Greenwood</b>, the deep forest and the
+  best woodcutting in the world, patrolled by wolves and, further in, bears.
+  East are the <b>Crags</b>, rocky uplands thick with ore and trolls, where the
+  smiths get their supply. South are the <b>Fens</b>, wetland and shore, all
+  fishing and goblin warrens, opening onto the bay. West are the <b>Wilds</b>,
+  the frontier, where the richest magic-rock lies and the skeleton-knights
+  muster in warbands. The middle is the <b>Heartlands</b>: farmed, settled,
+  walled, and where most citizens keep a roof. Seven walled settlements stand
+  across it, every road a spoke leading back to Anchor. A citizen who learns
+  that once still knows it a year later, which is what a world owes people who
+  leave and come back.</p>
+  <p><b>Waystones</b> stand scattered across the map. Stand beside one to
+  <i>attune</i> to it; thereafter you may <i>recall</i> to any waystone
+  you've attuned, fast travel earned by having walked there once
+  (and never from within the Wilds; the frontier does not let you blink
+  away). A finished explorer can sell that attunement as a chart, so
+  even a citizen who never left home can buy the way.</p>
+
+  <h2>Combat, plainly</h2>
+  <p>Engage and combat runs itself: you trade blows every interval until
+  one of you falls. Three ways to fight, <b>melee</b> (attack,
+  defence, hitpoints), <b>ranged</b> (a bow and arrows, striking at
+  distance), and <b>magic</b> (a sigil spent to <i>mend</i> in the thick
+  of it). <b>Armor</b> forged at the anvil (bronze, and the rare
+  star plate and helm) soaks every incoming blow. Death destroys
+  what you wear and carry, so the Wilds ask you to weigh every piece.</p>
+  <p>The roster you'll meet: <b>goblins</b> (drop bones, sometimes ore
+  and seeds), <b>wolves</b>, <b>bears</b> (a bronze hatchet, if you're
+  lucky), <b>trolls</b> (bronze plate, and rarely an old chain), and,
+  mustering in warbands in and around the Wilds, the
+  <b>skeleton-knight</b>: horned, shield-bearing, hard to strike and
+  quick to bite back. Fell one and its bones pay double; fell enough and
+  one may yield the horned <b>star-helm</b> itself.</p>
+  <p><b>Star gear</b> is the frontier's reward: forged from magic-stone
+  (star sword, plate, helm) or looted from a knight. The <b>star-dagger</b>
+  strikes lighter than the sword but <i>roots</i> what it hits for a few
+  intervals, a rare, long-cooldown hold, no chaining, no
+  stun-locks. Land it well and it decides a fight.</p>
+
+  <h2>The Brand</h2>
+  <p>Strike an unprovoked citizen in the Wilds and you are <b>branded</b>,
+  your name burns crimson and a hot-iron mark rides above you for
+  a time, seen by everyone. The rules impose no penalty; the record
+  simply makes the deed legible, and the rest of the world decides what
+  it means. Reputation, not punishment, enforced by daylight.</p>
+
+  <h2>Exploration &amp; charts</h2>
+  <p>The beacon keeps a handful of <b>survey markers</b> scattered across
+  the world, relocating as they're claimed so the frontier never runs
+  out. Stand on one to survey it; the XP scales with how far from home it
+  sat, so the deep, dangerous markers pay most. Reaching a marker by a
+  waystone yields a <b>chart</b>, a tradeable token that grants its
+  buyer attunement to that waystone without the walk. Knowledge, made a
+  good. An explorer who never fights can still grow rich selling the map.</p>
+
+  <h2>Brewing &amp; the brewhouse</h2>
+  <p>Raise a <b>brewpot</b> beside a house (logs and ore to build; four
+  to a citizen), set grain to ferment into <b>ale</b> or fish into
+  <b>broth</b>, and walk away, the world does the waiting. Return
+  when it's ready and collect a stackable, tradeable draught that heals.
+  The protocol knows nothing of taverns; it knows only that a brewpot
+  needs a roof beside it. A house ringed with brewpots and the people who
+  gather there becomes <i>somebody's tavern</i>, a meaning players
+  assign, the way they made routes of waystones. Brewpots are walkable
+  (they wall no one in), and an abandoned one crumbles back to the
+  commons, so the world stays open to whoever comes next.</p>
+
+  <h2>Milestones</h2>
+  <p>Some deeds the whole world sees. Master a skill, and everyone is
+  told; be the <i>first</i> ever to master it, and the telling is
+  grander. Master all sixteen and you become a <b>Master of Interval</b>,
+  vanishingly rare, and permanent in the record. The first into
+  the Wilds, the first to fell a skeleton-knight, the first to press a
+  sigil, the first to draw a finished brew, the firsts are kept
+  forever. And each year the world marks its own age.</p>
+
+  <h2>The bank, trade, death, names</h2>
+  <p><b>The bank</b> survives death: stand at a bank and deposit one item
+  per interval; what you vault endures, what you carry can burn.
+  <b>Trade</b> is face-to-face, adjacent tiles, item for item,
+  settled atomically in one interval, whole or not at all. <b>Death</b>
+  at 0 HP returns you to spawn with your carried inventory destroyed;
+  skills, XP, and your name survive. <b>Names</b> are in-world objects:
+  first valid claim wins, one per character, lowercase letters, digits,
+  and hyphens, up to twelve.</p>
+
+  <h2>Worlds and forks</h2>
+  <p>A world is identified by the hash of its constitution. Change a rule
+  and you have created a different world on a different network: one that
+  shares history up to the fork and welcomes whoever prefers it. Updates
+  don't happen to you; they compete for you. This is how the world
+  governs itself, by exit, not by decree.</p>
 
   <h2>Ways to play</h2>
   <div class="cards">
     <div class="card stone"><b>The browser window</b><p><code>node serve.mjs yourname</code>,
-    open <code>localhost:8787</code>. Click-to-everything. This is the
-    reference window: the founding aesthetic, not the required one.</p></div>
+    open <code>localhost:8787/play</code>. Click-to-everything. The
+    reference window, the founding aesthetic, not the required one.
+    A 3D "deluxe" window renders the same world at <code>/deluxe</code>.</p></div>
     <div class="card stone"><b>The terminal window</b><p><code>node play.mjs yourname</code>.
-    WASD, g, x, f, e. The whole world in ASCII, because it can be.</p></div>
+    The whole world in ASCII, because it can be.</p></div>
     <div class="card stone"><b>The SDK</b><p>Write your own hands. <code>sdk.mjs</code>
     exposes the world as data and actions; a script and a human use the
     identical interface, by design.</p></div>
     <div class="card stone"><b>A node</b><p>Run infrastructure as a way of
-    playing. Nodes gossip inputs, enforce the constitution, serve
-    checkpoints to newcomers and history to the stalled.</p></div>
+    playing. Nodes gossip inputs, certify intervals, serve checkpoints to
+    newcomers and history to the stalled.</p></div>
   </div>
-
-  <h2>The bank</h2>
-  <p>Stand at a bank and tap items to deposit; tap the vault to withdraw.
-  One item per interval: patience is the fee. <b>The bank survives
-  death.</b> What you carry can burn; what you vault endures.</p>
-
-  <h2>Trade</h2>
-  <p>Walk up to someone (adjacent tiles), offer an item for an item, they
-  accept, and the swap settles atomically in a single interval: whole or
-  not at all. Trade deliberately requires being there.</p>
-
-  <h2>Death</h2>
-  <p>At 0 HP you respawn at the spawn point with your inventory
-  <b>destroyed</b>. Skills, XP, and your name survive. The constitution
-  itself labels this rule provisional: a softer death is an expected
-  fork, and the fork will be legitimate.</p>
-
-  <h2>Names</h2>
-  <p>Names are in-world objects: first valid claim wins, one per
-  character, forever (v0.x has no transfer). Lowercase letters, digits,
-  hyphens, up to 12 characters.</p>
-
-  <h2>Worlds and forks</h2>
-  <p>A world is identified by the hash of its constitution. Change a rule
-  and you have created a different world on a different network: one
-  that shares history up to the fork and welcomes whoever prefers it.
-  Updates don't happen to you; they compete for you.</p>
 
   <h2>Bots, plainly</h2>
   <p>The rules cannot tell a click from a script and refuse to pretend
   otherwise. What keeps the world human is design, not detection:
   resources deplete and are shared, processing destroys supply, trade
-  and (eventually) fleeting events reward being present. A bot can grind
-  all night; it cannot be <i>there</i>.</p>
+  requires being adjacent, and a brew ferments in real time whether or
+  not you're watching. A bot can grind all night; it cannot be
+  <i>there</i>.</p>
   <p>And the irony cuts the right way. Traditional games hunt bots
   because bots consume a world someone else pays to run. In Interval a
   bot cannot consume the world without computing it: every automated
@@ -87,16 +211,20 @@
   the power grid at once. Run a bot; you are holding a lantern.</p>
 
   <h2>The readable world (API)</h2>
-  <p>Every serving node exposes the world as JSON: hiscores sites,
-  clan pages, and market trackers are all just windows:</p>
-  <pre>GET /api/world      → { tick, worldId, players, mobs }
-GET /api/hiscores   → { players: [{ name, levels, total, xp }] }
-GET /api/player/:name → one citizen, full public record</pre>
+  <p>Every serving node exposes the world as JSON: hiscores sites, clan
+  pages, and market trackers are all just windows:</p>
+  <pre>GET /api/world        &rarr; { tick, worldId, players, mobs }
+GET /api/hiscores     &rarr; { players: [{ name, levels, total, xp }] }
+GET /api/player/:name &rarr; one citizen, full public record</pre>
 
   <h2>For the systems-minded</h2>
   <p>The full constitution is <code>SPEC.md</code> in the repository,
-  state machine, XP tables, combat math, checkpoint and catch-up
-  protocols, the works. The engine is ~400 lines of dependency-light
-  JavaScript that runs identically in Node and browsers. Reimplement it
-  in any language: if your hashes match, you're a citizen.</p>
+  state machine, XP tables, combat math, the skill rules, the
+  checkpoint and catch-up protocols, and the certified-interval
+  consensus is <code>CONSENSUS.md</code>. The engine is a single
+  dependency-light JavaScript file that runs identically in Node and
+  browsers; an adversarial simulator stress-tests the consensus against
+  equivocating witnesses and partitions, and the test suite proves no two
+  honest nodes ever finalize different history. Reimplement any of it in
+  any language: if your hashes match, you're a citizen.</p>
 </main></div></body></html>
