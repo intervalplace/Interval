@@ -3908,7 +3908,11 @@ function syncBeings(s, prev) {
           m.userData.pick.visible = nd2?.type === 'rock' || nd2?.type === 'magic-rock'
           m.userData.rod.visible = nd2?.type === 'fishing-spot'
         }
-        const wep = thing.equipment?.weapon?.item
+        // A hand holds one thing. While a tool is out for the job, whatever is
+        // wielded is slung and not drawn, or a citizen chops with an axe and a
+        // sword growing from the same fist.
+        const toolOut = !!(m.userData.hatchet?.visible || m.userData.pick?.visible || m.userData.rod?.visible)
+        const wep = toolOut ? null : thing.equipment?.weapon?.item
         m.userData.sword.visible = wep === 'bronze-sword' || wep === 'star-sword'
         m.userData.sword.material.color.set(wep === 'star-sword' ? 0x8ce0ff : 0xc9c2b2)
         m.userData.sword.material.emissive.set(wep === 'star-sword' ? 0x1c6a8e : 0x000000) // starlight in the steel
@@ -4009,6 +4013,20 @@ function syncBeings(s, prev) {
         m.visible = performance.now() - m.userData.dieAt < 1500
       } else if (m.userData.dieAt) { m.userData.dieAt = 0; m.rotation.z = 0 }
       else m.visible = true
+    }
+  }
+  if (pendingLight && ownKey) { // keep at it until it catches, or clearly will not
+    const meL = s.players[ownKey.pub]
+    const stillLogs = meL?.inventory?.[pendingLight.slot]?.item === 'logs'
+    const lit = Object.values(s.nodes ?? {}).some(n => n.type === 'fire'
+      && n.x === meL?.x && n.y === meL?.y && n.expiresAt > s.tick)
+    if (!meL || !stillLogs || lit) {
+      if (lit) feed('it catches')
+      pendingLight = null
+    } else if (s.tick > pendingLight.tick) {
+      pendingLight.tick = s.tick
+      if (++pendingLight.tries > 6) { feed('the wood is stubborn here. perhaps another spot'); pendingLight = null }
+      else send({ do: 'light', slot: pendingLight.slot })
     }
   }
   try { renderDeeds(s) } catch { /* the bar is decoration; never let it stop the world */ }
@@ -4229,6 +4247,13 @@ document.getElementById('inv3d').addEventListener('click', (e) => {
 document.getElementById('invact').addEventListener('click', (e) => {
   const b2 = e.target.closest('[data-act]')
   if (!b2 || selSlot < 0) return
+  if (b2.dataset.act === 'light') { // wood does not catch first time, and should not pretend to
+    pendingLight = { slot: selSlot, tries: 0, tick: world?.tick ?? 0 }
+    send({ do: 'light', slot: selSlot })
+    feed('you crouch and work at the wood')
+    selSlot = -1; lastInvSig = ''
+    return
+  }
   if (b2.dataset.act === 'fletchbow') { send({ do: 'fletch', slot: selSlot, make: 'bow' }); return }
   if (b2.dataset.act === 'fletcharrows') { send({ do: 'fletch', slot: selSlot, make: 'arrows' }); return }
   send({ do: b2.dataset.act, slot: selSlot })
@@ -4250,6 +4275,7 @@ let burstAt = -1e9
 // invisible wall at spawn that swallowed every tap
 let huntTarget = null // a mob id: walk in, then strike
 let workTarget = null // a node id: walk in, then gather
+let pendingLight = null // { slot, tries, tick } while coaxing a fire
 const GATHERABLE = new Set(['tree', 'rock', 'magic-rock', 'fishing-spot'])
 // things you walk to and use rather than harvest (v0.51-0.55)
 const USABLE = new Set(['waystone', 'brewpot', 'watchfire', 'plot'])

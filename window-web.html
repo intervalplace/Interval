@@ -1282,9 +1282,15 @@ function terrainOfE(x, y) {
 const REGION_NAMES = { greenwood: 'the Greenwood', crags: 'the Crags', fens: 'the Fens',
   wilds: 'the Wilds', meadow: 'the Heartlands', heartlands: 'the Heartlands' }
 const SETTLEMENT_NAMES = ['Anchor', 'Greenhollow', 'Millbrook', 'Cragfoot', 'Eastmere', 'Fenmarch', 'Norwick']
+const CLASSIC_NAMES = { wilds: 'the Wilds', cave: 'the Deep', scree: 'the Scree',
+  mountain: 'the Mountains', sea: 'the Sea', bridge: 'the Bridge',
+  cobble: 'the City', plaza: 'the Market', trail: 'the Road', meadow: 'the Meadows' }
 function regionNameAt(x, y) {
   try {
-    if (GEN !== 'interval-expanse-v1') return ''
+    if (GEN !== 'interval-expanse-v1') {
+      // the founding world has countries too; they were simply never named
+      return CLASSIC_NAMES[terrainOf(x, y)] ?? ''
+    }
     const ss = ssE()
     for (let i = 0; i < ss.length; i++) {
       const t = ss[i]
@@ -2327,10 +2333,10 @@ function drawScene(now) {
                : p.action?.type === 'attack' ? 'fight' : 'idle'
     const workNode = p.action?.nodeId ? s.nodes[p.action.nodeId] : null
     const tool = workNode?.type === 'fishing-spot' ? 'rod'
-               : workNode?.type === 'rock' ? 'pick' : 'axe'
+               : (workNode?.type === 'rock' || workNode?.type === 'magic-rock') ? 'pick' : 'axe'
     const wep = p.equipment?.weapon?.item
     const bronzeTool = (workNode?.type === 'tree' && wep === 'bronze-hatchet')
-                    || (workNode?.type === 'rock' && wep === 'bronze-pickaxe')
+                    || ((workNode?.type === 'rock' || workNode?.type === 'magic-rock') && wep === 'bronze-pickaxe')
     const awake = isAwake(p, s.tick)
     const dying = p.hp <= 0, deadStart = (p.deadUntil ?? s.tick) - 5
     layer.push({ z: Z(iy, 4), draw: () => {
@@ -2979,12 +2985,14 @@ function drawSunMap(s, now) {
   // means one place to everyone who hears it.
   {
     const rn = regionNameAt(Math.round(pxr), Math.round(pyr))
-    g.fillStyle = "#181209"; g.fillRect(0, MH, MW, NAMEH)
-    g.fillStyle = "#55462d"; g.fillRect(0, MH, MW, 1)
-    g.font = "bold 8px Verdana"; g.textAlign = "center"; g.textBaseline = "middle"
-    g.fillStyle = "#c6941e"
-    g.fillText(rn, MW / 2, MH + NAMEH / 2 + 0.5)
-    g.textAlign = "left"; g.textBaseline = "alphabetic"
+    if (rn) { // an empty strip is worse than no strip
+      g.fillStyle = "#181209"; g.fillRect(0, MH, MW, NAMEH)
+      g.fillStyle = "#55462d"; g.fillRect(0, MH, MW, 1)
+      g.font = "bold 8px Verdana"; g.textAlign = "center"; g.textBaseline = "middle"
+      g.fillStyle = "#c6941e"
+      g.fillText(rn, MW / 2, MH + NAMEH / 2 + 0.5)
+      g.textAlign = "left"; g.textBaseline = "alphabetic"
+    }
   }
   g.save(); g.beginPath(); g.rect(pad, pad, MW - pad * 2, MH - pad * 2); g.clip()
   g.fillStyle = "#0e120b"; g.fillRect(0, 0, MW, MH)
