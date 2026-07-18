@@ -1,0 +1,134 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Choose a window: Interval</title>
+<link rel="stylesheet" href="site.css">
+<style>
+.doors { display: flex; flex-wrap: wrap; gap: 22px; margin: 26px 0 8px }
+.door { flex: 1 1 300px; background: linear-gradient(#1d1409, #120c06);
+  border: 1px solid #55462d; border-radius: 10px; padding: 20px 20px 22px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  transition: border-color .18s, transform .18s }
+.door:hover { border-color: #c6941e; transform: translateY(-2px) }
+.door figure { margin: 0 0 14px; height: 168px; display: flex; align-items: flex-end }
+.door h3 { margin: 0 0 2px; font: 600 19px Georgia, serif; color: #e2b63e; letter-spacing: .01em }
+.door .kind { color: #94805a; font-size: 12px; margin: 0 0 12px; letter-spacing: .06em; text-transform: uppercase }
+.door p { color: #d6c49c; font-size: 14px; line-height: 1.55; margin: 0 0 18px; max-width: 34ch }
+.enter { display: inline-block; padding: 9px 26px; border-radius: 6px;
+  background: linear-gradient(#6b5a34, #46381f); border: 1px solid #8a7444;
+  color: #f2d574; font: bold 14px Verdana, sans-serif; text-decoration: none }
+.enter:hover { background: linear-gradient(#7d6a3e, #544325); border-color: #c6941e; text-decoration: none }
+.samecap { text-align: center; color: #94805a; font-size: 13px; font-style: italic; margin: 4px 0 30px }
+</style></head><body>
+
+<div class="page"><nav class="stone" style="margin-bottom:18px">
+  <a href="#">Interval</a><a href="#" class="here">Play</a><a href="#">New Player Guide</a>
+  <a href="#">The Manual</a><a href="#">Hiscores</a></nav><main class="stone">
+  <h1>Choose a window</h1>
+  <p class="tagline">Both of these open the same world. Neither of them is it.</p>
+
+  <div class="doors">
+    <div class="door">
+      <figure>
+        <svg width="150" height="168" viewBox="0 0 150 168" aria-hidden="true">
+          <!-- the flat window: a citizen as tiles, drawn straight on -->
+          <rect x="12" y="118" width="126" height="9" fill="#3d5a23"/>
+          <rect x="12" y="127" width="126" height="9" fill="#36501e"/>
+          <rect x="12" y="136" width="126" height="9" fill="#3d5a23"/>
+          <rect x="112" y="96" width="9" height="9" fill="#5c4023"/>
+          <rect x="103" y="87" width="27" height="9" fill="#26401b"/>
+          <rect x="112" y="78" width="9" height="9" fill="#26401b"/>
+          <rect x="66" y="52" width="18" height="9" fill="#d8b784"/>
+          <rect x="66" y="61" width="18" height="9" fill="#d8b784"/>
+          <rect x="70" y="56" width="4" height="4" fill="#241a0e"/>
+          <rect x="78" y="56" width="4" height="4" fill="#241a0e"/>
+          <rect x="61" y="70" width="28" height="27" fill="#6b5a34"/>
+          <rect x="52" y="79" width="9" height="18" fill="#d8b784"/>
+          <rect x="89" y="79" width="9" height="18" fill="#d8b784"/>
+          <rect x="43" y="70" width="9" height="14" fill="#9a927e"/>
+          <rect x="61" y="97" width="10" height="21" fill="#4a3a20"/>
+          <rect x="79" y="97" width="10" height="21" fill="#4a3a20"/>
+        </svg>
+      </figure>
+      <h3>The flat window</h3>
+      <p class="kind">tiles, from above</p>
+      <p>Every tile plain and legible, the whole neighbourhood at a glance.
+      It asks very little of a machine and reads well on a small screen.
+      If you are not sure, start here.</p>
+      <a class="enter" href="/play/flat">Enter</a>
+    </div>
+
+    <div class="door">
+      <figure>
+        <svg width="150" height="168" viewBox="0 0 150 168" aria-hidden="true">
+          <!-- the same citizen, standing in depth -->
+          <defs>
+            <linearGradient id="grd" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#4a6b2c"/><stop offset="1" stop-color="#26401b"/>
+            </linearGradient>
+          </defs>
+          <path d="M4 148 L75 112 L146 148 L146 164 L4 164 Z" fill="url(#grd)"/>
+          <ellipse cx="75" cy="146" rx="26" ry="7" fill="#1b2612" opacity=".55"/>
+          <path d="M108 140 L116 96 L122 140 Z" fill="#4a3a20"/>
+          <ellipse cx="118" cy="92" rx="15" ry="12" fill="#26401b"/>
+          <ellipse cx="113" cy="86" rx="10" ry="8" fill="#31501f"/>
+          <path d="M62 96 L88 96 L92 140 L58 140 Z" fill="#6b5a34"/>
+          <path d="M62 96 L75 100 L88 96 L86 120 L64 120 Z" fill="#7d6a3e"/>
+          <ellipse cx="75" cy="72" rx="15" ry="17" fill="#d8b784"/>
+          <ellipse cx="75" cy="66" rx="15" ry="10" fill="#c9a86a"/>
+          <circle cx="69" cy="73" r="2.4" fill="#241a0e"/>
+          <circle cx="81" cy="73" r="2.4" fill="#241a0e"/>
+          <path d="M52 100 L60 98 L64 124 L56 126 Z" fill="#d8b784"/>
+          <path d="M90 98 L98 100 L94 126 L86 124 Z" fill="#d8b784"/>
+          <path d="M42 66 L50 64 L54 104 L46 106 Z" fill="#9a927e"/>
+          <path d="M42 66 L50 64 L49 56 L43 57 Z" fill="#c9c2b2"/>
+          <path d="M60 140 L70 140 L69 160 L59 160 Z" fill="#4a3a20"/>
+          <path d="M80 140 L90 140 L91 160 L81 160 Z" fill="#4a3a20"/>
+        </svg>
+      </figure>
+      <h3>The deep window</h3>
+      <p class="kind">geometry, from behind the shoulder</p>
+      <p>The same country in three dimensions, with weather, weight and
+      nightfall. It asks more of a machine than the flat window does, and
+      gives back the feeling of standing somewhere.</p>
+      <a class="enter" href="/play/deep">Enter</a>
+    </div>
+  </div>
+  <p class="samecap">Both open in this browser, on a phone as readily as a
+  desktop. Nothing is installed and nothing is chosen for good: leave by one
+  door, come back through the other, and you are the same citizen in the same
+  place. Standing, calling and inventory are identical in both, because none
+  of that is the window's to decide.</p>
+
+  <h2>A window is not the world</h2>
+  <p>The world is not in either of these pages. It is a protocol: a rule for
+  turning one state and a set of deeds into the next state, agreed six hundred
+  milliseconds at a time by every node that runs it. Interval is that
+  agreement. Everything you see here is one program's opinion about how to
+  paint it.</p>
+  <p>Which means these two are not the client and the alternative client.
+  They are two windows, written first, out of the same protocol anyone else
+  can read. A window that draws the world in a terminal, or reads it aloud, or
+  paints it on a headset, or fits it into a watch face, is not a lesser way to
+  play Interval. It is Interval, seen from somewhere else.</p>
+
+  <h2>What the world insists on</h2>
+  <p>A window may choose its colours, its camera, its sounds, whether to show
+  a map at all. It may not choose what is true. Where a citizen stands, what
+  they carry, which country they are in, how much of the world they have
+  touched: all of it is settled by the protocol before any window opens, and
+  every window that reads the same tick must agree about every one of them.</p>
+  <p>That line is drawn deliberately, and it is drawn tightly. Two people who
+  disagree about where the Fens end cannot arrange to meet there, so geography
+  is law. Two people whose windows report different levels for the same
+  citizen do not have a disagreement about pixels, they have a disagreement
+  about a person, so standing and calling are law. Almost nothing else is.</p>
+
+  <h2>Write your own</h2>
+  <p>The state of the world is public and readable over a plain HTTP endpoint,
+  and a window needs nothing more than that plus the ability to sign a deed
+  with a key. No permission, no registration, no approved client list. If your
+  hashes match, you are a citizen, and so is whatever you wrote to look at it
+  with.</p>
+  <p>The <a href="/manual">manual</a> documents the state and the rules. The
+  <a href="/quickstart">New Player Guide</a> gets you playing in ten minutes.
+  Both windows above ship with the node, and both are yours to take apart.</p>
+</main></div></body></html>

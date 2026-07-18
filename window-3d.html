@@ -244,8 +244,6 @@
 </div>
 <div id="hud">
   <b>INTERVAL</b> · the deluxe window · <span id="wid">connecting&hellip;</span>
-  <div class="sub">the same world as <a href="/play" style="color:#8a8474">/play</a>, rendered by a different program.
-  Same ticks, same citizens, same fires. No window is authoritative: that is the whole point.</div>
 </div>
 <div id="stat"></div>
 <div id="invact" style="position:fixed;bottom:196px;left:50%;transform:translateX(-50%);display:none;gap:6px;z-index:6"></div>
@@ -3406,13 +3404,17 @@ function beingMesh(kind, id, thing) {
     // line and bobber, a fullered sword whose tip shares the blade's very
     // material (so starlight dyes the whole edge), a recurve bow, a chain
     // of actual links. ----
+    // Held things were drawn true to a citizen's hand and read as toothpicks at
+    // walking distance, which is the distance you actually watch from. Everything
+    // carried is enlarged by one factor, so proportions between tools are kept.
+    const TOOL_SCALE = 1.45
     const hand = armR.userData.joint
     const woodM = M(0x5c4023, 0.85)
     const wrapM = M(0x33220f, 0.95)
     const bronzeM = metal(0xb07a34, 0.38, 0.6)
     const bronzeHiM = metal(0xd8a050, 0.28, 0.75)
     const hatchet = new THREE.Group()
-    { const hh = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.024, 0.34, 7), shapeWood))
+    { const hh = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.024, 0.34, 7), woodM))
       hh.position.y = -0.3; hatchet.add(hh)
       const wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.021, 0.06, 7), wrapM)
       wrap.position.y = -0.43; hatchet.add(wrap)
@@ -3422,9 +3424,10 @@ function beingMesh(kind, id, thing) {
       bit.position.set(0.105, -0.44, 0); hatchet.add(bit) // the honed edge catches the light
       const poll = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.026), bronzeM)
       poll.position.set(-0.02, -0.44, 0); hatchet.add(poll) }
+    hatchet.scale.setScalar(TOOL_SCALE)
     hatchet.visible = false; hand.add(hatchet); g.userData.hatchet = hatchet
     const pick = new THREE.Group()
-    { const ph2 = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.024, 0.36, 7), shapeWood))
+    { const ph2 = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.024, 0.36, 7), woodM))
       ph2.position.y = -0.32; pick.add(ph2)
       const wrap2 = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.021, 0.06, 7), wrapM)
       wrap2.position.y = -0.45; pick.add(wrap2)
@@ -3436,6 +3439,7 @@ function beingMesh(kind, id, thing) {
         tine.rotation.z = -sx3 * (Math.PI / 2 + 0.3)
         pick.add(tine)
       } }
+    pick.scale.setScalar(TOOL_SCALE)
     pick.visible = false; hand.add(pick); g.userData.pick = pick
     const rod = new THREE.Group()
     { const rh = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.014, 0.52, 5), M(0x8a5a2a, 0.7)))
@@ -3448,12 +3452,14 @@ function beingMesh(kind, id, thing) {
       line.position.set(0, -0.26, -0.125); rod.add(line) // the line hangs from the tip
       const bob = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 5), M(0xc0392b, 0.5))
       bob.position.set(0, -0.41, -0.125); rod.add(bob) } // and the bobber waits
+    rod.scale.setScalar(TOOL_SCALE)
     rod.visible = false; hand.add(rod); g.userData.rod = rod
     // sword: the blade, its tip and its fuller SHARE one material, so the
     // equipment code's recolor dyes the whole edge in starlight at once
     const bladeMat = M(0xd8d2c2, 0.25)
     const sword = cast(new THREE.Mesh(new THREE.BoxGeometry(0.046, 0.38, 0.014), bladeMat))
-    sword.position.set(0, -0.4, 0.06); sword.visible = false; hand.add(sword); g.userData.sword = sword
+    sword.position.set(0, -0.4, 0.06); sword.scale.setScalar(TOOL_SCALE)
+    sword.visible = false; hand.add(sword); g.userData.sword = sword
     const tip = cast(new THREE.Mesh(new THREE.ConeGeometry(0.024, 0.07, 4), bladeMat))
     tip.position.set(0, -0.225, 0); tip.rotation.set(0, Math.PI / 4, Math.PI); sword.add(tip)
     const fuller = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.3, 0.018), bladeMat)
@@ -3486,7 +3492,8 @@ function beingMesh(kind, id, thing) {
       }
       const bowstr = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.4, 4), M(0xd9d3c0, 0.5))
       bowstr.rotation.z = Math.PI / 2; arc.add(bowstr) } // the string rides with the bow
-    bow.position.set(0, -0.24, 0.04); bow.visible = false; hand.add(bow); g.userData.bow = bow
+    bow.position.set(0, -0.24, 0.04); bow.scale.setScalar(TOOL_SCALE)
+    bow.visible = false; hand.add(bow); g.userData.bow = bow
     const chain = new THREE.Group()
     { const linkM = metal(0x8a8a82, 0.42, 0.6)
       for (let li2 = 0; li2 < 5; li2++) { // links, not a pipe
@@ -3496,6 +3503,7 @@ function beingMesh(kind, id, thing) {
         link.rotation.x = 0.15
         chain.add(link)
       } }
+    chain.scale.setScalar(TOOL_SCALE)
     chain.visible = false; hand.add(chain); g.userData.chain = chain
     // ---- the other shapes, in hand (v0.66) ----
     const shapeSteel = (star) => new THREE.MeshStandardMaterial({
@@ -3536,6 +3544,7 @@ function beingMesh(kind, id, thing) {
     strg.position.set(0.16, 0.45, 0); hb.add(strg)
     shapes['horn-bow'] = hb
     for (const [k, mesh] of Object.entries(shapes)) {
+      mesh.scale.setScalar(TOOL_SCALE)
       mesh.visible = false; hand.add(mesh)
     }
     g.userData.shapes = shapes

@@ -124,7 +124,7 @@
     <div class="sub">a world that runs on rules, not servers</div>
     <div id="gateinfo">waking the world&hellip;</div>
     <input id="gatename" maxlength="12" placeholder="choose a name (optional)" autocomplete="off">
-    <div id="gatedetail" style="font-size:11px;color:var(--dim);cursor:pointer;margin:6px 0;user-select:none"></div>
+    <div id="gatedetail" style="font-size:11px;color:var(--dim);margin:6px 0;user-select:none"></div>
     <button id="gatebtn" disabled>&hellip;</button>
     <div id="gatekey"></div>
   </div>
@@ -149,12 +149,13 @@
   </div>
 </div>
 <script>
-// two detail modes, one world: the same states, the same constitution,
-// rendered twice. No window is authoritative: not even ours. (And yes:
-// low detail / high detail. Some of us remember choosing.)
-// High detail is now the ceiling: the painted frame passes through WebGL
-// where fires become real light, bright things bloom, and night is night.
-const HD = (localStorage.getItem('interval-detail') ?? 'high') === 'high'
+// The painted frame passes through WebGL, where fires become real light,
+// bright things bloom, and night is night.
+// One rendering, not two. The old low-detail mode existed for machines that
+// could not manage the full frame; the WebGL composite already degrades on its
+// own when a device cannot provide it, so the question was asked of everyone to
+// serve almost nobody. A window should not open with a quiz.
+const HD = true
 let GLON = false, gl = null, glCv = null, glU = {}, glLights = []
 let glNight = 0, glWarm = 0
 const RES = 1 // the shader supersamples now; the painter stays cheap
@@ -1275,6 +1276,25 @@ function terrainOfE(x, y) {
   if (onRoadE(x, y)) return 'trail'
   return biomeAtE(x, y)
 }
+// the countries, by their names (spec 9d). A region is not decoration: it is
+// a pure function of the founding record, identical in every window, so that
+// "meet me at the fens edge" means one place to everyone who hears it.
+const REGION_NAMES = { greenwood: 'the Greenwood', crags: 'the Crags', fens: 'the Fens',
+  wilds: 'the Wilds', meadow: 'the Heartlands', heartlands: 'the Heartlands' }
+const SETTLEMENT_NAMES = ['Anchor', 'Greenhollow', 'Millbrook', 'Cragfoot', 'Eastmere', 'Fenmarch', 'Norwick']
+function regionNameAt(x, y) {
+  try {
+    if (GEN !== 'interval-expanse-v1') return ''
+    const ss = ssE()
+    for (let i = 0; i < ss.length; i++) {
+      const t = ss[i]
+      if (Math.abs(x - t.x) <= (t.w >> 1) && Math.abs(y - t.y) <= (t.h >> 1))
+        return SETTLEMENT_NAMES[i] ?? 'a settlement'
+    }
+    return REGION_NAMES[biomeAtE(x, y)] ?? ''
+  } catch { return '' } // a nameplate must never be able to stop the world drawing
+}
+
 function tileHash(x, y, k) { // integer avalanche: adjacent tiles decorrelate
   let h = (x * 374761393 + y * 668265263 + (k ?? 0) * 2246822519) | 0
   h = Math.imul(h ^ (h >>> 13), 1274126177)
@@ -3010,17 +3030,9 @@ function glComposite(now) {
   } catch (e) { GLON = false; glCv.style.display = 'none' }
 }
 {
+  // no toggle: only a note, and only when the composite could not be had
   const detEl = document.getElementById('gatedetail')
-  const detText = () => 'detail: ' + (HD ? (GLON ? 'high (webgl)' : 'high (webgl unavailable: low)') : 'low') + ' \u25b8 tap to switch (one world, two renderings)'
-  if (detEl) {
-    detEl.textContent = detText()
-    detEl.onclick = () => { localStorage.setItem('interval-detail', HD ? 'low' : 'high'); location.reload() }
-  }
-  const sd = document.createElement('div')
-  sd.style.cssText = 'font-size:10px;color:var(--dim);cursor:pointer;user-select:none;margin-top:2px'
-  sd.textContent = detText()
-  sd.onclick = () => { localStorage.setItem('interval-detail', HD ? 'low' : 'high'); location.reload() }
-  sndEl.parentNode.insertBefore(sd, sndEl.nextSibling)
+  if (detEl) detEl.textContent = GLON ? '' : 'this device has no webgl: drawing without it'
 }
 sndLabel()
 sndEl.addEventListener('click', () => {
@@ -3072,8 +3084,11 @@ document.addEventListener('keydown', (e) => {
   if (say.value.length < say.maxLength) say.value += e.key
 })
 
-document.getElementById('inv').addEventListener('click', (e) => {
-  const slotEl = e.target.closest('.slot'); const i = slotEl?.dataset.i; if (i === undefined || !world) return
+// Named, because the "light fire" branch re-enters it for the same slot once
+// the choice is made. It was anonymous, so that re-entry called a function that
+// did not exist and lighting a fire from the menu threw instead.
+function invClick(i) {
+  if (i === undefined || !world) return
   const meNow = world.players[myId]
   const it = meNow?.inventory[i]
   if (!it) return
@@ -3165,6 +3180,10 @@ document.getElementById('inv').addEventListener('click', (e) => {
   }
   else if (it?.item === 'raw-fish') { send({ do: 'cook', slot: +i }); feed('You attempt to cook\u2026') }
   else if (it) { send({ do: 'drop', slot: +i }); feed('You drop the ' + it.item.replace('-', ' ') + '.') }
+}
+document.getElementById('inv').addEventListener('click', (e) => {
+  const slotEl = e.target.closest('.slot')
+  invClick(slotEl?.dataset.i)
 })
 
 cv.addEventListener('click', (e) => {
