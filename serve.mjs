@@ -156,7 +156,8 @@ function hiscores() {
   return Object.entries(node.state.players).map(([pid, p]) => {
     const levels = Object.fromEntries(Object.entries(p.skills).map(([k, xp]) => [k, lvl(xp)]))
     return { playerId: pid, name: p.name ?? pid.slice(0, 8) + '…',
-             levels, total: Object.values(levels).reduce((a, b) => a + b, 0),
+             levels, skillXp: { ...p.skills },
+             total: Object.values(levels).reduce((a, b) => a + b, 0),
              xp: Object.values(p.skills).reduce((a, b) => a + b, 0) }
   }).sort((a, b) => b.total - a.total || b.xp - a.xp)
 }
@@ -209,6 +210,43 @@ const server = http.createServer((req, res) => {
       const fresh = Date.now() - 5 * 60 * 1000
       for (const [id2, e2] of announced) if (e2.at < fresh) announced.delete(id2)
       return json({ peers: [...announced.values()].map(e2 => e2.addr), count: announced.size })
+    }
+    if (path === '/api/races') {
+      // One row per skill: a race that is over names its winner forever, and a
+      // race still running names whoever is closest and how far they have come.
+      const firsts = node.state.firsts ?? {}
+      const nameOf = (pid) => node.state.players[pid]?.name ?? pid.slice(0, 12) + '\u2026'
+      const races = E.SKILLS.map((sk) => {
+        const wonBy = firsts['master:' + sk]
+        if (wonBy) return { skill: sk, settled: true, name: nameOf(wonBy), playerId: wonBy }
+        let bestPid = null, bestXp = -1
+        for (const [pid, p] of Object.entries(node.state.players)) {
+          const xp = p.skills[sk] ?? 0
+          if (xp > bestXp) { bestXp = xp; bestPid = pid }
+        }
+        if (!bestPid || bestXp <= 0) return { skill: sk, settled: false, name: null }
+        const level = lvl(bestXp)
+        // how far along the LAST step, which is the one worth watching
+        const at99 = E.XP_TABLE[99] // mastery: 13,034,431
+        const toGo = Math.max(0, at99 - bestXp)
+        return { skill: sk, settled: false, name: nameOf(bestPid), playerId: bestPid,
+                 level, xp: bestXp, toGo,
+                 pct: Math.max(0, Math.min(100, Math.round((bestXp / at99) * 100))) }
+      })
+      return json({ tick: node.state.tick, worldId: node.worldId, races })
+    }
+    if (path === '/api/firsts') {
+      // The world already remembers these forever (engine claimFirst): they are
+      // hashed into state like everything else. They were simply never shown.
+      const names = {}
+      for (const [pid, p] of Object.entries(node.state.players)) names[pid] = p.name ?? null
+      return json({
+        tick: node.state.tick,
+        worldId: node.worldId,
+        firsts: Object.entries(node.state.firsts ?? {}).map(([key, pid]) => ({
+          key, playerId: pid, name: names[pid] ?? null,
+        })),
+      })
     }
     if (path === '/api/hiscores') return json({ tick: node.state.tick, players: hiscores() })
     if (path.startsWith('/api/player/')) {
