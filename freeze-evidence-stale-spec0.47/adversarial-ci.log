@@ -1,0 +1,100 @@
+TAP version 13
+# Subtest: adversarial benign: freeze criterion holds (seeded, deterministic)
+ok 1 - adversarial benign: freeze criterion holds (seeded, deterministic)
+  ---
+  duration_ms: 4826.299258
+  type: 'test'
+  ...
+# Subtest: adversarial lossy: freeze criterion holds (seeded, deterministic)
+ok 2 - adversarial lossy: freeze criterion holds (seeded, deterministic)
+  ---
+  duration_ms: 5541.699661
+  type: 'test'
+  ...
+# Subtest: adversarial crashes: freeze criterion holds (seeded, deterministic)
+ok 3 - adversarial crashes: freeze criterion holds (seeded, deterministic)
+  ---
+  duration_ms: 5469.765474
+  type: 'test'
+  ...
+# Subtest: adversarial partitions: freeze criterion holds (seeded, deterministic)
+ok 4 - adversarial partitions: freeze criterion holds (seeded, deterministic)
+  ---
+  duration_ms: 12317.2024
+  type: 'test'
+  ...
+# Subtest: adversarial equivocator: freeze criterion holds (seeded, deterministic)
+ok 5 - adversarial equivocator: freeze criterion holds (seeded, deterministic)
+  ---
+  duration_ms: 4504.35661
+  type: 'test'
+  ...
+# Subtest: adversarial liar: freeze criterion holds (seeded, deterministic)
+ok 6 - adversarial liar: freeze criterion holds (seeded, deterministic)
+  ---
+  duration_ms: 4225.437895
+  type: 'test'
+  ...
+# Subtest: adversarial replayer: freeze criterion holds (seeded, deterministic)
+ok 7 - adversarial replayer: freeze criterion holds (seeded, deterministic)
+  ---
+  duration_ms: 4307.983832
+  type: 'test'
+  ...
+# Subtest: adversarial garbage: freeze criterion holds (seeded, deterministic)
+ok 8 - adversarial garbage: freeze criterion holds (seeded, deterministic)
+  ---
+  duration_ms: 3657.489227
+  type: 'test'
+  ...
+# Subtest: adversarial chaos: freeze criterion holds (seeded, deterministic)
+ok 9 - adversarial chaos: freeze criterion holds (seeded, deterministic)
+  ---
+  duration_ms: 7876.914276
+  type: 'test'
+  ...
+# Subtest: adversarial heal: freeze criterion holds (seeded, deterministic)
+ok 10 - adversarial heal: freeze criterion holds (seeded, deterministic)
+  ---
+  duration_ms: 11576.151992
+  type: 'test'
+  ...
+# Subtest: adversarial byzantine-max: freeze criterion holds (seeded, deterministic)
+ok 11 - adversarial byzantine-max: freeze criterion holds (seeded, deterministic)
+  ---
+  duration_ms: 11537.920256
+  type: 'test'
+  ...
+# Subtest: healed honest nodes converge to the same finalized frontier (spread 0)
+ok 12 - healed honest nodes converge to the same finalized frontier (spread 0)
+  ---
+  duration_ms: 33677.719049
+  type: 'test'
+  ...
+# Subtest: the requiredSpread mechanism: heal demands 0, other healed scenarios use the generic threshold
+ok 13 - the requiredSpread mechanism: heal demands 0, other healed scenarios use the generic threshold
+  ---
+  duration_ms: 15386.217785
+  type: 'test'
+  ...
+# Subtest: requiredSpread=0 actually FAILS when healed nodes diverge (not just passes when they agree)
+ok 14 - requiredSpread=0 actually FAILS when healed nodes diverge (not just passes when they agree)
+  ---
+  duration_ms: 19083.9663
+  type: 'test'
+  ...
+# Subtest: determinism: identical seeds replay identical runs
+ok 15 - determinism: identical seeds replay identical runs
+  ---
+  duration_ms: 5655.361583
+  type: 'test'
+  ...
+1..15
+# tests 15
+# suites 0
+# pass 15
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 149798.857749

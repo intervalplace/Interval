@@ -1,0 +1,15 @@
+Interval spec v0.47: 200 ticks
+Rules hash: 7b3cab5e576bae3f…
+Peers agree on all 200 state hashes: YES ✓
+alice (9b31343d…) woodcutting lvl 5, 17 logs
+bob   (18b02034…) mining      lvl 6, 18 ore
+
+Forged signature (mallory as alice): rejected ✓
+Tampered payload after signing: rejected ✓
+Replayed old input at wrong tick: ignored ✓
+Peer with different rules hash: different world → not peers ✓
+Self-awarded XP: hash diverges → rejected ✓
+Simultaneous name claims resolve to one owner: ✓
+Second name for same player refused: ✓
+
+ALL CHECKS PASSED

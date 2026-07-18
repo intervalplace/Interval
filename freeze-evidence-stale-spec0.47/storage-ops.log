@@ -1,0 +1,32 @@
+--- health ---
+{
+  "backend": "sqlite",
+  "dbBytes": 200704,
+  "walBytes": 0,
+  "shmBytes": 32768,
+  "rows": 200,
+  "latestTick": 199,
+  "journalMode": "wal",
+  "integrity": null,
+  "freeDiskBytes": 10596462592,
+  "quickCheck": "ok"
+}
+--- integrity ---
+integrity_check: ok
+--- backup ---
+{
+  "backup": "/tmp/tmp.SjTz15dsXB/bk.db",
+  "ms": 9,
+  "srcRows": 200,
+  "backupRows": 200,
+  "integrity": "ok",
+  "ok": true
+}
+--- verify ---
+{
+  "ok": true,
+  "rows": 200,
+  "latestTick": 199,
+  "integrity": "ok",
+  "validation": "clean"
+}

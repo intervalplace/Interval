@@ -1,0 +1,53 @@
+[nodeB] peer connected: 12D3KooWEkrrBqvGqsao2mCE… (1 total)
+[nodeA] peer connected: 12D3KooWStveBbBPqJDSCjUf… (1 total)
+[nodeC] peer connected: 12D3KooWEkrrBqvGqsao2mCE… (1 total)
+[nodeA] peer connected: 12D3KooWCqF1oC3zcdcAXzQz… (2 total)
+[cheat] peer connected: 12D3KooWEkrrBqvGqsao2mCE… (1 total)
+[nodeA] peer connected: 12D3KooWRZngwXLRpN9wfoCP… (3 total)
+[nodeC] peer connected: 12D3KooWStveBbBPqJDSCjUf… (2 total)
+[nodeB] peer connected: 12D3KooWCqF1oC3zcdcAXzQz… (2 total)
+[cheat] peer connected: 12D3KooWStveBbBPqJDSCjUf… (2 total)
+[nodeB] peer connected: 12D3KooWRZngwXLRpN9wfoCP… (3 total)
+[cheat] peer connected: 12D3KooWCqF1oC3zcdcAXzQz… (3 total)
+[nodeC] peer connected: 12D3KooWRZngwXLRpN9wfoCP… (3 total)
+Interval v0.3 — 4 libp2p nodes, world 7b3cab5e576b…
+peers: nodeA=12D3KooW… nodeB=12D3KooW… nodeC=12D3KooW… cheat=12D3KooW…
+
+tick  1  A:9a015a41 B:9a015a41 C:9a015a41 cheat:0b4d34da  ✓  (cheater diverged)
+tick  2  A:bee0b9a8 B:bee0b9a8 C:bee0b9a8 cheat:391c82ef  ✓  (cheater diverged)
+tick  3  A:9b5c1185 B:9b5c1185 C:9b5c1185 cheat:9a314bc8  ✓  (cheater diverged)
+tick  4  A:d0cc86b6 B:d0cc86b6 C:d0cc86b6 cheat:b78a4ac7  ✓  (cheater diverged)
+tick  5  A:f2413c72 B:f2413c72 C:f2413c72 cheat:d817dbd0  ✓  (cheater diverged)
+tick  6  A:0ec7e467 B:0ec7e467 C:0ec7e467 cheat:902e6abb  ✓  (cheater diverged)
+tick  7  A:acf82f2b B:acf82f2b C:acf82f2b cheat:31e2e2c4  ✓  (cheater diverged)
+tick  8  A:713e39e8 B:713e39e8 C:713e39e8 cheat:201f296e  ✓  (cheater diverged)
+tick  9  A:12b71c08 B:12b71c08 C:12b71c08 cheat:be5e1c66  ✓  (cheater diverged)
+tick 10  A:be9f40f3 B:be9f40f3 C:be9f40f3 cheat:59d5e744  ✓  (cheater diverged)
+tick 11  A:0b08716b B:0b08716b C:0b08716b cheat:e1be8011  ✓  (cheater diverged)
+tick 12  A:93bd9f00 B:93bd9f00 C:93bd9f00 cheat:8053cafa  ✓  (cheater diverged)
+
+Honest nodes agree after 12 ticks: YES ✓
+Cheater flagged by honest nodes:
+  nodeA: yes, at tick 1 ✓
+  nodeB: yes, at tick 1 ✓
+  nodeC: yes, at tick 1 ✓
+
+world state (honest): alice wc lvl 1 (2 logs), bob mining lvl 1 (1 ore)
+[nodeA] DIVERGENCE: peer 12D3KooW… broke the rules at tick 1 — ignoring their world
+[nodeB] DIVERGENCE: peer 12D3KooW… broke the rules at tick 1 — ignoring their world
+[nodeC] DIVERGENCE: peer 12D3KooW… broke the rules at tick 1 — ignoring their world
+[cheat] DIVERGENCE: peer 12D3KooW… broke the rules at tick 1 — ignoring their world
+[cheat] DIVERGENCE: peer 12D3KooW… broke the rules at tick 1 — ignoring their world
+[cheat] DIVERGENCE: peer 12D3KooW… broke the rules at tick 1 — ignoring their world
+[nodeA] peer left: 12D3KooWStveBbBPqJDSCjUf… (2 total)
+[nodeA] peer left: 12D3KooWCqF1oC3zcdcAXzQz… (1 total)
+[nodeA] peer left: 12D3KooWRZngwXLRpN9wfoCP… (0 total)
+[nodeB] peer left: 12D3KooWCqF1oC3zcdcAXzQz… (2 total)
+[nodeB] peer left: 12D3KooWRZngwXLRpN9wfoCP… (1 total)
+[nodeC] peer left: 12D3KooWRZngwXLRpN9wfoCP… (2 total)
+[cheat] peer left: 12D3KooWCqF1oC3zcdcAXzQz… (2 total)
+[cheat] peer left: 12D3KooWStveBbBPqJDSCjUf… (1 total)
+[cheat] peer left: 12D3KooWEkrrBqvGqsao2mCE… (0 total)
+[nodeC] peer left: 12D3KooWStveBbBPqJDSCjUf… (1 total)
+[nodeC] peer left: 12D3KooWEkrrBqvGqsao2mCE… (0 total)
+[nodeB] peer left: 12D3KooWEkrrBqvGqsao2mCE… (0 total)

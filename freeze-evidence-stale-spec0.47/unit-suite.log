@@ -1,0 +1,959 @@
+TAP version 13
+# Subtest: an input on opposite sides of the local boundary still yields ONE finalized bundle
+ok 1 - an input on opposite sides of the local boundary still yields ONE finalized bundle
+  ---
+  duration_ms: 124.36334
+  type: 'test'
+  ...
+# Subtest: empty intervals produce one certified empty bundle, not local improvisation
+ok 2 - empty intervals produce one certified empty bundle, not local improvisation
+  ---
+  duration_ms: 57.044756
+  type: 'test'
+  ...
+# Subtest: proposer disappears: the next deterministic round finalizes
+ok 3 - proposer disappears: the next deterministic round finalizes
+  ---
+  duration_ms: 121.307764
+  type: 'test'
+  ...
+# Subtest: short partition converges by rebroadcast; a multi-round lock split stalls WITHOUT forking (H2)
+ok 4 - short partition converges by rebroadcast; a multi-round lock split stalls WITHOUT forking (H2)
+  ---
+  duration_ms: 559.565148
+  type: 'test'
+  ...
+# Subtest: equivocation: X to half the witnesses, Y to the other half — one deterministic outcome
+ok 5 - equivocation: X to half the witnesses, Y to the other half — one deterministic outcome
+  ---
+  duration_ms: 223.547687
+  type: 'test'
+  ...
+# Subtest: a wrong-lineage or forged bundle is rejected; a jumped round is rejected
+ok 6 - a wrong-lineage or forged bundle is rejected; a jumped round is rejected
+  ---
+  duration_ms: 7.320805
+  type: 'test'
+  ...
+# Subtest: finality proof: sub-quorum, non-witness, and duplicate-witness proofs are refused
+ok 7 - finality proof: sub-quorum, non-witness, and duplicate-witness proofs are refused
+  ---
+  duration_ms: 50.954688
+  type: 'test'
+  ...
+# Subtest: an observer finalizes from certified records and replays them, never adopting raw state
+ok 8 - an observer finalizes from certified records and replays them, never adopting raw state
+  ---
+  duration_ms: 128.60056
+  type: 'test'
+  ...
+# Subtest: local mismatch with a certified result halts the node instead of forking it
+ok 9 - local mismatch with a certified result halts the node instead of forking it
+  ---
+  duration_ms: 41.280543
+  type: 'test'
+  ...
+# Subtest: quorum mathematics: byzantineSafe / minQuorumFor / maxByzantine
+ok 10 - quorum mathematics: byzantineSafe / minQuorumFor / maxByzantine
+  ---
+  duration_ms: 1.40819
+  type: 'test'
+  ...
+# Subtest: genesis validation enforces the constitutional fault model
+ok 11 - genesis validation enforces the constitutional fault model
+  ---
+  duration_ms: 63.070536
+  type: 'test'
+  ...
+# Subtest: agreement refuses to run on a Byzantine-unsafe configuration
+ok 12 - agreement refuses to run on a Byzantine-unsafe configuration
+  ---
+  duration_ms: 4.852
+  type: 'test'
+  ...
+# Subtest: historical conflicting certificates: identical accepted, conflicting halts, invalid rejected
+ok 13 - historical conflicting certificates: identical accepted, conflicting halts, invalid rejected
+  ---
+  duration_ms: 230.603774
+  type: 'test'
+  ...
+# Subtest: conflicting-certificate halt evidence verifies cryptographically
+ok 14 - conflicting-certificate halt evidence verifies cryptographically
+  ---
+  duration_ms: 137.110755
+  type: 'test'
+  ...
+# Subtest: accountable failure: conflicting signatures remain attributable
+ok 15 - accountable failure: conflicting signatures remain attributable
+  ---
+  duration_ms: 3.559521
+  type: 'test'
+  ...
+# Subtest: persistent finality index: conflict detected after the in-memory window and after restart
+ok 16 - persistent finality index: conflict detected after the in-memory window and after restart
+  ---
+  duration_ms: 210.260584
+  type: 'test'
+  ...
+# Subtest: finality index survives a fresh store handle (restart) and reports latest tick
+ok 17 - finality index survives a fresh store handle (restart) and reports latest tick
+  ---
+  duration_ms: 5.451496
+  type: 'test'
+  ...
+# Subtest: finality index APPEND failure halts the node; state does not advance
+ok 18 - finality index APPEND failure halts the node; state does not advance
+  ---
+  duration_ms: 79.994116
+  type: 'test'
+  ...
+# Subtest: finality index READ failure during a historical conflict check halts
+ok 19 - finality index READ failure during a historical conflict check halts
+  ---
+  duration_ms: 115.648918
+  type: 'test'
+  ...
+# Subtest: finality index CONFLICTING append (different record for a finalized tick) halts as corruption
+ok 20 - finality index CONFLICTING append (different record for a finalized tick) halts as corruption
+  ---
+  duration_ms: 36.054517
+  type: 'test'
+  ...
+# Subtest: finality index IDENTICAL append is idempotent (no halt, no error)
+ok 21 - finality index IDENTICAL append is idempotent (no halt, no error)
+  ---
+  duration_ms: 45.061285
+  type: 'test'
+  ...
+# Subtest: startup REFUSES a corrupt finality index (§3)
+ok 22 - startup REFUSES a corrupt finality index (§3)
+  ---
+  duration_ms: 1.737781
+  type: 'test'
+  ...
+# Subtest: startup REFUSES an index with conflicting entries for one tick (§3/§4)
+ok 23 - startup REFUSES an index with conflicting entries for one tick (§3/§4)
+  ---
+  duration_ms: 0.647852
+  type: 'test'
+  ...
+# Subtest: a clean index passes startup validation and detects long-history conflicts
+ok 24 - a clean index passes startup validation and detects long-history conflicts
+  ---
+  duration_ms: 11602.384963
+  type: 'test'
+  ...
+# Subtest: recovery after an index-persist halt: frontier durable, index valid, lock intact
+ok 25 - recovery after an index-persist halt: frontier durable, index valid, lock intact
+  ---
+  duration_ms: 96.18273
+  type: 'test'
+  ...
+# Subtest: a production witness REQUIRES all three durable stores (lock, frontier, index)
+ok 26 - a production witness REQUIRES all three durable stores (lock, frontier, index)
+  ---
+  duration_ms: 2.278184
+  type: 'test'
+  ...
+# Subtest: the durable finality store enforces immutability itself (not just the caller)
+ok 27 - the durable finality store enforces immutability itself (not just the caller)
+  ---
+  duration_ms: 4.749047
+  type: 'test'
+  ...
+# Subtest: the ephemeral index enforces the same immutability invariant
+ok 28 - the ephemeral index enforces the same immutability invariant
+  ---
+  duration_ms: 0.565588
+  type: 'test'
+  ...
+# Subtest: trade XOR is enforced in PERSISTED state, exactly as at the input
+ok 29 - trade XOR is enforced in PERSISTED state, exactly as at the input
+  ---
+  duration_ms: 3.242808
+  type: 'test'
+  ...
+# Subtest: equipment slot correctness: the shared slotOf() rules every layer
+ok 30 - equipment slot correctness: the shared slotOf() rules every layer
+  ---
+  duration_ms: 80.126736
+  type: 'test'
+  ...
+# Subtest: IntervalNode enforces its own boundaries: genesis, built state, and genesis embedding
+ok 31 - IntervalNode enforces its own boundaries: genesis, built state, and genesis embedding
+  ---
+  duration_ms: 2.273437
+  type: 'test'
+  ...
+# Subtest: canonical input schemas: one serialized form per action, at every gate
+ok 32 - canonical input schemas: one serialized form per action, at every gate
+  ---
+  duration_ms: 85.721427
+  type: 'test'
+  ...
+# Subtest: banks are sparse: zero is absence in execution, validation, and imports
+ok 33 - banks are sparse: zero is absence in execution, validation, and imports
+  ---
+  duration_ms: 48.266468
+  type: 'test'
+  ...
+# Subtest: canonical founding: defaults match the classic generator, which is NAMED in genesis
+ok 34 - canonical founding: defaults match the classic generator, which is NAMED in genesis
+  ---
+  duration_ms: 170.387819
+  type: 'test'
+  ...
+# Subtest: PROPERTY: hundreds of accepted transitions never produce a state the validator rejects
+ok 35 - PROPERTY: hundreds of accepted transitions never produce a state the validator rejects
+  ---
+  duration_ms: 4023.637516
+  type: 'test'
+  ...
+# Subtest: trade closure: exactly one of constitutional item XOR positive gold
+ok 36 - trade closure: exactly one of constitutional item XOR positive gold
+  ---
+  duration_ms: 984.840477
+  type: 'test'
+  ...
+# Subtest: imported citizens: complete validation before world construction
+ok 37 - imported citizens: complete validation before world construction
+  ---
+  duration_ms: 129.777204
+  type: 'test'
+  ...
+# Subtest: worldgen floors: the minimum builds, below-minimum and invalid genesis refuse
+ok 38 - worldgen floors: the minimum builds, below-minimum and invalid genesis refuse
+  ---
+  duration_ms: 84.881112
+  type: 'test'
+  ...
+# Subtest: node type rules: ownership, expiry, and text belong to exactly their kinds
+ok 39 - node type rules: ownership, expiry, and text belong to exactly their kinds
+  ---
+  duration_ms: 81.602546
+  type: 'test'
+  ...
+# Subtest: archive durability failures SURFACE in the log; consensus is unaffected
+ok 40 - archive durability failures SURFACE in the log; consensus is unaffected
+  ---
+  duration_ms: 52.743719
+  type: 'test'
+  ...
+# Subtest: identity recovery: missing creates, corrupt refuses, valid loads, forged refuses
+ok 41 - identity recovery: missing creates, corrupt refuses, valid loads, forged refuses
+  ---
+  duration_ms: 2.595382
+  type: 'test'
+  ...
+# Subtest: safety records for ANOTHER world refuse startup — never silently ignored
+ok 42 - safety records for ANOTHER world refuse startup — never silently ignored
+  ---
+  duration_ms: 5.715889
+  type: 'test'
+  ...
+# Subtest: ONE constitutional name rule everywhere: inputs, state, registry, imports
+ok 43 - ONE constitutional name rule everywhere: inputs, state, registry, imports
+  ---
+  duration_ms: 153.07754
+  type: 'test'
+  ...
+# Subtest: ONE constitutional item registry: unknown items are contraband everywhere
+ok 44 - ONE constitutional item registry: unknown items are contraband everywhere
+  ---
+  duration_ms: 1.515184
+  type: 'test'
+  ...
+# Subtest: relational validation: no dangling references are constitutionally permitted
+ok 45 - relational validation: no dangling references are constitutionally permitted
+  ---
+  duration_ms: 0.985063
+  type: 'test'
+  ...
+# Subtest: lock archive failures are LOGGED, never silently swallowed
+ok 46 - lock archive failures are LOGGED, never silently swallowed
+  ---
+  duration_ms: 39.407757
+  type: 'test'
+  ...
+# Subtest: frontier persistence fails CLOSED: halt, lock intact, no advance; restart rebroadcasts only
+ok 47 - frontier persistence fails CLOSED: halt, lock intact, no advance; restart rebroadcasts only
+  ---
+  duration_ms: 164.768433
+  type: 'test'
+  ...
+# Subtest: same-height impostor state is refused at restart (frontier hash check)
+ok 48 - same-height impostor state is refused at restart (frontier hash check)
+  ---
+  duration_ms: 14.13043
+  type: 'test'
+  ...
+# Subtest: archive failure is tolerated (hygiene, not safety): finality still commits
+ok 49 - archive failure is tolerated (hygiene, not safety): finality still commits
+  ---
+  duration_ms: 6.605778
+  type: 'test'
+  ...
+# Subtest: spent locks retire into a unique-name history journal on real disk
+ok 50 - spent locks retire into a unique-name history journal on real disk
+  ---
+  duration_ms: 62.304328
+  type: 'test'
+  ...
+# Subtest: exact engine invariants: actions, trades, equipment, skills, mob/node tables
+ok 51 - exact engine invariants: actions, trades, equipment, skills, mob/node tables
+  ---
+  duration_ms: 2.903419
+  type: 'test'
+  ...
+# Subtest: the FULL worldgen world validates: every node type and extra the generator writes
+ok 52 - the FULL worldgen world validates: every node type and extra the generator writes
+  ---
+  duration_ms: 202.45407
+  type: 'test'
+  ...
+# Subtest: gold-only trade offers no longer crash the state hash (undefined never enters state)
+ok 53 - gold-only trade offers no longer crash the state hash (undefined never enters state)
+  ---
+  duration_ms: 33.031275
+  type: 'test'
+  ...
+# Subtest: attackp targeting the sender's own id is always invalid
+ok 54 - attackp targeting the sender's own id is always invalid
+  ---
+  duration_ms: 126.304285
+  type: 'test'
+  ...
+# Subtest: dropping 17 arrows grounds qty 17; picking them up restores 17
+ok 55 - dropping 17 arrows grounds qty 17; picking them up restores 17
+  ---
+  duration_ms: 76.952399
+  type: 'test'
+  ...
+# Subtest: depositing from a 17-stack banks 1 and leaves 16
+ok 56 - depositing from a 17-stack banks 1 and leaves 16
+  ---
+  duration_ms: 77.850175
+  type: 'test'
+  ...
+# Subtest: full inventory: arrow pickup merges into the quiver; non-stackable is refused
+ok 57 - full inventory: arrow pickup merges into the quiver; non-stackable is refused
+  ---
+  duration_ms: 77.772231
+  type: 'test'
+  ...
+# Subtest: inventory helpers: add / remove / count / canAdd behave and never go negative
+ok 58 - inventory helpers: add / remove / count / canAdd behave and never go negative
+  ---
+  duration_ms: 0.400191
+  type: 'test'
+  ...
+# Subtest: an input signed for World A is rejected by World B
+ok 59 - an input signed for World A is rejected by World B
+  ---
+  duration_ms: 70.703405
+  type: 'test'
+  ...
+# Subtest: worldId commits to every founding field, never truncated
+ok 60 - worldId commits to every founding field, never truncated
+  ---
+  duration_ms: 0.500443
+  type: 'test'
+  ...
+# Subtest: a chat-domain signature can never pass as a game input
+ok 61 - a chat-domain signature can never pass as a game input
+  ---
+  duration_ms: 44.411085
+  type: 'test'
+  ...
+# Subtest: two replays of the same signed log agree on every state hash
+ok 62 - two replays of the same signed log agree on every state hash
+  ---
+  duration_ms: 997.110318
+  type: 'test'
+  ...
+# Subtest: startup refusals carry the right typed code
+ok 63 - startup refusals carry the right typed code
+  ---
+  duration_ms: 3.65685
+  type: 'test'
+  ...
+# Subtest: frontier rollback and ahead-of-frontier are distinctly coded
+ok 64 - frontier rollback and ahead-of-frontier are distinctly coded
+  ---
+  duration_ms: 163.143564
+  type: 'test'
+  ...
+# Subtest: node-level refusals are coded: genesis, built state, checkpoint
+ok 65 - node-level refusals are coded: genesis, built state, checkpoint
+  ---
+  duration_ms: 192.297048
+  type: 'test'
+  ...
+# Subtest: identity corruption is coded (CJS engine mirrors the code set)
+ok 66 - identity corruption is coded (CJS engine mirrors the code set)
+  ---
+  duration_ms: 8.574875
+  type: 'test'
+  ...
+# Subtest: a Byzantine halt is structural: code + reason + supporting evidence
+ok 67 - a Byzantine halt is structural: code + reason + supporting evidence
+  ---
+  duration_ms: 15.073394
+  type: 'test'
+  ...
+# Subtest: halt evidence must PROVE the reported halt condition (§4/§5 rigor)
+ok 68 - halt evidence must PROVE the reported halt condition (§4/§5 rigor)
+  ---
+  duration_ms: 3.383703
+  type: 'test'
+  ...
+# Subtest: codeOf classifies coded errors and rejects uncoded ones
+ok 69 - codeOf classifies coded errors and rejects uncoded ones
+  ---
+  duration_ms: 0.173943
+  type: 'test'
+  ...
+# Subtest: all ERR and HALT codes are unique and well-formed
+ok 70 - all ERR and HALT codes are unique and well-formed
+  ---
+  duration_ms: 0.248595
+  type: 'test'
+  ...
+# (node:1553) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: shutdown drains checkpoint I/O before releasing the process lock
+ok 71 - shutdown drains checkpoint I/O before releasing the process lock
+  ---
+  duration_ms: 818.462798
+  type: 'test'
+  ...
+# Subtest: after shutdown, queueCheckpoint is a no-op (no writes past exclusivity release)
+ok 72 - after shutdown, queueCheckpoint is a no-op (no writes past exclusivity release)
+  ---
+  duration_ms: 193.069656
+  type: 'test'
+  ...
+# Subtest: stop() is idempotent
+ok 73 - stop() is idempotent
+  ---
+  duration_ms: 167.184155
+  type: 'test'
+  ...
+# Subtest: fail-safe startup: a failure after lock acquisition releases the lock
+ok 74 - fail-safe startup: a failure after lock acquisition releases the lock
+  ---
+  duration_ms: 121.977974
+  type: 'test'
+  ...
+# Subtest: clean restart after a clean shutdown succeeds and resumes
+ok 75 - clean restart after a clean shutdown succeeds and resumes
+  ---
+  duration_ms: 562.636792
+  type: 'test'
+  ...
+# Subtest: shutdown waits for an ALREADY-IN-FLIGHT checkpoint write to finish
+ok 76 - shutdown waits for an ALREADY-IN-FLIGHT checkpoint write to finish
+  ---
+  duration_ms: 938.190817
+  type: 'test'
+  ...
+# Subtest: shutdown waits for a checkpoint write LONGER than the old 10s timeout
+ok 77 - shutdown waits for a checkpoint write LONGER than the old 10s timeout
+  ---
+  duration_ms: 544.398392
+  type: 'test'
+  ...
+# Subtest: a pending checkpoint queued during an in-flight write is also drained
+ok 78 - a pending checkpoint queued during an in-flight write is also drained
+  ---
+  duration_ms: 449.793015
+  type: 'test'
+  ...
+# Subtest: no checkpoint files are written after the process lock is released
+ok 79 - no checkpoint files are written after the process lock is released
+  ---
+  duration_ms: 426.974787
+  type: 'test'
+  ...
+# [w] checkpoint write FAILED (1x): simulated disk failure
+# Subtest: shutdown FAILS CLOSED (lock retained) if the final checkpoint cannot be written
+ok 80 - shutdown FAILS CLOSED (lock retained) if the final checkpoint cannot be written
+  ---
+  duration_ms: 281.362611
+  type: 'test'
+  ...
+# Subtest: restart immediately after a clean shutdown re-acquires and resumes
+ok 81 - restart immediately after a clean shutdown re-acquires and resumes
+  ---
+  duration_ms: 516.936866
+  type: 'test'
+  ...
+# Subtest: checkpoint envelope: valid passes, forgeries are named and refused
+ok 82 - checkpoint envelope: valid passes, forgeries are named and refused
+  ---
+  duration_ms: 3.308363
+  type: 'test'
+  ...
+# Subtest: gossip bounds: oversized, far-future, wrong-world inputs never allocate
+ok 83 - gossip bounds: oversized, far-future, wrong-world inputs never allocate
+  ---
+  duration_ms: 0.702265
+  type: 'test'
+  ...
+# Subtest: network surfaces are namespaced by the complete world id
+ok 84 - network surfaces are namespaced by the complete world id
+  ---
+  duration_ms: 0.609611
+  type: 'test'
+  ...
+# Subtest: ground items survive validation: player drops, stacks, mob-drop shape, expired entries
+ok 85 - ground items survive validation: player drops, stacks, mob-drop shape, expired entries
+  ---
+  duration_ms: 79.523733
+  type: 'test'
+  ...
+# Subtest: a restored lock is verified in full: corruption refuses startup, a real lock restores
+ok 86 - a restored lock is verified in full: corruption refuses startup, a real lock restores
+  ---
+  duration_ms: 84.081058
+  type: 'test'
+  ...
+# Subtest: checkpoint rollback is refused: a state behind the finalized frontier never starts
+ok 87 - checkpoint rollback is refused: a state behind the finalized frontier never starts
+  ---
+  duration_ms: 72.955851
+  type: 'test'
+  ...
+# Subtest: a late-starting witness proposes only the CURRENT round, never stale ones
+ok 88 - a late-starting witness proposes only the CURRENT round, never stale ones
+  ---
+  duration_ms: 7.449542
+  type: 'test'
+  ...
+# Subtest: proposer equivocation: live conflicts poison, stale-lineage conflicts only leave evidence
+ok 89 - proposer equivocation: live conflicts poison, stale-lineage conflicts only leave evidence
+  ---
+  duration_ms: 22.312588
+  type: 'test'
+  ...
+# Subtest: malformed hashes are refused at every layer
+ok 90 - malformed hashes are refused at every layer
+  ---
+  duration_ms: 9.474091
+  type: 'test'
+  ...
+# Subtest: full persistent-state round-trip: actions, trades, equipment, banks, fires, damaged mobs, names
+ok 91 - full persistent-state round-trip: actions, trades, equipment, banks, fires, damaged mobs, names
+  ---
+  duration_ms: 317.534091
+  type: 'test'
+  ...
+# Subtest: §13 canonical action battery: exactly one accepted representation per action
+ok 92 - §13 canonical action battery: exactly one accepted representation per action
+  ---
+  duration_ms: 144.767786
+  type: 'test'
+  ...
+# Subtest: §14 builder boundaries: every builder result is validated, whatever its tick
+ok 93 - §14 builder boundaries: every builder result is validated, whatever its tick
+  ---
+  duration_ms: 3.229823
+  type: 'test'
+  ...
+# Subtest: §15 genesis canonicality matrix
+ok 94 - §15 genesis canonicality matrix
+  ---
+  duration_ms: 0.409053
+  type: 'test'
+  ...
+# Subtest: §16 SDK normalization: equivalent requests → byte-identical signed objects
+ok 95 - §16 SDK normalization: equivalent requests → byte-identical signed objects
+  ---
+  duration_ms: 3.804571
+  type: 'test'
+  ...
+# Subtest: §17 transition closure across EVERY input type on one living world
+ok 96 - §17 transition closure across EVERY input type on one living world
+  ---
+  duration_ms: 1225.733353
+  type: 'test'
+  ...
+# Subtest: durableStore.load fails CLOSED: only a missing file is absence
+ok 97 - durableStore.load fails CLOSED: only a missing file is absence
+  ---
+  duration_ms: 5.440984
+  type: 'test'
+  ...
+# Subtest: a witness with a corrupt lock or frontier file REFUSES startup, preserving the file
+ok 98 - a witness with a corrupt lock or frontier file REFUSES startup, preserving the file
+  ---
+  duration_ms: 3.566228
+  type: 'test'
+  ...
+# Subtest: a production witness REQUIRES all three durable stores; the testing flag is explicit
+ok 99 - a production witness REQUIRES all three durable stores; the testing flag is explicit
+  ---
+  duration_ms: 0.957961
+  type: 'test'
+  ...
+# Subtest: directory fsync is strict for consensus records, best-effort otherwise
+ok 100 - directory fsync is strict for consensus records, best-effort otherwise
+  ---
+  duration_ms: 0.277129
+  type: 'test'
+  ...
+# Subtest: a witness with an INVALID checkpoint refuses startup instead of recreating genesis
+ok 101 - a witness with an INVALID checkpoint refuses startup instead of recreating genesis
+  ---
+  duration_ms: 379.597602
+  type: 'test'
+  ...
+# Subtest: recovery AHEAD of the frontier requires a certified proof
+ok 102 - recovery AHEAD of the frontier requires a certified proof
+  ---
+  duration_ms: 154.195302
+  type: 'test'
+  ...
+# Subtest: failure AFTER frontier persistence halts forward: the frontier is never rolled back
+ok 103 - failure AFTER frontier persistence halts forward: the frontier is never rolled back
+  ---
+  duration_ms: 17.924125
+  type: 'test'
+  ...
+# Subtest: LOCK-2: a witness never signs conflicting bundles ACROSS rounds of one tick
+ok 104 - LOCK-2: a witness never signs conflicting bundles ACROSS rounds of one tick
+  ---
+  duration_ms: 134.161501
+  type: 'test'
+  ...
+# Subtest: unsafe quorum (2q <= n) is rejected at construction AND by the verifier
+ok 105 - unsafe quorum (2q <= n) is rejected at construction AND by the verifier
+  ---
+  duration_ms: 0.837809
+  type: 'test'
+  ...
+# Subtest: LOCK-3: a restarted witness reloads its vote and never signs a rival bundle
+ok 106 - LOCK-3: a restarted witness reloads its vote and never signs a rival bundle
+  ---
+  duration_ms: 43.817396
+  type: 'test'
+  ...
+# Subtest: proposer equivocation: two signed bundles for one (tick, round) → evidence, refusal, next round advances
+ok 107 - proposer equivocation: two signed bundles for one (tick, round) → evidence, refusal, next round advances
+  ---
+  duration_ms: 12.174662
+  type: 'test'
+  ...
+# Subtest: a certificate mixing rounds is refused everywhere (the one verifier)
+ok 108 - a certificate mixing rounds is refused everywhere (the one verifier)
+  ---
+  duration_ms: 26.326082
+  type: 'test'
+  ...
+# Subtest: oversized streams abort mid-read, before allocation grows unbounded
+ok 109 - oversized streams abort mid-read, before allocation grows unbounded
+  ---
+  duration_ms: 1.311741
+  type: 'test'
+  ...
+# Subtest: the bundle cap never splits a player's equivocation pair
+ok 110 - the bundle cap never splits a player's equivocation pair
+  ---
+  duration_ms: 10.525901
+  type: 'test'
+  ...
+# Subtest: engine: canonical rejects non-encodable values; validateState rejects hostile states
+ok 111 - engine: canonical rejects non-encodable values; validateState rejects hostile states
+  ---
+  duration_ms: 2.807311
+  type: 'test'
+  ...
+# Subtest: every public SDK action emits a canonical signed input
+ok 112 - every public SDK action emits a canonical signed input
+  ---
+  duration_ms: 97.217224
+  type: 'test'
+  ...
+# Subtest: gold and item trade helpers each normalize to the canonical XOR form
+ok 113 - gold and item trade helpers each normalize to the canonical XOR form
+  ---
+  duration_ms: 4.625042
+  type: 'test'
+  ...
+# Subtest: malformed SDK calls are refused before signing, not turned into junk inputs
+ok 114 - malformed SDK calls are refused before signing, not turned into junk inputs
+  ---
+  duration_ms: 0.896319
+  type: 'test'
+  ...
+# Subtest: the obsolete no-argument unwield() is gone; unequip(gear) is the canonical helper
+ok 115 - the obsolete no-argument unwield() is gone; unequip(gear) is the canonical helper
+  ---
+  duration_ms: 0.79011
+  type: 'test'
+  ...
+# (node:1606) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: the shared default constant is a bounded finite value
+ok 116 - the shared default constant is a bounded finite value
+  ---
+  duration_ms: 0.868787
+  type: 'test'
+  ...
+# Subtest: generic IntervalNode construction with NO override resolves to the bounded default
+ok 117 - generic IntervalNode construction with NO override resolves to the bounded default
+  ---
+  duration_ms: 254.810871
+  type: 'test'
+  ...
+# Subtest: an explicit bounded value is honored
+ok 118 - an explicit bounded value is honored
+  ---
+  duration_ms: 180.387947
+  type: 'test'
+  ...
+# Subtest: explicit Infinity selects full-history audit mode
+ok 119 - explicit Infinity selects full-history audit mode
+  ---
+  duration_ms: 139.611784
+  type: 'test'
+  ...
+# Subtest: explicit zero is honored (not coerced back to the default)
+ok 120 - explicit zero is honored (not coerced back to the default)
+  ---
+  duration_ms: 112.939975
+  type: 'test'
+  ...
+# Subtest: bounded verifyRecentN bounds cert verification but structure is checked on ALL rows
+ok 121 - bounded verifyRecentN bounds cert verification but structure is checked on ALL rows
+  ---
+  duration_ms: 124.5226
+  type: 'test'
+  ...
+# Subtest: direct construction and the launcher default resolve to the SAME bounded value
+ok 122 - direct construction and the launcher default resolve to the SAME bounded value
+  ---
+  duration_ms: 237.726163
+  type: 'test'
+  ...
+# (node:1613) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: SQLite store matches the flat-file store at the protocol level (parity)
+ok 123 - SQLite store matches the flat-file store at the protocol level (parity)
+  ---
+  duration_ms: 1077.463047
+  type: 'test'
+  ...
+# Subtest: SQLite store enforces immutability like the flat-file store
+ok 124 - SQLite store enforces immutability like the flat-file store
+  ---
+  duration_ms: 129.660372
+  type: 'test'
+  ...
+# Subtest: migration flat-file → SQLite preserves every record, verifies, and backs up the source
+ok 125 - migration flat-file → SQLite preserves every record, verifies, and backs up the source
+  ---
+  duration_ms: 2456.87928
+  type: 'test'
+  ...
+# Subtest: migration aborts on a corrupt source rather than producing a partial store
+ok 126 - migration aborts on a corrupt source rather than producing a partial store
+  ---
+  duration_ms: 0.734437
+  type: 'test'
+  ...
+# Subtest: the exclusive kernel lock refuses a second live holder and reclaims a stale one
+ok 127 - the exclusive kernel lock refuses a second live holder and reclaims a stale one
+  ---
+  duration_ms: 13.038189
+  type: 'test'
+  ...
+# Subtest: a stale socket file (dead holder) is reclaimed, not treated as held
+ok 128 - a stale socket file (dead holder) is reclaimed, not treated as held
+  ---
+  duration_ms: 3.021683
+  type: 'test'
+  ...
+# Subtest: the kernel lock excludes a second OS process for the same identity
+ok 129 - the kernel lock excludes a second OS process for the same identity
+  ---
+  duration_ms: 744.23556
+  type: 'test'
+  ...
+# Subtest: SQLite store enforces world isolation (rejects a foreign-world record)
+ok 130 - SQLite store enforces world isolation (rejects a foreign-world record)
+  ---
+  duration_ms: 9.301438
+  type: 'test'
+  ...
+# Subtest: migration is atomic: a failure leaves no partial destination database
+ok 131 - migration is atomic: a failure leaves no partial destination database
+  ---
+  duration_ms: 375.107058
+  type: 'test'
+  ...
+# Subtest: migration verifies content and produces a self-contained integrity-clean db
+ok 132 - migration verifies content and produces a self-contained integrity-clean db
+  ---
+  duration_ms: 1519.201963
+  type: 'test'
+  ...
+# Subtest: sparse-checkpoint recovery: replay advances a stale checkpoint up to the frontier
+ok 133 - sparse-checkpoint recovery: replay advances a stale checkpoint up to the frontier
+  ---
+  duration_ms: 255.690209
+  type: 'test'
+  ...
+# Subtest: SQLite store exposes an operational health snapshot and bounded validation
+ok 134 - SQLite store exposes an operational health snapshot and bounded validation
+  ---
+  duration_ms: 1467.361097
+  type: 'test'
+  ...
+# Subtest: strict world binding rejects a record with no world identifier
+ok 135 - strict world binding rejects a record with no world identifier
+  ---
+  duration_ms: 10.939095
+  type: 'test'
+  ...
+# Subtest: unknown finality backend value is rejected at construction
+ok 136 - unknown finality backend value is rejected at construction
+  ---
+  duration_ms: 146.856997
+  type: 'test'
+  ...
+# Subtest: migration verifies row count via SQLite and leaves a self-contained db (no WAL)
+ok 137 - migration verifies row count via SQLite and leaves a self-contained db (no WAL)
+  ---
+  duration_ms: 1216.47662
+  type: 'test'
+  ...
+# Subtest: online backup produces a consistent, integrity-clean copy with the same rows
+ok 138 - online backup produces a consistent, integrity-clean copy with the same rows
+  ---
+  duration_ms: 838.518892
+  type: 'test'
+  ...
+# Subtest: bounded startup verification: structure checked on all, cert-verify only the tail
+ok 139 - bounded startup verification: structure checked on all, cert-verify only the tail
+  ---
+  duration_ms: 2213.397359
+  type: 'test'
+  ...
+# Subtest: repeated lock acquire/release does not accumulate process exit listeners
+ok 140 - repeated lock acquire/release does not accumulate process exit listeners
+  ---
+  duration_ms: 35.714974
+  type: 'test'
+  ...
+# Subtest: package.json declares the release tuple
+ok 141 - package.json declares the release tuple
+  ---
+  duration_ms: 4.358283
+  type: 'test'
+  ...
+# Subtest: engine SPEC_VERSION matches the declared spec version
+ok 142 - engine SPEC_VERSION matches the declared spec version
+  ---
+  duration_ms: 0.235866
+  type: 'test'
+  ...
+# Subtest: SPEC.md header matches the spec version
+ok 143 - SPEC.md header matches the spec version
+  ---
+  duration_ms: 1.625441
+  type: 'test'
+  ...
+# Subtest: CONSENSUS.md header and version lines match
+ok 144 - CONSENSUS.md header and version lines match
+  ---
+  duration_ms: 0.50867
+  type: 'test'
+  ...
+# Subtest: README banner matches the release tuple
+ok 145 - README banner matches the release tuple
+  ---
+  duration_ms: 0.328216
+  type: 'test'
+  ...
+# Subtest: README adversarial and scenario counts match the manifest
+ok 146 - README adversarial and scenario counts match the manifest
+  ---
+  duration_ms: 41.502955
+  type: 'test'
+  ...
+# Subtest: TESTING.md banner matches the release tuple
+ok 147 - TESTING.md banner matches the release tuple
+  ---
+  duration_ms: 0.355599
+  type: 'test'
+  ...
+# Subtest: no stale version strings remain in the headline docs
+ok 148 - no stale version strings remain in the headline docs
+  ---
+  duration_ms: 0.690887
+  type: 'test'
+  ...
+# Subtest: rules hash in docs matches sha256(SPEC.md)
+ok 149 - rules hash in docs matches sha256(SPEC.md)
+  ---
+  duration_ms: 4.296465
+  type: 'test'
+  ...
+# Subtest: the release manifest matches package.json versions
+ok 150 - the release manifest matches package.json versions
+  ---
+  duration_ms: 37.211007
+  type: 'test'
+  ...
+# Subtest: TESTING.md test counts match the manifest
+ok 151 - TESTING.md test counts match the manifest
+  ---
+  duration_ms: 37.451216
+  type: 'test'
+  ...
+# Subtest: TESTING.md scenario count matches the manifest, no duplicate scenario rows
+ok 152 - TESTING.md scenario count matches the manifest, no duplicate scenario rows
+  ---
+  duration_ms: 35.785735
+  type: 'test'
+  ...
+# Subtest: TESTING.md cites the Node runtime requirement
+ok 153 - TESTING.md cites the Node runtime requirement
+  ---
+  duration_ms: 0.199568
+  type: 'test'
+  ...
+# Subtest: no duplicate test-file entries in TESTING.md
+ok 154 - no duplicate test-file entries in TESTING.md
+  ---
+  duration_ms: 0.277957
+  type: 'test'
+  ...
+# Subtest: the freeze-evidence summary, if present, matches the release
+ok 155 - the freeze-evidence summary, if present, matches the release
+  ---
+  duration_ms: 0.163539
+  type: 'test'
+  ...
+# Subtest: the auto-discovering runner covers every test file (none bypasses CI)
+ok 156 - the auto-discovering runner covers every test file (none bypasses CI)
+  ---
+  duration_ms: 0.287928
+  type: 'test'
+  ...
+# Subtest: the manifest unit count equals the sum over the discovered unit files
+ok 157 - the manifest unit count equals the sum over the discovered unit files
+  ---
+  duration_ms: 35.202694
+  type: 'test'
+  ...
+1..157
+# tests 157
+# suites 0
+# pass 157
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 51888.92513

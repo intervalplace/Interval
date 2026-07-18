@@ -1,0 +1,128 @@
+(node:1817) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+[w1] peer connected: 12D3KooWSEdFizhYcSbkBFPQ… (1 total)
+[w0] peer connected: 12D3KooWELqwgQKR65WFYUiA… (1 total)
+[w2] peer connected: 12D3KooWSEdFizhYcSbkBFPQ… (1 total)
+[w0] peer connected: 12D3KooWKfxuPx3w4vq3oCAm… (2 total)
+[w3] peer connected: 12D3KooWSEdFizhYcSbkBFPQ… (1 total)
+[w0] peer connected: 12D3KooWNagaRbwTSKkXhxv7… (3 total)
+[obs] peer connected: 12D3KooWSEdFizhYcSbkBFPQ… (1 total)
+[w0] peer connected: 12D3KooWFxU5aoFQHmtnbx4p… (4 total)
+[w2] peer connected: 12D3KooWELqwgQKR65WFYUiA… (2 total)
+[w1] peer connected: 12D3KooWKfxuPx3w4vq3oCAm… (2 total)
+[w3] peer connected: 12D3KooWELqwgQKR65WFYUiA… (2 total)
+[w1] peer connected: 12D3KooWNagaRbwTSKkXhxv7… (3 total)
+[obs] peer connected: 12D3KooWELqwgQKR65WFYUiA… (2 total)
+[w1] peer connected: 12D3KooWFxU5aoFQHmtnbx4p… (4 total)
+[w3] peer connected: 12D3KooWKfxuPx3w4vq3oCAm… (3 total)
+[w2] peer connected: 12D3KooWNagaRbwTSKkXhxv7… (3 total)
+[obs] peer connected: 12D3KooWKfxuPx3w4vq3oCAm… (3 total)
+[w2] peer connected: 12D3KooWFxU5aoFQHmtnbx4p… (4 total)
+[obs] peer connected: 12D3KooWNagaRbwTSKkXhxv7… (4 total)
+[w3] peer connected: 12D3KooWFxU5aoFQHmtnbx4p… (4 total)
+world 3ba4beff5d66… · 4 witnesses, quorum 3, 1 observer, +1 malicious
+[evil] peer connected: 12D3KooWSEdFizhYcSbkBFPQ… (1 total)
+[w0] peer connected: 12D3KooWPS5ujtUUutua6QHh… (5 total)
+[evil] peer connected: 12D3KooWELqwgQKR65WFYUiA… (2 total)
+[w1] peer connected: 12D3KooWPS5ujtUUutua6QHh… (5 total)
+[evil] peer connected: 12D3KooWKfxuPx3w4vq3oCAm… (3 total)
+[w2] peer connected: 12D3KooWPS5ujtUUutua6QHh… (5 total)
+[evil] peer connected: 12D3KooWNagaRbwTSKkXhxv7… (4 total)
+[w3] peer connected: 12D3KooWPS5ujtUUutua6QHh… (5 total)
+[evil] peer connected: 12D3KooWFxU5aoFQHmtnbx4p… (5 total)
+[obs] peer connected: 12D3KooWPS5ujtUUutua6QHh… (5 total)
+
+— phase 1: full set + malicious flood —
+  w0:9 w1:9 w2:9 w3:9 obs:9  forged msgs sent: 36
+
+— phase 2: kill honest witness w1; quorum 3 of remaining 3 holds —
+[w1] peer left: 12D3KooWKfxuPx3w4vq3oCAm… (4 total)
+[w1] peer left: 12D3KooWNagaRbwTSKkXhxv7… (3 total)
+[w1] peer left: 12D3KooWFxU5aoFQHmtnbx4p… (2 total)
+[w1] peer left: 12D3KooWPS5ujtUUutua6QHh… (1 total)
+[evil] peer left: 12D3KooWELqwgQKR65WFYUiA… (4 total)
+[obs] peer left: 12D3KooWELqwgQKR65WFYUiA… (4 total)
+[w3] peer left: 12D3KooWELqwgQKR65WFYUiA… (4 total)
+[w0] peer left: 12D3KooWELqwgQKR65WFYUiA… (4 total)
+[w2] peer left: 12D3KooWELqwgQKR65WFYUiA… (4 total)
+[w1] peer left: 12D3KooWSEdFizhYcSbkBFPQ… (0 total)
+  w0:23 w2:23 w3:23 obs:23  (advanced past 9: true)
+
+— phase 3: restart w1 from its DURABLE stores; it rejoins —
+[w1] peer connected: 12D3KooWSEdFizhYcSbkBFPQ… (1 total)
+[w0] peer connected: 12D3KooWGUGeTVUZ6YeaCttV… (5 total)
+[w1] peer connected: 12D3KooWKfxuPx3w4vq3oCAm… (2 total)
+[w2] peer connected: 12D3KooWGUGeTVUZ6YeaCttV… (5 total)
+[w1] peer connected: 12D3KooWNagaRbwTSKkXhxv7… (3 total)
+[w3] peer connected: 12D3KooWGUGeTVUZ6YeaCttV… (5 total)
+[w1] peer connected: 12D3KooWFxU5aoFQHmtnbx4p… (4 total)
+[obs] peer connected: 12D3KooWGUGeTVUZ6YeaCttV… (5 total)
+[evil] peer connected: 12D3KooWGUGeTVUZ6YeaCttV… (5 total)
+[w1] peer connected: 12D3KooWPS5ujtUUutua6QHh… (5 total)
+[w0] serving checkpoint at tick 27 to a joining peer
+[w2] serving checkpoint at tick 27 to a joining peer
+[w3] serving checkpoint at tick 27 to a joining peer
+[obs] serving checkpoint at tick 27 to a joining peer
+  w1 restarted → tick 36 (rejoined & advancing: true)
+
+— phase 4: a late observer joins and proof-syncs through the flood —
+[late] peer connected: 12D3KooWSEdFizhYcSbkBFPQ… (1 total)
+[w0] peer connected: 12D3KooWLv6MRzNjuqDTKitP… (6 total)
+[late] peer connected: 12D3KooWGUGeTVUZ6YeaCttV… (2 total)
+[w1] peer connected: 12D3KooWLv6MRzNjuqDTKitP… (6 total)
+[late] peer connected: 12D3KooWKfxuPx3w4vq3oCAm… (3 total)
+[w2] peer connected: 12D3KooWLv6MRzNjuqDTKitP… (6 total)
+[late] peer connected: 12D3KooWNagaRbwTSKkXhxv7… (4 total)
+[w3] peer connected: 12D3KooWLv6MRzNjuqDTKitP… (6 total)
+[late] peer connected: 12D3KooWFxU5aoFQHmtnbx4p… (5 total)
+[obs] peer connected: 12D3KooWLv6MRzNjuqDTKitP… (6 total)
+[w0] serving checkpoint at tick 59 to a joining peer
+  late observer synced to tick 59, state valid: true
+
+— verdict —
+  finalized ticks observed: 59
+  forks (two honest hashes for one tick): 0
+  invalid certificates committed: 0
+  forged messages injected on real topics: 264
+[obs] peer left: 12D3KooWPS5ujtUUutua6QHh… (5 total)
+[obs] peer left: 12D3KooWGUGeTVUZ6YeaCttV… (4 total)
+[obs] peer left: 12D3KooWLv6MRzNjuqDTKitP… (3 total)
+[late] peer left: 12D3KooWFxU5aoFQHmtnbx4p… (4 total)
+[late] peer left: 12D3KooWNagaRbwTSKkXhxv7… (3 total)
+[late] peer left: 12D3KooWKfxuPx3w4vq3oCAm… (2 total)
+[late] peer left: 12D3KooWGUGeTVUZ6YeaCttV… (1 total)
+[late] peer left: 12D3KooWSEdFizhYcSbkBFPQ… (0 total)
+[evil] peer left: 12D3KooWGUGeTVUZ6YeaCttV… (4 total)
+[evil] peer left: 12D3KooWFxU5aoFQHmtnbx4p… (3 total)
+[evil] peer left: 12D3KooWNagaRbwTSKkXhxv7… (2 total)
+[evil] peer left: 12D3KooWKfxuPx3w4vq3oCAm… (1 total)
+[evil] peer left: 12D3KooWSEdFizhYcSbkBFPQ… (0 total)
+[obs] peer left: 12D3KooWNagaRbwTSKkXhxv7… (2 total)
+[obs] peer left: 12D3KooWKfxuPx3w4vq3oCAm… (1 total)
+[obs] peer left: 12D3KooWSEdFizhYcSbkBFPQ… (0 total)
+[w0] peer left: 12D3KooWFxU5aoFQHmtnbx4p… (5 total)
+[w0] peer left: 12D3KooWPS5ujtUUutua6QHh… (4 total)
+[w0] peer left: 12D3KooWLv6MRzNjuqDTKitP… (3 total)
+[w2] peer left: 12D3KooWFxU5aoFQHmtnbx4p… (5 total)
+[w2] peer left: 12D3KooWPS5ujtUUutua6QHh… (4 total)
+[w2] peer left: 12D3KooWLv6MRzNjuqDTKitP… (3 total)
+[w3] peer left: 12D3KooWFxU5aoFQHmtnbx4p… (5 total)
+[w3] peer left: 12D3KooWPS5ujtUUutua6QHh… (4 total)
+[w3] peer left: 12D3KooWLv6MRzNjuqDTKitP… (3 total)
+[w1] peer left: 12D3KooWPS5ujtUUutua6QHh… (5 total)
+[w1] peer left: 12D3KooWFxU5aoFQHmtnbx4p… (4 total)
+[w1] peer left: 12D3KooWLv6MRzNjuqDTKitP… (3 total)
+[w0] peer left: 12D3KooWKfxuPx3w4vq3oCAm… (2 total)
+[w0] peer left: 12D3KooWNagaRbwTSKkXhxv7… (1 total)
+[w0] peer left: 12D3KooWGUGeTVUZ6YeaCttV… (0 total)
+[w2] peer left: 12D3KooWNagaRbwTSKkXhxv7… (2 total)
+[w2] peer left: 12D3KooWGUGeTVUZ6YeaCttV… (1 total)
+[w3] peer left: 12D3KooWGUGeTVUZ6YeaCttV… (2 total)
+[w3] peer left: 12D3KooWKfxuPx3w4vq3oCAm… (1 total)
+[w3] peer left: 12D3KooWSEdFizhYcSbkBFPQ… (0 total)
+[w2] peer left: 12D3KooWSEdFizhYcSbkBFPQ… (0 total)
+[w1] peer left: 12D3KooWNagaRbwTSKkXhxv7… (2 total)
+[w1] peer left: 12D3KooWKfxuPx3w4vq3oCAm… (1 total)
+[w1] peer left: 12D3KooWSEdFizhYcSbkBFPQ… (0 total)
+
+ALL CHECKS PASSED

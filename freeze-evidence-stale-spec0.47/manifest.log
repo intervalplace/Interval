@@ -1,0 +1,1 @@
+manifest --check: docs match the source tree

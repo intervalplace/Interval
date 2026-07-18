@@ -1,0 +1,42 @@
+[w1] peer connected: 12D3KooWSb484zKXiCsWVnCo… (1 total)
+[w0] peer connected: 12D3KooWDdqTy5r3PRiZDmiR… (1 total)
+[w2] peer connected: 12D3KooWSb484zKXiCsWVnCo… (1 total)
+[w0] peer connected: 12D3KooWMbX4HDxbbi5F3MMn… (2 total)
+[obs] peer connected: 12D3KooWSb484zKXiCsWVnCo… (1 total)
+[w0] peer connected: 12D3KooWFwNVyxpZnHndNY93… (3 total)
+[w2] peer connected: 12D3KooWDdqTy5r3PRiZDmiR… (2 total)
+[w1] peer connected: 12D3KooWMbX4HDxbbi5F3MMn… (2 total)
+[obs] peer connected: 12D3KooWDdqTy5r3PRiZDmiR… (2 total)
+[w1] peer connected: 12D3KooWFwNVyxpZnHndNY93… (3 total)
+[obs] peer connected: 12D3KooWMbX4HDxbbi5F3MMn… (3 total)
+[w2] peer connected: 12D3KooWFwNVyxpZnHndNY93… (3 total)
+world 6e88bd9cdf4c… · 3 witnesses, quorum 2, 1 observer
+
+— phase 1: full witness set —
+t+6s   w0:8 w1:8 w2:8 obs:8
+
+— phase 2: witness w0 dies; fallback rounds carry the world —
+[w0] peer left: 12D3KooWDdqTy5r3PRiZDmiR… (2 total)
+[w0] peer left: 12D3KooWMbX4HDxbbi5F3MMn… (1 total)
+[w0] peer left: 12D3KooWFwNVyxpZnHndNY93… (0 total)
+[w1] peer left: 12D3KooWSb484zKXiCsWVnCo… (2 total)
+[obs] peer left: 12D3KooWSb484zKXiCsWVnCo… (2 total)
+[w2] peer left: 12D3KooWSb484zKXiCsWVnCo… (2 total)
+t+14s  w0:8 w1:21 w2:21 obs:21
+
+— phase 3: witness w1 dies; quorum unreachable — the world STOPS, it does not fork —
+[w1] peer left: 12D3KooWMbX4HDxbbi5F3MMn… (1 total)
+[w1] peer left: 12D3KooWFwNVyxpZnHndNY93… (0 total)
+[obs] peer left: 12D3KooWDdqTy5r3PRiZDmiR… (1 total)
+[w2] peer left: 12D3KooWDdqTy5r3PRiZDmiR… (1 total)
+t+19s  w0:8 w1:21 w2:21 obs:21
+
+intervals finalize under full quorum:              ✓
+player inputs enter certified bundles:             ✓
+observer's latest finality proof verifies:         ✓
+dead proposer → deterministic fallback rounds:     ✓ (round>0 records present)
+below quorum → halt, not fork:                     ✓
+[w2] peer left: 12D3KooWFwNVyxpZnHndNY93… (0 total)
+[obs] peer left: 12D3KooWMbX4HDxbbi5F3MMn… (0 total)
+
+ALL CHECKS PASSED
