@@ -1,7 +1,7 @@
 # Interval — Testing & Freeze Evidence
 
-Release 0.23.0 · protocol spec v0.66 · consensus spec v1.9 · rules hash
-`f6fa5a0707095b5f…`.
+Release 0.23.0 · protocol spec v0.68 · consensus spec v1.9 · rules hash
+`9438fd2d07d4c2cd…`.
 
 This document states exactly what is tested, with what inputs, for how
 long. Coverage is **finite and enumerated** — the claims below are about
@@ -10,7 +10,7 @@ possible executions.
 
 ## Unit + property suite (`npm test`)
 
-`node --test test/*.test.mjs` — 233 tests across:
+`node --test test/*.test.mjs` — 239 tests across:
 
 - `engine.test.mjs` — pure state-machine transitions
 - `node.test.mjs` — libp2p node boundary
@@ -40,6 +40,8 @@ possible executions.
 - `world-freeze.test.mjs` — the founded country, pinned. A generator name is a
   promise that the name builds that landscape forever; this fails loudly if the
   promise is broken, so a silent divergence becomes a deliberate fork.
+- `windows-sane.test.mjs` — the checks a browser would have made: that no window
+  calls a name nothing defines, which is how two shipped bugs began.
 - `identity.test.mjs` — standing and calling (spec 10): proof that both windows
   derive a citizen's identity, and the XP curve beneath it, exactly as the
   engine does, past mastery included.

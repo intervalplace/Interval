@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.66 ("The Constitution")
+# Interval: Protocol Specification v0.68 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -290,6 +290,100 @@ whoever keeps a foot in the lawful world. A citizen slain in the Wilds
 drops every carried item where they fall, for anyone to take: the only
 place in the world where loot comes from people. Equipment is
 destroyed as ever. Enter armed, or enter fast.
+
+### 2b-iii. One arm, one speed (v0.68)
+
+§2b-ii tied the swing clock to the order rather than to the citizen, which
+closed one door and left another open beside it. Turning from one foe to
+the next makes every interval's order a *new* order, and a new order came
+with a new clock: a citizen standing between two others could strike one,
+turn, strike the other, turn back, and swing every single interval. It was
+worth two thirds again as much harm as an honest fight, and like massing it
+is a thing a script performs perfectly and a person does not.
+
+The mistake was locating the rhythm in the wrong place. A fight does not
+have a tempo; **an arm** does. A citizen has one pair of hands, and they
+recover at the speed their weapon allows no matter who the last blow
+landed on.
+
+The cadence is therefore kept on the citizen, as the interval of their
+last swing. A blow may be struck only when the weapon's full recovery has
+passed since that swing, counted across all foes together. Changing
+target, repeating an order, being interrupted and beginning again: none of
+them return an arm that has already been spent. A maul is slow at
+everything, and a chain rests at nothing.
+
+### 2b-ii. Repeating an order does not restart it (v0.67)
+
+Combat breathes: a swing lands every second interval (§6m), counted from
+the interval the order was given. Re-sending the same order used to
+overwrite that mark with the present interval, so a citizen who re-sent
+`attack` or `attackp` every interval swung every interval, while one who
+gave the order once and let it stand swung every second one. Measured at
+mastery: ninety-six points of harm against forty-six, for nothing but
+extra keypresses.
+
+That is precisely the shape of advantage this world refuses. A script
+can re-send an order sixty times a minute and a person cannot, so the
+rhythm of a fight would have belonged to whoever was automating it.
+
+Therefore an order that is already being carried out is **left
+untouched**: repeating `attack` on the beast you are already fighting, or
+`attackp` on the citizen you are already fighting, changes nothing at
+all. The clock belongs to the fight, not to how often it is asked for.
+Changing target starts a new fight and a new clock, as it always did.
+
+### 2b-i. The Flight Rule: no one can be run down (v0.67)
+
+This was not designed. It falls out of §1's oldest rule, that a citizen
+commits **one deed per interval**, and it was found by simulation rather
+than by intent. It is written down here because a world's promises must
+be readable in its constitution, not discovered by the disappointed.
+
+Fleeing costs an action. So does striking. A pursuer who moves cannot
+swing that interval, and a pursuer who swings does not move, so the
+runner gains a tile. Both walk at one tile per interval and neither can
+walk faster, so the distance between a hunter and a willing runner never
+closes. Measured over sixty intervals of unbroken pursuit at mastery, a
+fleeing citizen takes **nothing** from a sword, a spear or a bow, and
+ends the chase further away than it began. Reach buys an oscillation in
+and out of range and almost no blows. Because §2b requires attacker and
+target to stand inside the Wilds, running for the border ends any
+pursuit absolutely.
+
+Therefore: **no citizen may be robbed by one other citizen.** Not the
+strongest, not the best equipped, not the most patient. In the open, on
+foot, violence in this world requires the consent of the person
+receiving it.
+
+Three things take that consent away, and only three.
+
+**One: standing still.** Every deed costs a tick. Mining, woodcutting,
+fishing, smithing, cooking, lighting a fire, and above all **fighting**
+are ticks in which you are not running. All forty-six skeleton-knights
+stand inside the Wilds, which means the very reason to go there is the
+thing that pins you to the ground: a citizen locked in a fight with a
+knight is already wounded, already committed, and must choose between
+finishing what they came for and keeping what they carry. The Wilds does
+not endanger travellers. It endangers **workers**, and it always will.
+
+**Two: the root.** The star-dagger's freeze (§6q) is the single
+instrument in the world that removes a citizen's choice to leave. It is
+three ticks on a hundred-and-twenty-tick leash with ten ticks of
+immunity after, and it cannot kill on its own. It is rare and expensive
+by design because it is the only key to this lock.
+
+**Three: numbers.** One hunter cannot corner anyone. A band can: one
+roots, the others fall on what is held. Killing an unwilling citizen is
+therefore a **social act** requiring several people to agree on a victim
+and act together within three ticks. It cannot be performed by one
+script, and every striker wears the Brand (§2b) for fifteen minutes
+afterward, so a raiding party marks itself in public and cannot deny
+having been one.
+
+None of this is enforcement, and none of it can be tuned. It is the
+arithmetic of one deed per interval, and it holds for bots and citizens
+identically because the interval does not care who is spending it.
 
 ## 2c. The hedge is law
 

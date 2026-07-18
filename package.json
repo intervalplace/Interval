@@ -45,9 +45,9 @@
   "type": "commonjs",
   "release": "phase-1-freeze",
   "protocol": {
-    "specVersion": "0.66",
+    "specVersion": "0.68",
     "consensusVersion": "1.9",
-    "rulesHash": "f6fa5a0707095b5f"
+    "rulesHash": "9438fd2d07d4c2cd"
   },
   "engines": {
     "node": ">=22.5.0"

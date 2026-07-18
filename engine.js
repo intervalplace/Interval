@@ -53,7 +53,7 @@ function ensureEdHash() {
 function initCrypto() { ensureEdHash(); _selectEdBackend(); }
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.66';
+const SPEC_VERSION = '0.68';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 // Typed error codes for the CJS engine (mirrors errors.mjs; kept in sync by
@@ -1074,7 +1074,7 @@ function validateState(state) {
   const SKILL_SET = SKILLS;                 // shared constitutional tables
   const NODE_TYPE_SET = new Set(NODE_TYPES); // (rev4 §11): defined ONCE, above
   const PLAYER_REQUIRED = ['x', 'y', 'skills', 'hp', 'equipment', 'bank', 'lastInput', 'gold', 'inventory', 'action', 'name', 'trade'];
-  const PLAYER_OPTIONAL = new Set(['attuned', 'brandedUntil', 'cooksTried', 'deadUntil', 'lightsTried', 'rootedUntil', 'rootImmuneUntil', 'rootCdUntil', 'slain']);
+  const PLAYER_OPTIONAL = new Set(['attuned', 'brandedUntil', 'cooksTried', 'deadUntil', 'lightsTried', 'rootedUntil', 'rootImmuneUntil', 'rootCdUntil', 'slain', 'lastSwing']);
   const isId = (v) => typeof v === 'string' && /^[a-z0-9_-]{1,64}$/i.test(v);
 
   // Relational rule (rev5 §5), decided explicitly: NO stale references are
@@ -1162,7 +1162,7 @@ function validateState(state) {
         if (state.nodes[w]?.type !== 'waystone') return 'attunement references a missing waystone';
       }
     }
-    for (const tk of ['brandedUntil', 'deadUntil', 'rootedUntil', 'rootImmuneUntil', 'rootCdUntil']) if (p[tk] !== undefined && !isInt(p[tk], 0, MAX_TIME)) return `${tk} out of bounds`;
+    for (const tk of ['brandedUntil', 'deadUntil', 'rootedUntil', 'rootImmuneUntil', 'rootCdUntil', 'lastSwing']) if (p[tk] !== undefined && !isInt(p[tk], 0, MAX_TIME)) return `${tk} out of bounds`;
     for (const ck of ['cooksTried', 'lightsTried']) if (p[ck] !== undefined && !isInt(p[ck], 0, MAX_TIME)) return `${ck} out of bounds`;
     if (p.slain !== undefined) { // the loot tally: bounded by the roster, not by time
       if (typeof p.slain !== 'object' || p.slain === null || Array.isArray(p.slain)) return 'malformed slain tally';
@@ -2062,7 +2062,9 @@ function nextState(state, inputs, _legacyBeacon) {
         }
       }
     } else if (inp.type === 'attack') {
-      p.action = { type: 'attack', mobId: inp.mobId, since: s.tick };
+      p.action = (p.action?.type === 'attack' && p.action.mobId === inp.mobId)
+        ? p.action
+        : { type: 'attack', mobId: inp.mobId, since: s.tick };
     } else if (inp.type === 'smith') {
       const r = RECIPES[inp.recipe];
       const nearAnvil = hasAdjacentNode(s, _ctx, p, 'anvil');
@@ -2097,7 +2099,11 @@ function nextState(state, inputs, _legacyBeacon) {
     } else if (inp.type === 'attackp') {
       const q = s.players[inp.targetId];
       if (q && q.hp > 0 && inWilds(s.genesis, p.x, p.y) && inWilds(s.genesis, q.x, q.y)) {
-        p.action = { type: 'attackp', targetId: inp.targetId, since: s.tick };
+        // repeating an order you are already carrying out changes nothing:
+        // the rhythm belongs to the fight, not to how often you ask for it
+        p.action = (p.action?.type === 'attackp' && p.action.targetId === inp.targetId)
+          ? p.action
+          : { type: 'attackp', targetId: inp.targetId, since: s.tick };
         // the Brand (v0.41): striking one who was not striking you is
         // worn openly. Windows paint it as they wish; the state is law.
         const q3 = s.players[inp.targetId];
@@ -2366,9 +2372,11 @@ function nextState(state, inputs, _legacyBeacon) {
             && p.equipment.weapon?.item === 'wooden-bow'
             && p.inventory.some(sl => sl?.item === 'arrows')));
       if (!near) { p.action = null; }
-      else if (p.equipment.weapon?.item !== 'old-chain'
-        && (s.tick - (p.action.since ?? 0)) % 2 !== 0) { /* combat breathes (6m); the chain does not (6r) */ }
+      else if (s.tick - (p.lastSwing ?? -64) < (weaponOf(p)?.every ?? 2)) {
+        /* combat breathes (6m, 2b-iii): the arm has not recovered, and turning
+           to a different foe does not give it back. The chain never rests (6r). */ }
       else {
+        p.lastSwing = s.tick; // the arm is spent, whoever it was spent on
         const bowDrawn2 = drawnAt(p, q);
         let lvl2, tag2;
         if (bowDrawn2) {
@@ -2424,8 +2432,9 @@ function nextState(state, inputs, _legacyBeacon) {
       // every weapon keeps its own rhythm (6m, 6r): a maul is slow, a chain
       // never rests, everything else breathes
       const every = weaponOf(p)?.every ?? 2;
-      if ((s.tick - (p.action.since ?? 0)) % every !== 0) continue;
+      if (s.tick - (p.lastSwing ?? -64) < every) continue; // 2b-iii: one arm, one speed
       const mobTurn = (s.tick - (p.action.since ?? 0)) % 2 === 0; // the defender keeps the old rhythm
+      p.lastSwing = s.tick; // the arm is spent, whoever it was spent on
 
       const bowDrawn = drawnAt(p, m);
       if (bowDrawn) { // ranged (spec 6j): every draw costs an arrow, hit or miss
