@@ -49,7 +49,7 @@ async function readJson(url) {
   catch { throw new Error('the node answered ' + url + ' with something that was not JSON.') }
 }
 let SKILLS = [], VIEW = 'standing', LAST = null, FILTER = '', MINE = null
-let PAGE = 0
+let PAGE = 0, PROFILE = null
 const PER_PAGE = 20
 
 // The window keeps your key in this browser, and this page is the same origin,
@@ -119,7 +119,7 @@ function drawPicker() {
   wide += '</div>'
 
   el.innerHTML = sel + wide
-  const choose = (v) => { VIEW = v; PAGE = 0; drawPicker(); if (LAST) drawBoard(LAST) }
+  const choose = (v) => { VIEW = v; PAGE = 0; PROFILE = null; drawPicker(); if (LAST) drawBoard(LAST) }
   for (const b of el.querySelectorAll('.stab')) b.onclick = () => choose(b.dataset.view)
   const sb = el.querySelector('#pickskill')
   if (sb) sb.onchange = () => choose(sb.value)
@@ -129,20 +129,23 @@ function drawBoard(j) {
   const el = document.getElementById('board')
   if (!j.players.length) { el.textContent = 'No citizens yet. Be first.'; return }
 
-  if (VIEW === 'standing') { // every trade at once, for the whole world
-    // keep each citizen's TRUE rank with them, then filter, then page: a rank
-    // must never mean "position in what you happen to be looking at"
+  if (PROFILE) { drawCitizen(j); return }
+
+  if (VIEW === 'standing') { // the whole world, by the sum of everything
+    // Sixteen skills laid sideways made a table nineteen columns wide that
+    // nobody could read and no phone could show. A board is for finding a
+    // citizen; a citizen's own page is for reading their trades. So this shows
+    // what the ranking IS, and the detail lives one click away.
     const rows = j.players.map((p, i) => ({ p, rank: i + 1 })).filter(x => matches(x.p))
     if (!rows.length) { el.innerHTML = noneFound(); return }
     const page = clampPage(rows.length)
-    let html = '<table><tr><th class="rank">Rank</th><th>Name</th><th>Standing</th>'
-      + SKILLS.map(s => '<th>' + s + '</th>').join('') + '</tr>'
+    let html = '<table><tr><th class="rank">Rank</th><th>Name</th>'
+      + '<th>Standing</th><th>Experience</th></tr>'
     for (const { p, rank } of rows.slice(page * PER_PAGE, (page + 1) * PER_PAGE)) {
       html += '<tr' + (isMine(p) ? ' class="mine"' : '') + '><td class="rank">' + rank + '</td>'
         + '<td>' + nameCell(p) + '</td>'
         + '<td><b style="color:var(--gold)">' + p.total + '</b></td>'
-        + SKILLS.map(s => '<td' + (p.levels[s] >= 99 ? ' style="color:#ffcc33;font-weight:bold"' : '')
-          + '>' + p.levels[s] + '</td>').join('') + '</tr>'
+        + '<td style="color:var(--dim)">' + p.xp.toLocaleString() + '</td></tr>'
     }
     el.innerHTML = html + '</table>' + pager(rows.length)
     wireBoard()
@@ -175,14 +178,62 @@ function drawBoard(j) {
   wireBoard()
 }
 
+// One citizen, read downwards. Every trade on its own row with the rank they
+// hold in it, which is the thing sixteen sideways columns could never show:
+// that a citizen ranked ninetieth in the world is fourth in the world at
+// fishing. Standing sits at the top because it is the sum of what follows.
+function rankIn(players, skill, pid) {
+  const ranked = players
+    .map(p => ({ pid: p.playerId, xp: (p.skillXp ?? {})[skill] ?? 0 }))
+    .filter(x => x.xp > 0)
+    .sort((a, b) => b.xp - a.xp)
+  const i = ranked.findIndex(x => x.pid === pid)
+  return i === -1 ? null : i + 1
+}
+
+function drawCitizen(j) {
+  const el = document.getElementById('board')
+  const me = j.players.find(p => p.playerId === PROFILE)
+  if (!me) {
+    el.innerHTML = '<p style="color:var(--dim)">That citizen is no longer on the board.</p>'
+      + '<div class="pager"><button class="pgb" data-pg="back">back to the board</button></div>'
+    wireBoard(); return
+  }
+  const standingRank = j.players.findIndex(p => p.playerId === PROFILE) + 1
+
+  let html = '<div class="citizen">'
+    + '<div class="cname">' + esc(me.name) + '</div>'
+    + (me.calling ? '<div class="ccall">' + esc(me.calling) + '</div>' : '')
+    + '<div class="ckey" title="' + esc(me.playerId) + '">'
+    + esc(String(me.playerId).slice(0, 16)) + '\u2026</div></div>'
+
+  html += '<table><tr><th>Skill</th><th class="rank">Rank</th><th>Level</th><th>Experience</th></tr>'
+  html += '<tr class="crow-total"><td><b>standing</b></td>'
+    + '<td class="rank">' + standingRank + '</td>'
+    + '<td><b style="color:var(--gold)">' + me.total + '</b></td>'
+    + '<td style="color:var(--dim)">' + me.xp.toLocaleString() + '</td></tr>'
+  for (const sk of SKILLS) {
+    const lvl = me.levels[sk] ?? 1
+    const xp = (me.skillXp ?? {})[sk] ?? 0
+    const r = rankIn(j.players, sk, PROFILE)
+    html += '<tr><td>' + sk + '</td>'
+      + '<td class="rank">' + (r ?? '\u2013') + '</td>'
+      + '<td' + (lvl >= 99 ? ' style="color:#ffcc33;font-weight:bold"' : '') + '>' + lvl + '</td>'
+      + '<td style="color:var(--dim)">' + xp.toLocaleString() + '</td></tr>'
+  }
+  el.innerHTML = html + '</table>'
+    + '<div class="pager"><button class="pgb" data-pg="back">back to the board</button></div>'
+  wireBoard()
+}
+
 // A name is the obvious thing to click, so let it be one: it does exactly what
 // typing that name into the box does, because two ways to the same place should
 // not arrive somewhere different.
 const esc = (t) => String(t ?? '').replace(/[<>&"]/g, (c) =>
   ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]))
 function nameCell(p) {
-  const n = p.name ?? ''
-  return '<button class="nameb" data-name="' + esc(n) + '">' + esc(n) + '</button>'
+  return '<button class="nameb" data-pid="' + esc(p.playerId) + '">'
+    + esc(p.name ?? '') + '</button>'
 }
 
 function clampPage(total) {
@@ -208,17 +259,15 @@ function wireBoard() {
   const el = document.getElementById('board')
   for (const b of el.querySelectorAll('.nameb')) {
     b.onclick = () => {
-      const n = b.dataset.name
-      if (!n) return
-      const box = document.getElementById('find')
-      if (box) box.value = n
-      FILTER = n.toLowerCase(); PAGE = 0
+      PROFILE = b.dataset.pid || null
       if (LAST) drawBoard(LAST)
+      document.getElementById('finder')?.scrollIntoView({ block: 'nearest' })
     }
   }
   for (const b of el.querySelectorAll('.pgb')) {
     b.onclick = () => {
-      PAGE += (b.dataset.pg === 'next' ? 1 : -1)
+      if (b.dataset.pg === 'back') { PROFILE = null }
+      else PAGE += (b.dataset.pg === 'next' ? 1 : -1)
       if (LAST) drawBoard(LAST)
       document.getElementById('picker')?.scrollIntoView({ block: 'nearest' })
     }
@@ -239,13 +288,13 @@ function wireFinder() {
   const me = document.getElementById('findme')
   if (!box || box.dataset.wired) return
   box.dataset.wired = '1'
-  box.oninput = () => { FILTER = box.value.trim().toLowerCase(); PAGE = 0; if (LAST) drawBoard(LAST) }
+  box.oninput = () => { FILTER = box.value.trim().toLowerCase(); PAGE = 0; PROFILE = null; if (LAST) drawBoard(LAST) }
   if (!MINE) { me.style.display = 'none'; note.textContent = 'no key in this browser yet' }
   else me.onclick = () => {
     const mine = (LAST?.players ?? []).find(p => p.playerId === MINE)
     if (!mine) { note.textContent = 'you are not on the board yet'; return }
     note.textContent = ''
-    box.value = mine.name; FILTER = String(mine.name).toLowerCase(); PAGE = 0
+    PROFILE = MINE; PAGE = 0
     drawBoard(LAST)
   }
 }

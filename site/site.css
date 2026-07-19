@@ -313,3 +313,13 @@ tr.mine .nameb { color: var(--gold-hi); font-weight: bold; }
 .pgb:hover:not(:disabled) { border-color: var(--gold); color: var(--gold-hi); }
 .pgb:disabled { color: #4a3c24; border-color: #33291a; cursor: default; }
 .pgn { color: var(--dim); font: 11px ui-monospace, Menlo, monospace; }
+
+/* one citizen, read downwards */
+.citizen { text-align: center; margin: 4px 0 14px; }
+.cname { color: var(--gold-hi); font: bold 20px Verdana, sans-serif; letter-spacing: 1px; }
+.ccall { color: var(--parch); font: italic 13px Georgia, serif; margin-top: 2px; }
+.ckey {
+  color: #6e5f42; font: 11px ui-monospace, Menlo, monospace;
+  margin-top: 5px; cursor: help;
+}
+tr.crow-total td { background: #2b2113; border-bottom: 2px solid var(--stone-lt); }
