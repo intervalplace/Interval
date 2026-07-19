@@ -40,6 +40,8 @@ const fromHex = (h) => new Uint8Array(h.match(/../g).map(x => parseInt(x,16)))
 // the exact string the node verifies. If these two ever drift apart every post
 // fails loudly, which is the right way for them to drift.
 const signedBytes = (p) => JSON.stringify({ body: p.body, key: p.key, subject: p.subject, ts: p.ts })
+const modBytes = (m) => JSON.stringify({ act: m.act, key: m.key, target: m.target, ts: m.ts, why: m.why ?? '' })
+let KEEPERS = []
 
 let MINE = null
 try { MINE = JSON.parse(localStorage.getItem('interval-ownkey') || 'null') } catch {}
@@ -66,6 +68,7 @@ async function load() {
     + '</b> and allows <b>' + j.perDay + '</b> posts a day, the same number for everyone. '
     + 'Standing cannot be bought or hurried: it is time spent in the world, '
     + 'which is the one thing nobody can forge in bulk.'
+  KEEPERS = j.keepers ?? []
   $('compose').style.display = MINE?.pub ? '' : 'none'
   if (!MINE?.pub) {
     $('rules').innerHTML += ' <span class="dimline">Enter the world once and your key will appear here, '
@@ -85,8 +88,13 @@ async function load() {
       + '<span class="pwhen">' + ago(p.ts) + '</span>'
     + '</div>'
     + '<div class="pbody">' + esc(p.body) + '</div>'
-    + '<div class="pkey" title="' + esc(p.key) + '">' + esc(String(p.key).slice(0, 16)) + '\u2026</div>'
+    + '<div class="pfoot">'
+      + '<span class="pkey" title="' + esc(p.key) + '">' + esc(String(p.key).slice(0, 16)) + '\u2026</span>'
+      + (amKeeper() ? '<button class="modb" data-id="' + esc(p.id) + '" data-key="' + esc(p.key) + '">remove</button>'
+        + '<button class="modb" data-sil="' + esc(p.key) + '">silence</button>' : '')
+    + '</div>'
     + '</article>').join('')
+  wireMod()
 }
 
 async function send() {
@@ -108,6 +116,34 @@ async function send() {
     note.textContent = 'this window could not sign that (' + (e.message ?? e) + ')'
   }
   $('bsend').disabled = false
+}
+
+const amKeeper = () => !!MINE?.pub && KEEPERS.includes(MINE.pub)
+
+async function moderate(act, target, why) {
+  const m = { key: MINE.pub, act, target, ts: Date.now(), why: why ?? '' }
+  const priv = await crypto.subtle.importKey('pkcs8', fromHex(MINE.pk8), { name: 'Ed25519' }, true, ['sign'])
+  m.sig = toHex(await crypto.subtle.sign({ name: 'Ed25519' }, priv, new TextEncoder().encode(modBytes(m))))
+  const r = await fetch('/api/board/moderate', { method: 'POST', body: JSON.stringify(m) })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) alert(j.error ?? 'that did not work')
+  load()
+}
+
+function wireMod() {
+  for (const b of document.querySelectorAll('.modb')) {
+    b.onclick = async () => {
+      if (b.dataset.sil) {
+        const why = prompt('silence this key. Why?')
+        if (why === null) return
+        await moderate('silence', b.dataset.sil, why)
+      } else {
+        const why = prompt('remove this post. Why?')
+        if (why === null) return
+        await moderate('remove', b.dataset.id, why)
+      }
+    }
+  }
 }
 
 $('bsend').onclick = send
