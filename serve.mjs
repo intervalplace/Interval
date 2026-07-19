@@ -415,8 +415,7 @@ const server = http.createServer((req, res) => {
     // The old paths keep working, since links live longer than layouts.
     if (path === '/play/flat' || path === '/window-web') return sendFile('./window-web.html', 'text/html')
     if (path === '/play/deep' || path === '/deluxe') return sendFile('./window-3d.html', 'text/html')
-    if (path === '/play/grim' || path === '/window-grim') return sendFile('./window-grim.html', 'text/html')
-    if (path === '/play/grimdeep' || path === '/window-grim3d') return sendFile('./window-grim3d.html', 'text/html')
+    if (path === '/play/photo' || path === '/photo') return sendFile('./window-photo.html', 'text/html')
     // Music, if the world has any. Nothing here ships with a tune: a node with
     // an empty audio/ directory simply plays nothing, and the windows fall
     // silent without complaint. Drop files in and they are found.
