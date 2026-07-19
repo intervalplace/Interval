@@ -5,6 +5,11 @@
 <div class="page"><main class="stone">
   <h1>Hiscores</h1>
   <p class="tagline">Every rank on this page is cryptographically provable. No exceptions, no appeals.</p>
+  <div id="finder">
+    <input id="find" type="search" placeholder="find a citizen by name…" autocomplete="off" spellcheck="false">
+    <button id="findme" class="stab" title="the window keeps your key in this browser">find me</button>
+    <span id="findnote"></span>
+  </div>
   <div id="picker"></div>
   <div id="board">loading the world…</div>
 
@@ -41,7 +46,14 @@ async function readJson(url) {
   try { return await r.json() }
   catch { throw new Error('the node answered ' + url + ' with something that was not JSON.') }
 }
-let SKILLS = [], VIEW = 'standing', LAST = null
+let SKILLS = [], VIEW = 'standing', LAST = null, FILTER = '', MINE = null
+
+// The window keeps your key in this browser, and this page is the same origin,
+// so it can find you without asking who you are. Only the public half is read.
+try {
+  const k = JSON.parse(localStorage.getItem('interval-ownkey') || 'null')
+  if (k && typeof k.pub === 'string') MINE = k.pub
+} catch {}
 
 // Standing is a sum, so the whole-world board always belongs to generalists.
 // A citizen is introduced by their CALLING though, and a calling had no board
@@ -58,30 +70,55 @@ const FAMILIES = [
   ['mourning',   ['prayer']],
 ]
 
+// Two controls for one choice. A wall of seventeen buttons pushed the actual
+// rankings off the bottom of a phone: someone opening a hiscores page wants to
+// see ranks, not a menu. So narrow screens get a single line that collapses
+// into the native picker, and wide ones keep the families laid out where there
+// is room for them. Both write to VIEW; whichever is visible is the one in use.
 function drawPicker() {
   const el = document.getElementById('picker')
   if (!SKILLS.length) return
+  const known = new Set(SKILLS)
+  const placed = new Set(FAMILIES.flatMap(f => f[1]))
+  const rest = SKILLS.filter(x => !placed.has(x))
+
+  // --- the compact one, for phones: one line, native picker ---
+  let sel = '<div class="pcompact"><label for="pickskill">showing</label>'
+    + '<select id="pickskill"><option value="standing"'
+    + (VIEW === 'standing' ? ' selected' : '') + '>standing (every trade)</option>'
+  for (const [label, group] of FAMILIES) {
+    const present = group.filter(x => known.has(x))
+    if (!present.length) continue
+    sel += '<optgroup label="' + label + '">'
+      + present.map(x => '<option value="' + x + '"' + (VIEW === x ? ' selected' : '')
+        + '>' + x + '</option>').join('') + '</optgroup>'
+  }
+  if (rest.length) sel += '<optgroup label="and">'
+    + rest.map(x => '<option value="' + x + '"' + (VIEW === x ? ' selected' : '')
+      + '>' + x + '</option>').join('') + '</optgroup>'
+  sel += '</select></div>'
+
+  // --- the laid-out one, for screens with room ---
   const tab = (key, label) => '<button class="stab' + (VIEW === key ? ' on' : '')
     + '" data-view="' + key + '">' + label + '</button>'
-  const known = new Set(SKILLS)
-  let html = '<div class="prow prow-top">'
+  let wide = '<div class="pwide"><div class="prow prow-top">'
     + '<button class="stab wide' + (VIEW === 'standing' ? ' on' : '')
     + '" data-view="standing">standing</button></div>'
   for (const [label, group] of FAMILIES) {
     const present = group.filter(x => known.has(x))
     if (!present.length) continue
-    html += '<div class="prow"><span class="plab">' + label + '</span>'
+    wide += '<div class="prow"><span class="plab">' + label + '</span>'
       + present.map(x => tab(x, x)).join('') + '</div>'
   }
-  // anything the constitution has that this page did not know about
-  const placed = new Set(FAMILIES.flatMap(f => f[1]))
-  const rest = SKILLS.filter(x => !placed.has(x))
-  if (rest.length) html += '<div class="prow"><span class="plab">and</span>'
+  if (rest.length) wide += '<div class="prow"><span class="plab">and</span>'
     + rest.map(x => tab(x, x)).join('') + '</div>'
-  el.innerHTML = html
-  for (const b of el.querySelectorAll('.stab')) {
-    b.onclick = () => { VIEW = b.dataset.view; drawPicker(); if (LAST) drawBoard(LAST) }
-  }
+  wide += '</div>'
+
+  el.innerHTML = sel + wide
+  const choose = (v) => { VIEW = v; drawPicker(); if (LAST) drawBoard(LAST) }
+  for (const b of el.querySelectorAll('.stab')) b.onclick = () => choose(b.dataset.view)
+  const sb = el.querySelector('#pickskill')
+  if (sb) sb.onchange = () => choose(sb.value)
 }
 
 function drawBoard(j) {
@@ -91,20 +128,23 @@ function drawBoard(j) {
   if (VIEW === 'standing') { // every trade at once, for the whole world
     let html = '<table><tr><th class="rank">Rank</th><th>Name</th><th>Standing</th>'
       + SKILLS.map(s => '<th>' + s + '</th>').join('') + '</tr>'
+    let shown = 0
     j.players.forEach((p, i) => {
-      html += '<tr><td class="rank">' + (i+1) + '</td><td>' + p.name
+      if (!matches(p)) return // rank is still the TRUE rank, not the filtered one
+      shown++
+      html += '<tr' + (isMine(p) ? ' class="mine"' : '') + '><td class="rank">' + (i+1) + '</td><td>' + p.name
         + '</td><td><b style="color:var(--gold)">' + p.total + '</b></td>'
         + SKILLS.map(s => '<td' + (p.levels[s] >= 99 ? ' style="color:#ffcc33;font-weight:bold"' : '')
           + '>' + p.levels[s] + '</td>').join('') + '</tr>'
     })
-    el.innerHTML = html + '</table>'
+    el.innerHTML = shown ? html + '</table>' : noneFound()
     return
   }
 
   // one trade, ranked by the work done in it and nothing else
   const sk = VIEW
   const ranked = j.players
-    .map(p => ({ name: p.name, level: p.levels[sk] ?? 1, xp: (p.skillXp ?? {})[sk] ?? 0 }))
+    .map(p => ({ name: p.name, playerId: p.playerId, level: p.levels[sk] ?? 1, xp: (p.skillXp ?? {})[sk] ?? 0 }))
     .filter(p => p.xp > 0)
     .sort((a, b) => b.xp - a.xp)
   if (!ranked.length) {
@@ -113,13 +153,41 @@ function drawBoard(j) {
     return
   }
   let html = '<table><tr><th class="rank">Rank</th><th>Name</th><th>Level</th><th>Experience</th></tr>'
+  let shown = 0
   ranked.forEach((p, i) => {
-    html += '<tr><td class="rank">' + (i + 1) + '</td><td>' + p.name + '</td>'
+    if (!matches(p)) return
+    shown++
+    html += '<tr' + (isMine(p) ? ' class="mine"' : '') + '><td class="rank">' + (i + 1) + '</td><td>' + p.name + '</td>'
       + '<td' + (p.level >= 99 ? ' style="color:#ffcc33;font-weight:bold"' : ' style="color:var(--gold)"')
       + '>' + p.level + '</td>'
       + '<td style="color:var(--dim)">' + p.xp.toLocaleString() + '</td></tr>'
   })
-  el.innerHTML = html + '</table>'
+  el.innerHTML = shown ? html + '</table>' : noneFound()
+}
+
+// the rank shown is always the citizen's real rank in the world, never their
+// position in a filtered list: a search should not flatter anyone
+const matches = (p) => !FILTER || (p.name ?? '').toLowerCase().includes(FILTER)
+  || (p.playerId ?? '').startsWith(FILTER)
+const isMine = (p) => MINE && (p.playerId === MINE)
+const noneFound = () => '<p style="color:var(--dim)">No citizen here matches \u201c'
+  + FILTER.replace(/[<>&]/g, '') + '\u201d.</p>'
+
+function wireFinder() {
+  const box = document.getElementById('find')
+  const note = document.getElementById('findnote')
+  const me = document.getElementById('findme')
+  if (!box || box.dataset.wired) return
+  box.dataset.wired = '1'
+  box.oninput = () => { FILTER = box.value.trim().toLowerCase(); if (LAST) drawBoard(LAST) }
+  if (!MINE) { me.style.display = 'none'; note.textContent = 'no key in this browser yet' }
+  else me.onclick = () => {
+    const mine = (LAST?.players ?? []).find(p => p.playerId === MINE)
+    if (!mine) { note.textContent = 'you are not on the board yet'; return }
+    note.textContent = ''
+    box.value = mine.name; FILTER = String(mine.name).toLowerCase()
+    drawBoard(LAST)
+  }
 }
 
 async function load() {
@@ -127,6 +195,7 @@ async function load() {
     const j = await readJson('/api/hiscores')
     LAST = j
     if (j.players.length) SKILLS = Object.keys(j.players[0].levels) // whatever the constitution says
+    wireFinder()
     drawPicker()
     drawBoard(j)
   } catch (e) { document.getElementById('board').textContent = e.message }

@@ -173,9 +173,23 @@ h1 {
 .shapes b { color: var(--gold); margin-right: 5px }
 .shapes .itemicon { width: 28px; height: 28px }
 
-/* the trade picker. Three short labelled rows read faster than seventeen equal
-   buttons, and the whole-world board sits apart because it is not a trade. */
-#picker { margin: 0 0 16px; }
+/* The trade picker, in two forms. A hiscores page should open on ranks, not on
+   a menu: seventeen buttons is four rows on a phone and pushed the table off
+   the screen entirely. Narrow screens get one line and the native picker,
+   which on a phone is a proper scrolling wheel with the families as headings.
+   Wide screens keep them laid out, where there is room to see all of them. */
+#picker { margin: 0 0 14px; }
+
+.pcompact { display: none; align-items: center; gap: 8px; }
+.pcompact label { color: var(--dim); font: italic 11px Georgia, serif; }
+.pcompact select {
+  flex: 1 1 auto; max-width: 260px;
+  background: #1a1206; color: var(--gold); border: 1px solid #4a3c24;
+  border-radius: 3px; padding: 7px 9px;
+  font: bold 12px Verdana, sans-serif; letter-spacing: .3px;
+}
+.pcompact select:focus { outline: none; border-color: var(--gold); }
+
 .prow { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-bottom: 3px; }
 .prow-top { margin-bottom: 9px; }
 .plab {
@@ -190,8 +204,8 @@ h1 {
 .stab.wide { padding: 7px 18px; }
 .stab:hover { border-color: var(--gold); color: var(--gold-hi); }
 .stab.on { background: var(--gold); border-color: var(--gold-hi); color: #1a1206; }
-@media (max-width: 560px) {
-  .plab { width: 100%; flex: 0 0 100%; text-align: left; padding: 3px 0 1px; }
-  .prow { margin-bottom: 8px; }
-  .stab { padding: 6px 8px; font-size: 10.5px; letter-spacing: 0; }
+
+@media (max-width: 640px) {
+  .pcompact { display: flex; }
+  .pwide { display: none; }
 }
