@@ -26,7 +26,21 @@
      knight — and everyone WALKS now: strides chain into linear,
      continuous motion instead of stepping tile by tile, chests breathe
      at rest, steps bounce. First person is the default view, because
-     the light is the whole argument. All of it is rendering, none of
+     the light is the whole argument. The camera grew an iris — stare
+     into the sun and the pupil closes instead of the frame whiting
+     out — and the window grew an EAR: procedural wind, rain, thunder
+     that arrives a polite second after its bolt, crickets after dark,
+     crackling fires that get louder as you approach, birdsong, and
+     your own footsteps on the beat of the stride. Press and hold to
+     keep walking the way you look. And then everything else: the ear
+     went STEREO — thunder rolls in from the side its bolt struck, work
+     and blows ring from their true directions, gulls cry over the
+     shore and water laps at it, the aurora hums a fifth to itself, a
+     synthesized room gives the night its distances, and a heart with
+     three points left keeps its own drum while the frame flushes red
+     at the edges. Snow falls instead of rain over the high country,
+     the canopies shed leaves onto the wind, and CINE clears every
+     scrap of interface for footage. All of it is rendering, none of
      it is rules.
      Zero assets: every texture is synthesized on a canvas at load.
      Optional: ?hdri=<url-to-.hdr> swaps the procedural sky for a real
@@ -83,6 +97,10 @@
     transition: box-shadow .25s, background .25s }
   #splash button:hover, #splash button:active { background: rgba(226,182,62,.12);
     box-shadow: 0 0 22px rgba(226,182,62,.28) }
+  #cinex { position: fixed; top: calc(10px + env(safe-area-inset-top)); right: 10px; z-index: 30;
+    width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(226,182,62,.5);
+    color: var(--gold); background: rgba(12,11,9,.45); display: none; align-items: center;
+    justify-content: center; font-size: 15px }
 </style>
 <script type="importmap">
 { "imports": {
@@ -101,16 +119,18 @@
     <button data-v="pack">PACK</button><button data-v="eat">EAT</button><button data-v="cook">COOK</button>
     <button data-v="wield">WIELD</button><button data-v="drop">DROP</button><button data-v="light">LIGHT</button>
     <button data-v="bury">BURY</button><button data-v="take">TAKE</button><button data-v="chat">CHAT</button>
-    <button data-v="pov">POV</button><button data-v="fx">FX</button><button data-v="shot">&#128247;</button>
+    <button data-v="pov">POV</button><button data-v="fx">FX</button><button data-v="cine">CINE</button><button data-v="shot">&#128247;</button>
   </div>
 </div>
+<div id="cinex">&#10005;</div>
 <div id="splash">
   <h1>THE PHOTO WINDOW</h1>
   <p>A physically-based view of the same world <code>/play</code> and <code>/deluxe</code> watch.
      One key on this device; one citizen in every window.</p>
-  <p>You wake behind your own eyes. Tap the ground to walk. Tap a tree to work it,
-     a beast to hunt it, litter to fetch it. Drag to look, pinch to breathe in and out.
-     POV steps the window back over the shoulder; the sky keeps its own weather.</p>
+  <p>You wake behind your own eyes. Tap the ground to walk; press and HOLD to keep
+     walking the way you look. Tap a tree to work it, a beast to hunt it, litter to
+     fetch it. Drag to look, pinch to breathe. The world has a sound now — the sky
+     keeps its own weather, and the weather keeps its own score.</p>
   <button id="enter">STEP THROUGH</button>
 </div>
 <script type="module">
@@ -470,11 +490,14 @@ const raysPass = new ShaderPass({
       for (int i = 0; i < ${MOBILE ? 28 : 44}; i++) {
         p += dir;
         vec3 s = texture2D(tDiffuse, p).rgb;
-        float l = max(0., dot(s, vec3(.299, .587, .114)) - .5);
+        s = s / (1. + s); // the beam is made of light, not of overflow:
+        // tone each sample before it joins the shaft, so the HDR sun
+        // can never stack itself into a white wall
+        float l = smoothstep(.45, .85, dot(s, vec3(.299, .587, .114)));
         acc += s * l * w; tot += w; w *= .952;
       }
       float edge = smoothstep(1.35, .4, distance(vUv, uSun));
-      gl_FragColor = vec4(base + acc / tot * uTint * uAmt * 1.7 * edge, 1.);
+      gl_FragColor = vec4(base + acc / tot * uTint * uAmt * 1.9 * edge, 1.);
     }` })
 composer.addPass(raysPass)
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.55, 0.88)
@@ -484,9 +507,9 @@ composer.addPass(new OutputPass())
 // a breath of chromatic fringe at the edges, a nudge of saturation.
 // This is where 'render' becomes 'photograph'.
 const gradePass = new ShaderPass({
-  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uAmt: { value: 1 }, uWarm: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uAmt: { value: 1 }, uWarm: { value: 0 }, uHurt: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
-  fragmentShader: `varying vec2 vUv; uniform sampler2D tDiffuse; uniform float uTime, uAmt, uWarm;
+  fragmentShader: `varying vec2 vUv; uniform sampler2D tDiffuse; uniform float uTime, uAmt, uWarm, uHurt;
     void main(){
       vec2 d = vUv - .5; float r2 = dot(d, d);
       vec2 ca = d * r2 * .0045 * uAmt;
@@ -499,6 +522,8 @@ const gradePass = new ShaderPass({
       col += st * uWarm * uAmt;
       col = mix(col, col * col * (3. - 2. * col), .2 * uAmt); // a filmic S over the middle
       col *= 1.0 - smoothstep(.32, .95, sqrt(r2)) * .40 * uAmt;
+      // pain arrives at the edge of vision first
+      col = mix(col, vec3(.5, .03, .03), smoothstep(.3, .95, sqrt(r2)) * uHurt * .8);
       float gn = fract(sin(dot(vUv + fract(uTime), vec2(12.9898, 78.233))) * 43758.5453);
       col += (gn - .5) * .028 * uAmt;
       gl_FragColor = vec4(col, 1.);
@@ -795,9 +820,11 @@ bolt.frustumCulled = false
 scene.add(bolt)
 const boltLight = new THREE.PointLight(0xbcd0ff, 0, 90, 1.2)
 scene.add(boltLight)
+let boltX = 0, boltZ = 0
 function strikeBolt(cx, cz) {
   const a = Math.random() * Math.PI * 2, d = 26 + Math.random() * 46
   let x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d, y = 55 + Math.random() * 25
+  boltX = x; boltZ = z
   boltLight.position.set(x, 14, z)
   const p = boltGeo.attributes.position.array
   let i = 0
@@ -836,6 +863,154 @@ for (let i = 0; i < (MOBILE ? 7 : 11); i++) {
   flock.add(b); birds.push(b)
 }
 scene.add(flock)
+
+// ---- the ear: the window learns to listen. Zero assets here too —
+// wind is filtered noise, rain is brighter noise, thunder is a burst
+// falling through a closing filter a polite second after its bolt,
+// crickets are detuned triangle waves gated by their own tremor,
+// fire is bandpass pops that get louder as you walk toward it,
+// birdsong is a sine that remembers being a whistle, and your own
+// footsteps land on the beat of the stride. The weather scores itself.
+let AC = null, audio = null
+function initAudio() {
+  if (AC) { if (AC.state === 'suspended') AC.resume(); return }
+  try { AC = new (window.AudioContext || window.webkitAudioContext)() } catch { return }
+  const master = AC.createGain(); master.gain.value = 0.6; master.connect(AC.destination)
+  // the room: a synthesized impulse gives the night its distances
+  const conv = AC.createConvolver()
+  { const len = Math.floor(AC.sampleRate * 1.5)
+    const ib = AC.createBuffer(2, len, AC.sampleRate)
+    for (let ch = 0; ch < 2; ch++) { const d = ib.getChannelData(ch)
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6) }
+    conv.buffer = ib }
+  const wet = AC.createGain(); wet.gain.value = 0.08
+  master.connect(conv); conv.connect(wet); wet.connect(AC.destination)
+  const noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate)
+  { const d = noiseBuf.getChannelData(0)
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1 }
+  const bed = (type, freq, q) => {
+    const src = AC.createBufferSource(); src.buffer = noiseBuf; src.loop = true
+    const f = AC.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q
+    const g = AC.createGain(); g.gain.value = 0
+    src.connect(f); f.connect(g); g.connect(master); src.start()
+    return { f, g }
+  }
+  const wind = bed('lowpass', 320, 0.4)
+  const rain = bed('bandpass', 3400, 0.35)
+  const lap = bed('bandpass', 540, 0.9) // the shore keeps time
+  const crickets = AC.createGain(); crickets.gain.value = 0; crickets.connect(master)
+  for (const [f0, tr] of [[4300, 21], [4750, 16]]) {
+    const o = AC.createOscillator(); o.type = 'triangle'; o.frequency.value = f0
+    const g = AC.createGain(); g.gain.value = 0.5
+    const lfo = AC.createOscillator(); lfo.frequency.value = tr
+    const lg = AC.createGain(); lg.gain.value = 0.5
+    lfo.connect(lg); lg.connect(g.gain)
+    o.connect(g); g.connect(crickets); o.start(); lfo.start()
+  }
+  const pad = AC.createGain(); pad.gain.value = 0; pad.connect(master)
+  for (const f0 of [196, 294.7]) { // the aurora hums a fifth to itself
+    const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = f0
+    const g = AC.createGain(); g.gain.value = 0.5
+    o.connect(g); g.connect(pad); o.start()
+  }
+  const out = (g, pan) => { // pops can sit left or right of the ear
+    if (pan && AC.createStereoPanner) {
+      const p = AC.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan))
+      g.connect(p); p.connect(master)
+    } else g.connect(master)
+  }
+  const pop = (freq, gain, dur, when = 0, pan = 0) => { // one struck sound, any kind
+    const t0 = AC.currentTime + when
+    const src = AC.createBufferSource(); src.buffer = noiseBuf
+    const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 1
+    const g = AC.createGain()
+    g.gain.setValueAtTime(gain, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
+    src.connect(f); f.connect(g); out(g, pan)
+    src.start(t0, Math.random() * 1.5, dur + 0.05)
+  }
+  audio = {
+    wind, rain, lap, crickets, pad, wet, noiseBuf, pop,
+    step: (hard) => pop(hard ? 620 + Math.random() * 200 : 210 + Math.random() * 140,
+      hard ? 0.11 : 0.09, hard ? 0.07 : 0.09),
+    crackle: (d, pan) => pop(1100 + Math.random() * 900, 0.16 / (1 + d * d * 0.12),
+      0.05 + Math.random() * 0.06, 0, pan),
+    thump: (when) => { // the heart, when it has reason to be heard
+      const t0 = AC.currentTime + when
+      const o = AC.createOscillator(); o.type = 'sine'
+      o.frequency.setValueAtTime(58, t0); o.frequency.exponentialRampToValueAtTime(40, t0 + 0.12)
+      const g = AC.createGain()
+      g.gain.setValueAtTime(0.28, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22)
+      o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + 0.25)
+    },
+    gull: (pan) => {
+      const t0 = AC.currentTime
+      const o = AC.createOscillator(); o.type = 'sawtooth'
+      o.frequency.setValueAtTime(1250 + Math.random() * 300, t0)
+      o.frequency.exponentialRampToValueAtTime(560, t0 + 0.4)
+      const g = AC.createGain()
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.03, t0 + 0.05)
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.45)
+      o.connect(g); out(g, pan); o.start(t0); o.stop(t0 + 0.5)
+    },
+    chirp: (pan) => {
+      const t0 = AC.currentTime
+      const o = AC.createOscillator(); o.type = 'sine'
+      const g = AC.createGain()
+      o.frequency.setValueAtTime(2500 + Math.random() * 900, t0)
+      o.frequency.exponentialRampToValueAtTime(3900, t0 + 0.07)
+      o.frequency.exponentialRampToValueAtTime(2300, t0 + 0.15)
+      g.gain.setValueAtTime(0.0001, t0)
+      g.gain.exponentialRampToValueAtTime(0.045, t0 + 0.02)
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.17)
+      o.connect(g); out(g, pan); o.start(t0); o.stop(t0 + 0.2)
+    },
+    thunder: (pan) => {
+      const t0 = AC.currentTime + 0.25 + Math.random() * 1.1 // light outruns sound
+      const src = AC.createBufferSource(); src.buffer = noiseBuf; src.loop = true
+      const f = AC.createBiquadFilter(); f.type = 'lowpass'
+      f.frequency.setValueAtTime(950, t0)
+      f.frequency.exponentialRampToValueAtTime(52, t0 + 2.3)
+      const g = AC.createGain()
+      g.gain.setValueAtTime(0.0001, t0)
+      g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.05)
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.5)
+      src.connect(f); f.connect(g); out(g, pan)
+      src.start(t0); src.stop(t0 + 2.6)
+    },
+  }
+}
+let lastAudioAt = 0, stepSign = 0, lastBeatAt = 0
+// which side of the head a world position sits on, for the panners
+const tmpV4 = new THREE.Vector3()
+const panOf = (x, z) => {
+  tmpV4.setFromMatrixColumn(camera.matrixWorld, 0) // the camera's right hand
+  const dx = x - camera.position.x, dz = z - camera.position.z
+  const d = Math.hypot(dx, dz) || 1
+  return Math.max(-1, Math.min(1, (dx * tmpV4.x + dz * tmpV4.z) / d))
+}
+
+// ---- the leaves: the canopies shed onto the wind. A small budget of
+// falling flecks, each borrowed from a nearby tree, spiraling down and
+// respawning somewhere greener. The stronger the wind, the more of
+// them the eye is allowed to see. ----
+const LEAF_N = MOBILE ? 60 : 110
+const leafPos = new Float32Array(LEAF_N * 3)
+const leafPh = new Float32Array(LEAF_N)
+const leafLife = new Float32Array(LEAF_N)
+const leafGeo = new THREE.BufferGeometry()
+leafGeo.setAttribute('position', new THREE.BufferAttribute(leafPos, 3))
+{ const cols = new Float32Array(LEAF_N * 3); const c = new THREE.Color()
+  for (let i = 0; i < LEAF_N; i++) {
+    c.setHSL(0.09 + Math.random() * 0.17, 0.6, 0.3 + Math.random() * 0.15)
+    cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b
+    leafPos[i * 3 + 1] = -999
+  }
+  leafGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3)) }
+const leaves = new THREE.Points(leafGeo, new THREE.PointsMaterial({ size: 0.075, vertexColors: true,
+  transparent: true, opacity: 0, depthWrite: false, sizeAttenuation: true }))
+leaves.frustumCulled = false
+scene.add(leaves)
+let treeCache = [], lastTreeAt = 0
 
 // ---- the ground: the deluxe window's blended heightfield, dressed in
 // synthesized PBR skin. Twice the vertices of the tile grid; biomes
@@ -1580,6 +1755,15 @@ function tickTheater(st) {
       const n = st.nodes[a.nodeId]; if (!n) continue
       burst(wx(n.x), groundYAt(n.x, n.y) + (n.type === 'tree' ? 0.9 : 0.35), wz(n.y), NODE_FX[n.type] ?? 'dust')
       const nv = vis.node.get(a.nodeId); if (nv) nv.__shakeAt = performance.now()
+      if (audio) { // labor is audible from the correct direction
+        const d = Math.hypot(wx(n.x) - camera.position.x, wz(n.y) - camera.position.z)
+        if (d < 22) {
+          const pan = panOf(wx(n.x), wz(n.y)), att = 1 / (1 + d * 0.3)
+          if (n.type === 'tree') audio.pop(320 + Math.random() * 140, 0.13 * att, 0.1, 0, pan)
+          else if (n.type === 'fishing-spot') audio.pop(580, 0.1 * att, 0.18, 0, pan)
+          else audio.pop(1800 + Math.random() * 600, 0.1 * att, 0.06, 0, pan)
+        }
+      }
     }
     if ((a.type === 'attack' && a.mobId) || (a.type === 'attackp' && a.targetId)) {
       const g = vis.player.get(pid)
@@ -1588,7 +1772,17 @@ function tickTheater(st) {
         g.__lungeAt = performance.now()
         g.__lungeDx = Math.sign(tgt.x - p.x); g.__lungeDz = Math.sign(tgt.y - p.y)
       }
-      if (tgt) burst(wx(tgt.x), groundYAt(tgt.x, tgt.y) + 0.5, wz(tgt.y), 'spark')
+      if (tgt) {
+        burst(wx(tgt.x), groundYAt(tgt.x, tgt.y) + 0.5, wz(tgt.y), 'spark')
+        if (audio) { // the blow lands where it lands
+          const d = Math.hypot(wx(tgt.x) - camera.position.x, wz(tgt.y) - camera.position.z)
+          if (d < 22) {
+            const pan = panOf(wx(tgt.x), wz(tgt.y)), att = 1 / (1 + d * 0.3)
+            audio.pop(2300 + Math.random() * 500, 0.08 * att, 0.05, 0, pan)
+            audio.pop(240, 0.1 * att, 0.09, 0.02, pan)
+          }
+        }
+      }
     }
   }
 }
@@ -1723,12 +1917,23 @@ const ray = new THREE.Raycaster()
 let walkGoal = null, huntTarget = null, workTarget = null
 let lastStepPos = '', lastStepAxisX = false
 const ptr = { down: false, moved: false, x: 0, y: 0, pinch: 0 }
+// hold to walk: keep a finger down without dragging and the citizen
+// walks the way the eyes point, stride after stride, until you let go
+let holdWalk = false, holdTimer = null, holdWas = false
 const el = renderer.domElement
-el.addEventListener('pointerdown', (e) => { ptr.down = true; ptr.moved = false; ptr.x = e.clientX; ptr.y = e.clientY })
+el.addEventListener('pointerdown', (e) => {
+  initAudio() // the ear needs a gesture to wake; any will do
+  ptr.down = true; ptr.moved = false; ptr.x = e.clientX; ptr.y = e.clientY
+  holdWas = false
+  clearTimeout(holdTimer)
+  holdTimer = setTimeout(() => {
+    if (ptr.down && !ptr.moved && povMode && entered) { holdWalk = true; holdWas = true }
+  }, 340)
+})
 el.addEventListener('pointermove', (e) => {
   if (!ptr.down) return
   const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y
-  if (Math.abs(dx) + Math.abs(dy) > 6) ptr.moved = true
+  if (Math.abs(dx) + Math.abs(dy) > 6) { ptr.moved = true; holdWalk = false; clearTimeout(holdTimer) }
   if (ptr.moved) {
     if (povMode) {
       fpYaw -= dx * 0.0062
@@ -1742,6 +1947,8 @@ el.addEventListener('pointermove', (e) => {
 })
 el.addEventListener('pointerup', (e) => {
   const wasDrag = ptr.moved; ptr.down = false
+  clearTimeout(holdTimer); holdWalk = false
+  if (holdWas) return // the hold was the whole intention; no tap follows it
   if (wasDrag || !entered) return
   const m2 = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1)
   ray.setFromCamera(m2, camera)
@@ -1816,6 +2023,15 @@ function stepToward(txg, tyg, stopAdjacent) {
 let lastActed = -1
 function actOnTick() {
   const me = world?.players?.[ownKey?.pub]; if (!me) return
+  if (holdWalk && povMode) {
+    // the held finger is the compass: one signed stride per interval,
+    // in whichever direction the eyes are pointed
+    huntTarget = null; workTarget = null; walkGoal = null
+    const vx = Math.sin(fpYaw), vz = Math.cos(fpYaw)
+    if (Math.abs(vx) >= Math.abs(vz)) send({ do: 'move', dx: vx > 0 ? 1 : -1, dy: 0 })
+    else send({ do: 'move', dx: 0, dy: vz > 0 ? 1 : -1 })
+    return
+  }
   if (huntTarget) {
     const m = world.mobs?.[huntTarget]
     if (!m || (m.hp ?? 0) <= 0) { huntTarget = null; return }
@@ -1862,6 +2078,17 @@ function renderPack() {
     packEl.appendChild(b)
   }
 }
+// CINE: the frame with nothing on it. Every scrap of interface steps
+// out; the labels hold their breath; the camera drifts like it's being
+// held rather than worn. For screenshots, screen recordings, and
+// standing at a window for its own sake. The ✕ brings the world back.
+let cine = false
+const setCine = (on) => {
+  cine = on
+  for (const id of ['top', 'bar', 'feed']) document.getElementById(id).style.display = on ? 'none' : ''
+  document.getElementById('cinex').style.display = on ? 'flex' : 'none'
+}
+document.getElementById('cinex').onclick = () => setCine(false)
 const chatrow = document.getElementById('chatrow')
 document.getElementById('verbs').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-v]'); if (!b) return
@@ -1879,6 +2106,7 @@ document.getElementById('verbs').addEventListener('click', (e) => {
                  : 'the window steps back behind the shoulder')
     return
   }
+  if (v === 'cine') { setCine(true); return }
   if (v === 'fx') { bloom.enabled = !bloom.enabled; gradePass.enabled = bloom.enabled
     raysPass.enabled = bloom.enabled
     feed(bloom.enabled ? 'the light blooms' : 'the light behaves'); return }
@@ -1916,6 +2144,7 @@ document.getElementById('chatsend').onclick = chatgo
 document.getElementById('chatinput').addEventListener('keydown', (e) => { if (e.key === 'Enter') chatgo() })
 document.getElementById('enter').onclick = () => {
   entered = true
+  initAudio() // the gesture that opens the window opens the ear
   document.getElementById('splash').remove()
   if (ownKey && world && !world.players[ownKey.pub]) send({ do: 'spawn' })
 }
@@ -1985,7 +2214,8 @@ function frame() {
   const overcast = THREE.MathUtils.clamp(wthr * 1.4, 0, 1)
   const rainAmt = THREE.MathUtils.clamp((wthr - 0.55) * 2.2, 0, 1)
   if (rainAmt > 0.6 && Math.random() < dt * 0.07) { // thunder keeps its own counsel
-    flashAt = now; strikeBolt(camera.position.x, camera.position.z) }
+    flashAt = now; strikeBolt(camera.position.x, camera.position.z)
+    if (audio) audio.thunder(panOf(boltX, boltZ)) }
   const flash = Math.max(0, 1 - (now - flashAt) / 260)
 
   // low sun gets its drama from physics: more air in the light's way
@@ -2000,12 +2230,17 @@ function frame() {
   starUniforms.uTime.value = t
   starUniforms.uNight.value = nightAmt * (1 - overcast)
   for (const nb of nebs) nb.material.opacity = 0.55 * nightAmt * (1 - overcast)
-  renderer.toneMappingExposure = 0.57 + dayAmt * 0.23 - overcast * 0.06 + flash * 0.3
+  // the iris: stare into the sun and the pupil closes. The blindness
+  // was the camera's honesty; this is the camera's reflex. Exposure and
+  // bloom both step down as the gaze approaches the light.
+  const gaze = Math.max(0, camera.getWorldDirection(tmpV3).dot(sunDir))
+  const iris = 1 - Math.pow(gaze, 5) * 0.5 * dayAmt * (1 - overcast * 0.7)
+  renderer.toneMappingExposure = (0.57 + dayAmt * 0.23 - overcast * 0.06 + flash * 0.3) * iris
   scene.fog.color.setHSL(0.58, 0.25 - overcast * 0.12, (0.04 + dayAmt * 0.42) * (1 - overcast * 0.3) + flash * 0.25)
   scene.fog.near = (24 + dayAmt * 70) * (1 - overcast * 0.45)
   scene.fog.far = (110 + dayAmt * 270) * (1 - overcast * 0.55)
   if (!hdriMode && scene.environment) scene.environmentIntensity = (0.18 + dayAmt * 0.42) * (1 - overcast * 0.35)
-  bloom.strength = 0.3 + warm * 0.3 + nightAmt * 0.1
+  bloom.strength = (0.3 + warm * 0.3 + nightAmt * 0.1) * (0.5 + 0.5 * iris)
 
   // the wind is the weather's handwriting: grass, leaves, clouds, rain
   uWindA.value += ((0.4 + overcast * 0.7 + rainAmt * 0.7) - uWindA.value) * Math.min(1, dt * 1.5)
@@ -2017,16 +2252,33 @@ function frame() {
   const me = world?.players?.[ownKey?.pub]
   const meVis = me && vis.player.get(ownKey.pub)
   const focus = meVis ? meVis.position : tmpV.set(0, 0, 0)
+  // pain reaches the frame: a red pressure at the edge of vision when
+  // you're struck, and a standing flush when the body is nearly done
+  const ownHurt = meVis?.__hurtAt ? Math.max(0, 1 - (now - meVis.__hurtAt) / 450) : 0
+  gradePass.uniforms.uHurt.value = Math.min(1,
+    ownHurt * 0.9 + (me && me.hp <= 3 ? 0.24 + 0.09 * Math.sin(t * 3.2) : 0))
   if (povMode && meVis) {
     const walking = me && (Math.abs(wx(me.x) - meVis.position.x) + Math.abs(wz(me.y) - meVis.position.z)) > 0.03
     let bob = walking ? Math.sin(t * 8.5) * 0.028 : 0
+    if (audio && walking) { // every other bob-trough is a footfall,
+      // and the ground decides what it sounds like
+      const ph = Math.sin(t * 8.5)
+      if ((stepSign >= 0 && ph < 0) || (stepSign <= 0 && ph > 0))
+        audio.step(['mountain', 'scree', 'crags', 'cave'].includes(
+          terrainOf(Math.min(W - 1, Math.max(0, me.x)), Math.min(H - 1, Math.max(0, me.y)))))
+      stepSign = ph
+    }
     if (me?.action) bob += Math.sin(Math.min(1, (now - clock.at) / 320) * Math.PI) * -0.05 // the swing lands
+    // CINE lets the head drift the way a held camera drifts
+    const cy = fpYaw + (cine ? Math.sin(t * 0.11) * 0.035 : 0)
+    const cp = fpPitch + (cine ? Math.sin(t * 0.073) * 0.018 : 0)
     camera.position.set(focus.x, focus.y + 0.72 + bob, focus.z)
     camera.lookAt(
-      focus.x + Math.sin(fpYaw) * Math.cos(fpPitch),
-      focus.y + 0.72 + bob + Math.sin(fpPitch),
-      focus.z + Math.cos(fpYaw) * Math.cos(fpPitch))
+      focus.x + Math.sin(cy) * Math.cos(cp),
+      focus.y + 0.72 + bob + Math.sin(cp),
+      focus.z + Math.cos(cy) * Math.cos(cp))
   } else {
+    if (cine && !ptr.down) camYaw += dt * 0.032 // the slow orbit of an establishing shot
     camera.position.set(
       focus.x + Math.sin(camYaw) * Math.cos(camPitch) * camDist,
       focus.y + Math.sin(camPitch) * camDist + Math.sin(t * 0.35) * 0.05,
@@ -2069,9 +2321,16 @@ function frame() {
     flyUniforms.uNight.value = nightAmt * (1 - rainAmt)
     flyUniforms.uDay.value = dayAmt * (1 - overcast) * 0.8
   }
-  rain.material.opacity = rainAmt * 0.5
+  // over the high country the same weather falls as snow: slower,
+  // whiter, shorter flecks that barely lean. Same hash, same day —
+  // only the altitude changes what the sky decides to send down.
+  const snowy = !!(me && ['mountain', 'scree', 'crags'].includes(
+    terrainOf(Math.min(W - 1, Math.max(0, me.x)), Math.min(H - 1, Math.max(0, me.y)))))
+  rain.material.color.setHex(snowy ? 0xf0f5ff : 0x9fb4c8)
+  rain.material.opacity = rainAmt * (snowy ? 0.75 : 0.5)
   if (rainAmt > 0.02) {
-    const lean = Math.sin(uWindT.value * 0.5) * 0.6 + uWindA.value * 0.4
+    const lean = (Math.sin(uWindT.value * 0.5) * 0.6 + uWindA.value * 0.4) * (snowy ? 0.55 : 1)
+    const fall = snowy ? 0.24 : 1, seg = snowy ? 0.09 : 0.42
     for (let i = 0; i < rainN; i++) {
       const y = rainPos[i * 6 + 1]
       if (y < focus.y - 2.5 || y > focus.y + 30) {
@@ -2079,11 +2338,11 @@ function frame() {
         rainPos[i * 6 + 1] = focus.y + 9 + Math.random() * 6
         rainPos[i * 6 + 2] = focus.z + (Math.random() * 34 - 17)
       } else {
-        rainPos[i * 6 + 1] = y - (13 + (i % 5)) * dt
-        rainPos[i * 6] += lean * dt
+        rainPos[i * 6 + 1] = y - (13 + (i % 5)) * fall * dt
+        rainPos[i * 6] += lean * dt + (snowy ? Math.sin(t * 2 + i) * 0.3 * dt : 0)
       }
       rainPos[i * 6 + 3] = rainPos[i * 6] + lean * 0.06
-      rainPos[i * 6 + 4] = rainPos[i * 6 + 1] - 0.42
+      rainPos[i * 6 + 4] = rainPos[i * 6 + 1] - seg
       rainPos[i * 6 + 5] = rainPos[i * 6 + 2]
     }
     rain.geometry.attributes.position.needsUpdate = true
@@ -2141,6 +2400,63 @@ function frame() {
       ud.w1.rotation.z = fl; ud.w2.rotation.z = -fl
     }
   }
+
+  // the mix follows the weather: four times a second the beds are told
+  // what the day is doing — and the near fires, the shore, the aurora,
+  // and a heart with reason to be heard all get their say
+  if (audio && now - lastAudioAt > 250) {
+    lastAudioAt = now
+    const tA = AC.currentTime
+    audio.wind.g.gain.setTargetAtTime(0.035 + uWindA.value * 0.1, tA, 0.5)
+    audio.wind.f.frequency.setTargetAtTime(240 + uWindA.value * 540, tA, 0.5)
+    audio.rain.g.gain.setTargetAtTime(rainAmt * (snowy ? 0.02 : 0.14), tA, 0.5)
+    audio.crickets.gain.setTargetAtTime(nightAmt * (1 - rainAmt) * 0.04, tA, 0.8)
+    audio.pad.gain.setTargetAtTime(auroraAmt * 0.016, tA, 1.2)
+    audio.wet.gain.setTargetAtTime(0.06 + nightAmt * 0.2, tA, 1)
+    let fireD = 1e9, fireG = null
+    for (const g of vis.node.values())
+      if (g.userData.fireLight) { const d2 = g.position.distanceTo(focus)
+        if (d2 < fireD) { fireD = d2; fireG = g } }
+    if (fireG && fireD < 11 && Math.random() < 0.75)
+      audio.crackle(fireD, panOf(fireG.position.x, fireG.position.z))
+    let wD = 1e9 // how far to the nearest water the truth knows about
+    if (me && waterSet) for (let dy2 = -4; dy2 <= 4; dy2++) for (let dx2 = -4; dx2 <= 4; dx2++)
+      if (waterSet.has((me.x + dx2) + ',' + (me.y + dy2))) wD = Math.min(wD, Math.hypot(dx2, dy2))
+    audio.lap.g.gain.setTargetAtTime(wD < 5 ? (0.045 + 0.02 * Math.sin(t * 0.9)) / (1 + wD) : 0, tA, 0.6)
+    if (wD < 6 && dayAmt > 0.35 && Math.random() < 0.06) audio.gull((Math.random() - 0.5) * 1.6)
+    if (flock.visible && dayAmt > 0.4 && Math.random() < 0.2)
+      audio.chirp(panOf(flock.position.x, flock.position.z))
+    if (me && me.hp <= 3 && now - lastBeatAt > 950) { // the body keeps its own drum
+      lastBeatAt = now; audio.thump(0); audio.thump(0.17)
+    }
+  }
+
+  // the leaves borrow trees and ride the wind down
+  if (now - lastTreeAt > 1600) {
+    lastTreeAt = now
+    treeCache = []
+    for (const g of vis.node.values())
+      if (g.userData.type === 'tree' && !g.userData.depleted && g.position.distanceTo(focus) < 30) treeCache.push(g)
+  }
+  if (treeCache.length) {
+    for (let i = 0; i < LEAF_N; i++) {
+      leafLife[i] -= dt
+      if (leafLife[i] <= 0) {
+        const tr = treeCache[(Math.random() * treeCache.length) | 0]
+        leafPos[i * 3] = tr.position.x + (Math.random() - 0.5) * 1.2
+        leafPos[i * 3 + 1] = tr.position.y + 1.6 + Math.random() * 0.9
+        leafPos[i * 3 + 2] = tr.position.z + (Math.random() - 0.5) * 1.2
+        leafPh[i] = Math.random() * 6.28
+        leafLife[i] = 3.5 + Math.random() * 4
+      } else {
+        leafPos[i * 3 + 1] -= dt * (0.22 + 0.1 * Math.sin(t * 2.2 + leafPh[i]))
+        leafPos[i * 3] += dt * (Math.sin(t * 1.8 + leafPh[i]) * 0.5 + uWindA.value * 0.5)
+        leafPos[i * 3 + 2] += dt * Math.cos(t * 1.5 + leafPh[i] * 2) * 0.4
+      }
+    }
+    leafGeo.attributes.position.needsUpdate = true
+    leaves.material.opacity = Math.min(0.85, 0.3 + uWindA.value * 0.5) * (1 - rainAmt * 0.6)
+  } else leaves.material.opacity = 0
 
   // bodies glide between the ticks they were told about: the truth
   // steps once per interval, but the window draws the stride. Each body
@@ -2292,7 +2608,7 @@ function frame() {
       const lb = g.userData.lb ?? g.userData.label
       if (!lb) continue
       const d = camera.position.distanceTo(g.position)
-      const o = 1 - Math.min(1, Math.max(0, (d - near) / (far - near)))
+      const o = (cine ? 0 : 1) * (1 - Math.min(1, Math.max(0, (d - near) / (far - near))))
       lb.visible = o > 0.03
       lb.material.opacity = o * 0.9
     }
