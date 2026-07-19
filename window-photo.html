@@ -437,8 +437,8 @@ addEventListener('resize', () => {
 // surface is lit by the very dawn it stands under ----
 const sky = new Sky(); sky.scale.setScalar(4000); scene.add(sky)
 const su = sky.material.uniforms
-su.turbidity.value = 7; su.rayleigh.value = 1.8
-su.mieCoefficient.value = 0.005; su.mieDirectionalG.value = 0.8
+su.turbidity.value = 4.2; su.rayleigh.value = 1.15
+su.mieCoefficient.value = 0.0038; su.mieDirectionalG.value = 0.8
 const sunDir = new THREE.Vector3()
 const pmrem = new THREE.PMREMGenerator(renderer)
 let envRT = null, lastEnvElev = 99
@@ -556,7 +556,7 @@ function buildGround(s0) {
     cA.multiplyScalar(shade)
     if (mountainW > 0 && h2 > 1.4) cA.lerp(snow, Math.min(1, (h2 - 1.4) * 0.9) * mountainW)
     if (nearWater(gx, gy)) { h2 = Math.min(h2, -0.34); cA.lerp(wetSand, 0.6) }
-    else if (shoreOf(gx, gy)) cA.lerp(sand, 0.4)
+    else if (shoreOf(gx, gy)) { h2 = Math.min(h2, -0.08); cA.lerp(sand, 0.4) }
     pos.setY(i, h2)
     const hx = Math.round(px * 2), hy = Math.round(pz * 2)
     if (hx >= 0 && hx < GW2 && hy >= 0 && hy <= H * 2) groundHGrid[hy * GW2 + hx] = h2
@@ -594,9 +594,9 @@ function buildGround(s0) {
 let grassMesh = null
 function buildGrass() {
   const GREEN = new Set(['meadow', 'greenwood', 'fens'])
-  const blade = new THREE.ConeGeometry(0.028, 0.34, 4)
-  blade.translate(0, 0.17, 0)
-  const mat = new THREE.MeshStandardMaterial({ color: 0x2d4a17, roughness: 0.95 })
+  const blade = new THREE.ConeGeometry(0.022, 0.3, 4)
+  blade.translate(0, 0.15, 0)
+  const mat = new THREE.MeshStandardMaterial({ color: 0x577a2b, roughness: 0.95 })
   const count = Math.min(15000, W * H)
   grassMesh = new THREE.InstancedMesh(blade, mat, count)
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler()
@@ -612,7 +612,7 @@ function buildGrass() {
     m4.compose(new THREE.Vector3(wx(gx) + ox, groundYAt(gx, gy), wz(gy) + oz), q,
       new THREE.Vector3(s, s, s))
     grassMesh.setMatrixAt(placed, m4)
-    col.setHSL(0.26 + (tileHash(i, 19, 47) % 20) / 400, 0.5, 0.2 + (tileHash(i, 23, 48) % 20) / 200)
+    col.setHSL(0.24 + (tileHash(i, 19, 47) % 20) / 400, 0.48, 0.3 + (tileHash(i, 23, 48) % 24) / 160)
     grassMesh.setColorAt(placed, col)
     placed++
   }
@@ -622,7 +622,7 @@ function buildGrass() {
 
 // ---- the standing world: everything the state names, made matter ----
 const mats = { // shared PBR skins
-  bark: new THREE.MeshStandardMaterial({ color: 0x4a2f14, roughness: 0.95 }),
+  bark: new THREE.MeshStandardMaterial({ color: 0x39230d, roughness: 0.95 }),
   leaf0: new THREE.MeshStandardMaterial({ color: 0x1d4210, roughness: 0.9 }),
   leaf1: new THREE.MeshStandardMaterial({ color: 0x27511a, roughness: 0.9 }),
   leaf2: new THREE.MeshStandardMaterial({ color: 0x315c22, roughness: 0.9 }),
@@ -679,7 +679,7 @@ function nodeBody(n) {
   const add = (mesh, x = 0, y = 0, z = 0, shadow = true) => {
     mesh.position.set(x, y, z); mesh.castShadow = shadow; g.add(mesh); return mesh }
   if (n.type === 'tree') {
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.09 * grow, 0.2 * grow, 1.5 * grow, 7), mats.bark), 0, 0.75 * grow)
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.065 * grow, 0.15 * grow, 1.55 * grow, 7), mats.bark), 0, 0.75 * grow)
     const crown = (m, x, y, z, s) => { const k = add(new THREE.Mesh(craggy(0.62 * s * grow, hsh % 97), m), x * grow, y * grow, z * grow); k.userData.canopy = true; return k }
     crown(mats.leaf1, 0, 1.75, 0, 1.15)
     crown(mats.leaf0, 0.4, 1.45, 0.25, 0.8)
@@ -744,7 +744,7 @@ function nodeBody(n) {
   } else {
     add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.5), mats.wood), 0, 0.3)
   }
-  const lb = label(n.type); lb.position.y = 2.5; lb.material.opacity = 0.85; g.add(lb)
+  const lb = label(n.type); lb.position.y = 1.9; lb.scale.set(1.5, 0.28, 1); g.add(lb)
   g.userData.label = lb
   return g
 }
@@ -1158,11 +1158,13 @@ function frame() {
   const warm = THREE.MathUtils.clamp(1 - Math.abs(elev) * 2.6, 0, 1)
   sun.color.setHSL(0.09 - warm * 0.045, 0.5 + warm * 0.4, 0.72 - warm * 0.16)
   sun.intensity = 0.04 + dayAmt * 3.4
-  moon.intensity = (1 - dayAmt) * 0.22
-  hemi.intensity = 0.06 + dayAmt * 0.24
+  moon.intensity = (1 - dayAmt) * 0.38
+  hemi.intensity = 0.11 + dayAmt * 0.2
   stars.material.opacity = (1 - dayAmt) * 0.9
-  renderer.toneMappingExposure = 0.5 + dayAmt * 0.28
+  renderer.toneMappingExposure = 0.57 + dayAmt * 0.23
   scene.fog.color.setHSL(0.58, 0.25, 0.04 + dayAmt * 0.42)
+  scene.fog.near = 24 + dayAmt * 50
+  scene.fog.far = 110 + dayAmt * 180
   if (!hdriMode && scene.environment) scene.environmentIntensity = 0.25 + dayAmt * 0.75
 
   // the camera hangs from its citizen
@@ -1295,6 +1297,22 @@ function frame() {
   }
 
   // the country's name, spoken by the corner of the frame
+  // a name is for the person standing near it, not a banner over the
+  // country: labels fade with distance and vanish past earshot
+  const fadeLabels = (map, near, far) => {
+    for (const g of map.values()) {
+      const lb = g.userData.lb ?? g.userData.label
+      if (!lb) continue
+      const d = camera.position.distanceTo(g.position)
+      const o = 1 - Math.min(1, Math.max(0, (d - near) / (far - near)))
+      lb.visible = o > 0.03
+      lb.material.opacity = o * 0.9
+    }
+  }
+  fadeLabels(vis.node, 4.5, 9)
+  fadeLabels(vis.mob, 8, 16)
+  fadeLabels(vis.player, 10, 22)
+
   if (me) {
     const rn = regionNameAt(me.x, me.y)
     const rEl = document.getElementById('region')
