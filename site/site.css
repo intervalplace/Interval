@@ -21,7 +21,8 @@ body {
 /* six doors on a phone will wrap, and a wrapped row of loose boxes reads as a
    mistake. Let it wrap as evenly spaced tiles that keep their shape, and shrink
    the type before the row breaks rather than after. */
-nav { display: flex; gap: 2px; flex-wrap: wrap; margin-bottom: 14px; align-items: stretch; }
+nav { display: flex; gap: 2px; flex-wrap: wrap; margin-bottom: 14px;
+  align-items: stretch; justify-content: center; }
 nav a {
   display: flex; align-items: center; padding: 7px 14px; color: var(--gold);
   text-decoration: none; font-weight: bold; font-size: 12px; letter-spacing: .5px;
@@ -182,7 +183,7 @@ h1 {
    the screen entirely. Narrow screens get one line and the native picker,
    which on a phone is a proper scrolling wheel with the families as headings.
    Wide screens keep them laid out, where there is room to see all of them. */
-#picker { margin: 0 0 14px; }
+#picker { margin: 0 auto 14px; max-width: 560px; }
 
 .pcompact { display: none; align-items: center; gap: 8px; }
 .pcompact label { color: var(--dim); font: italic 11px Georgia, serif; }
