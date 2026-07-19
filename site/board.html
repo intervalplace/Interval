@@ -1,0 +1,116 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Board: Interval</title>
+<link rel="stylesheet" href="/site/site.css"></head><body>
+<script src="/site/nav.js"></script>
+<div class="page"><main class="stone">
+  <h1>The Board</h1>
+  <p class="tagline">For arranging things with people who are not standing next to you.</p>
+
+  <p>Chat inside the world is for what is happening now, where you are. This is
+  for what is happening later. Selling four hundred logs. Asking how smithing
+  works. Agreeing to meet at the north bank.</p>
+
+  <p>There are no accounts, because you already have an identity. A post is
+  signed with the same key that swings your axe, and the node checks it against
+  the same public key the hiscores rank. Nobody can post as you, and nobody has
+  to be trusted for that to be true.</p>
+
+  <div id="rules" class="boardnote">reading the board&hellip;</div>
+
+  <div id="compose" style="display:none">
+    <input id="bsubject" maxlength="80" placeholder="what is it about">
+    <textarea id="bbody" rows="4" maxlength="2000" placeholder="say it plainly"></textarea>
+    <div class="brow">
+      <button id="bsend" class="stab">post</button>
+      <span id="bnote"></span>
+    </div>
+  </div>
+
+  <div id="posts">loading&hellip;</div>
+</main></div>
+
+<script src="/site/items.js"></script>
+<script>
+const $ = (id) => document.getElementById(id)
+const esc = (t) => String(t ?? '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))
+const toHex = (b) => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join('')
+const fromHex = (h) => new Uint8Array(h.match(/../g).map(x => parseInt(x,16)))
+
+// the exact string the node verifies. If these two ever drift apart every post
+// fails loudly, which is the right way for them to drift.
+const signedBytes = (p) => JSON.stringify({ body: p.body, key: p.key, subject: p.subject, ts: p.ts })
+
+let MINE = null
+try { MINE = JSON.parse(localStorage.getItem('interval-ownkey') || 'null') } catch {}
+
+function ago(ts) {
+  const s = Math.max(0, (Date.now() - ts) / 1000)
+  if (s < 90) return 'just now'
+  if (s < 5400) return Math.round(s / 60) + ' minutes ago'
+  if (s < 172800) return Math.round(s / 3600) + ' hours ago'
+  return Math.round(s / 86400) + ' days ago'
+}
+
+async function load() {
+  let j
+  try {
+    const r = await fetch('/api/board')
+    if (r.status === 404) { $('posts').innerHTML = '<p class="boardnote">This world is not carrying a board.</p>'; return }
+    j = await r.json()
+  } catch {
+    $('posts').innerHTML = '<p class="boardnote">The board is unreachable. Is a node running?</p>'
+    return
+  }
+  $('rules').innerHTML = 'Posting asks for a standing of <b>' + j.minStanding
+    + '</b> and allows <b>' + j.perDay + '</b> posts a day, the same number for everyone. '
+    + 'Standing cannot be bought or hurried: it is time spent in the world, '
+    + 'which is the one thing nobody can forge in bulk.'
+  $('compose').style.display = MINE?.pub ? '' : 'none'
+  if (!MINE?.pub) {
+    $('rules').innerHTML += ' <span class="dimline">Enter the world once and your key will appear here, '
+      + 'and with it the box to write in.</span>'
+  }
+
+  if (!j.posts.length) {
+    $('posts').innerHTML = '<p class="boardnote">Nothing yet. The first post on a board is the hardest one.</p>'
+    return
+  }
+  $('posts').innerHTML = j.posts.map(p => '<article class="post' + (MINE?.pub === p.key ? ' mine' : '') + '">'
+    + '<div class="psubject">' + esc(p.subject) + '</div>'
+    + '<div class="pmeta">'
+      + '<a href="/hiscores">' + esc(p.name ?? 'unnamed') + '</a>'
+      + (p.calling ? '<span class="pcall">' + esc(p.calling) + '</span>' : '')
+      + '<span class="pstand">standing ' + (p.standing | 0) + '</span>'
+      + '<span class="pwhen">' + ago(p.ts) + '</span>'
+    + '</div>'
+    + '<div class="pbody">' + esc(p.body) + '</div>'
+    + '<div class="pkey" title="' + esc(p.key) + '">' + esc(String(p.key).slice(0, 16)) + '\u2026</div>'
+    + '</article>').join('')
+}
+
+async function send() {
+  const subject = $('bsubject').value.trim(), body = $('bbody').value.trim()
+  const note = $('bnote')
+  if (!subject || !body) { note.textContent = 'a subject and something to say'; return }
+  if (!MINE?.pk8) { note.textContent = 'no key in this window yet'; return }
+  $('bsend').disabled = true; note.textContent = 'signing\u2026'
+  try {
+    const priv = await crypto.subtle.importKey('pkcs8', fromHex(MINE.pk8), { name: 'Ed25519' }, true, ['sign'])
+    const post = { key: MINE.pub, subject, body, ts: Date.now() }
+    post.sig = toHex(await crypto.subtle.sign({ name: 'Ed25519' }, priv,
+      new TextEncoder().encode(signedBytes(post))))
+    const r = await fetch('/api/board', { method: 'POST', body: JSON.stringify(post) })
+    const j = await r.json().catch(() => ({}))
+    if (r.ok) { $('bsubject').value = ''; $('bbody').value = ''; note.textContent = 'posted'; load() }
+    else note.textContent = j.error ?? 'the board did not take it'
+  } catch (e) {
+    note.textContent = 'this window could not sign that (' + (e.message ?? e) + ')'
+  }
+  $('bsend').disabled = false
+}
+
+$('bsend').onclick = send
+load(); setInterval(load, 20000)
+</script>
+</body></html>
