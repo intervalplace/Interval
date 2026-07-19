@@ -256,19 +256,41 @@ const server = http.createServer((req, res) => {
       return json({ playerId: hit[0], ...hit[1] })
     }
     const NC = { 'Cache-Control': 'no-cache' } // stale windows caused ghost bugs
+    // Read the file BEFORE the headers go out. It used to be the other way
+    // round: writeHead(200), then readFileSync, so one missing file threw with
+    // the response already begun, and the catch below then died trying to send
+    // a 500 that could no longer be sent. A single absent asset took the whole
+    // node down and the log named the error handler instead of the cause.
+    const sendFile = (rel, type) => {
+      let buf
+      try { buf = fs.readFileSync(new URL(rel, import.meta.url)) }
+      catch {
+        console.warn('[web] missing file for ' + path + ': ' + rel)
+        res.writeHead(404, { 'Content-Type': 'text/plain' })
+        return res.end('nothing here')
+      }
+      res.writeHead(200, { 'Content-Type': type, ...NC })
+      return res.end(buf)
+    }
     // /play is the doorway: a window is a choice, and the choice is shown.
     // The old paths keep working, since links live longer than layouts.
-    if (path === '/play/flat' || path === '/window-web') { res.writeHead(200, { 'Content-Type': 'text/html', ...NC }); return res.end(fs.readFileSync(new URL('./window-web.html', import.meta.url))) }
-    if (path === '/play/deep' || path === '/deluxe') { res.writeHead(200, { 'Content-Type': 'text/html', ...NC }); return res.end(fs.readFileSync(new URL('./window-3d.html', import.meta.url))) }
+    if (path === '/play/flat' || path === '/window-web') return sendFile('./window-web.html', 'text/html')
+    if (path === '/play/deep' || path === '/deluxe') return sendFile('./window-3d.html', 'text/html')
     if (path.startsWith('/site/')) {
       const f = path.slice(6).replace(/[^a-z0-9.-]/g, '')
       const ext = f.split('.').pop()
-      res.writeHead(200, { 'Content-Type': MIME[ext] ?? 'text/plain', ...NC })
-      return res.end(fs.readFileSync(new URL('./site/' + f, import.meta.url)))
+      return sendFile('./site/' + f, MIME[ext] ?? 'text/plain')
     }
-    if (PAGES[path]) { res.writeHead(200, { 'Content-Type': 'text/html', ...NC }); return res.end(fs.readFileSync(new URL('./site/' + PAGES[path], import.meta.url))) }
+    if (PAGES[path]) return sendFile('./site/' + PAGES[path], 'text/html')
     res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('nothing here')
-  } catch (e) { res.writeHead(500); res.end('error') }
+  } catch (e) {
+    // A handler that has already begun its response cannot be given a 500, and
+    // trying was itself the crash. Report, close what is open, stay alive: a
+    // world should not fall over because one request went wrong.
+    console.error('[web] request failed: ' + (e?.stack ?? e))
+    if (res.headersSent) { try { res.end() } catch {} return }
+    try { res.writeHead(500, { 'Content-Type': 'text/plain' }); res.end('error') } catch {}
+  }
 })
 const wss = new WebSocketServer({ server })
 const sockets = new Map() // ws -> IntervalClient (per-visitor identity)
