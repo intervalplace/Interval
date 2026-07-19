@@ -18,7 +18,15 @@
      canopies, a twinkling milky way with nebular breath, lightning that
      has a body and not just a flash, rainbows on the sun-shower days,
      a flock wheeling on the thermals, and a golden-hour split-tone
-     grade that knows what hour it is. All of it is rendering, none of
+     grade that knows what hour it is. The ground level caught up too:
+     timber-framed houses on stone footings with smoking chimneys and
+     windows that glow into the bloom, dressed citizens with hair and
+     belts in colors spun from their own keys, armed goblins, mossy
+     hunched trolls, ruffed wolves with lamp-lit eyes, a shielded
+     knight — and everyone WALKS now: strides chain into linear,
+     continuous motion instead of stepping tile by tile, chests breathe
+     at rest, steps bounce. First person is the default view, because
+     the light is the whole argument. All of it is rendering, none of
      it is rules.
      Zero assets: every texture is synthesized on a canvas at load.
      Optional: ?hdri=<url-to-.hdr> swaps the procedural sky for a real
@@ -100,8 +108,9 @@
   <h1>THE PHOTO WINDOW</h1>
   <p>A physically-based view of the same world <code>/play</code> and <code>/deluxe</code> watch.
      One key on this device; one citizen in every window.</p>
-  <p>Tap the ground to walk. Tap a tree to work it, a beast to hunt it, litter to fetch it.
-     Drag to look, pinch to breathe in and out. The sky keeps its own weather.</p>
+  <p>You wake behind your own eyes. Tap the ground to walk. Tap a tree to work it,
+     a beast to hunt it, litter to fetch it. Drag to look, pinch to breathe in and out.
+     POV steps the window back over the shoulder; the sky keeps its own weather.</p>
   <button id="enter">STEP THROUGH</button>
 </div>
 <script type="module">
@@ -1082,6 +1091,10 @@ for (const bm of [mats.bark, mats.wood, mats.roof]) {
   bm.map = barkDetail.albedo; bm.normalMap = barkDetail.normal
   bm.roughnessMap = barkDetail.rough; bm.normalScale = new THREE.Vector2(1.1, 1.1)
 }
+// the bodies get skins too: one woven weave for every garment, one
+// rougher nap for every pelt — synthesized once, worn by everyone
+const clothDetail = makeDetail(17, { bump: 1.6, roughBase: 220 })
+const furDetail = makeDetail(19, { bump: 3, roughBase: 225 })
 // canopies breathe: each crown sways on a phase drawn from where it
 // stands, and the whole forest stiffens together when a storm leans in
 for (const lm of [mats.leaf0, mats.leaf1, mats.leaf2]) {
@@ -1213,13 +1226,17 @@ function nodeBody(n) {
       sp.position.y = 1; g.add(sp); g.userData.smoke.push(sp)
     }
   } else if (n.type === 'bank') {
-    // a colonnade and a gold cornice: the one building that shows off
+    // a colonnade and a gold cornice: the one building that shows off —
+    // now with the steps and the pediment its self-image always implied
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 0.26), mats.stone), 0, 0.03, 0.56)
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.06, 0.2), mats.stone), 0, 0.09, 0.5)
     add(new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.8, 0.72), mats.stone), 0, 0.4)
     for (const sx of [-0.36, -0.12, 0.12, 0.36])
       add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.8, 8), mats.plaster), sx, 0.4, 0.42)
     add(new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.06, 0.8), mats.gold), 0, 0.82)
     add(new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.08, 0.95), mats.stone), 0, 0.89)
     add(new THREE.Mesh(roofGeo(0.32, 1.0), mats.stone), 0, 0.93).rotation.y = Math.PI / 2
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.05, 3), mats.gold), 0, 1.02, 0.42) // the crest
     add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.36, 0.03), mats.darkwood), 0, 0.18, 0.37)
   } else if (n.type === 'anvil') {
     add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.3, 9), mats.wood), 0, 0.15) // the stump
@@ -1234,32 +1251,66 @@ function nodeBody(n) {
     add(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.34), mats.rune), 0, 1.32, 0, false)
     add(new THREE.PointLight(0x5f9dff, 5, 6), 0, 1.7, 0, false)
   } else if (n.type === 'house' || n.type === 'store' || n.type === 'guard' || n.type === 'gatehouse') {
-    // a building is a wall, a roof, a door, and a lit window after dark.
-    // Guardposts trade the gable for a crenellated slab and a banner.
+    // a building finally earns the light it stands in: a stone footing,
+    // timber-framed walls, an overhung roof with a ridge beam, a
+    // chimney that actually smokes, a door with a lintel and a worn
+    // step — and windows that don't just warm after dark, they glow
+    // into the bloom like someone is home.
     const wallMat = n.type === 'store' ? mats.wood : n.type === 'house' ? mats.plaster : mats.stone
-    add(new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.78, 0.8), wallMat), 0, 0.39)
-    add(new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.4, 0.04), mats.darkwood), 0.18, 0.2, 0.41)
+    add(new THREE.Mesh(new THREE.BoxGeometry(1.06, 0.14, 0.92), mats.stone), 0, 0.07) // the footing
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.78, 0.8), wallMat), 0, 0.5)
+    if (n.type === 'house' || n.type === 'store') { // the timber frame
+      for (const [cx, cz] of [[-0.455, 0.385], [0.455, 0.385], [-0.455, -0.385], [0.455, -0.385]])
+        add(new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.82, 0.075), mats.darkwood), cx, 0.5, cz)
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.99, 0.06, 0.05), mats.darkwood), 0, 0.88, 0.39)
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.99, 0.06, 0.05), mats.darkwood), 0, 0.88, -0.39)
+      const brace = add(new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.05, 0.035), mats.darkwood), -0.22, 0.6, 0.405)
+      brace.rotation.z = 0.55
+    }
+    // the door and its manners
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.42, 0.04), mats.darkwood), 0.18, 0.33, 0.41)
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.055, 0.07), mats.wood), 0.18, 0.56, 0.41)
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.05, 0.2), mats.stone), 0.18, 0.12, 0.52)
     if (n.type === 'guard' || n.type === 'gatehouse') {
-      add(new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.08, 0.9), mats.stone), 0, 0.82)
+      add(new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.08, 0.9), mats.stone), 0, 0.93)
       for (const mx of [-0.42, -0.14, 0.14, 0.42]) {
-        add(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.12), mats.stone), mx, 0.94, 0.39)
-        add(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.12), mats.stone), mx, 0.94, -0.39)
+        add(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.12), mats.stone), mx, 1.05, 0.39)
+        add(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.12), mats.stone), mx, 1.05, -0.39)
       }
-      add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.34, 0.02), mats.gold), 0, 0.55, 0.415, false)
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.34, 0.02), mats.gold), 0, 0.66, 0.415, false)
+      add(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5, 5), mats.iron), 0.42, 1.22, -0.35) // the flagstaff
+      const fl2 = add(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 0.015), mats.gold), 0.55, 1.38, -0.35)
+      fl2.userData.canopy = false
     } else {
-      add(new THREE.Mesh(roofGeo(0.42, 1.02), mats.roof), 0, 0.78).rotation.y = Math.PI / 2
-      add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.36, 0.12), mats.stone), -0.3, 1.12, -0.2)
+      const rf = add(new THREE.Mesh(roofGeo(0.46, 1.14), mats.roof), 0, 0.89)
+      rf.rotation.y = Math.PI / 2 // the overhang
+      add(new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.05, 0.09), mats.darkwood), 0, 1.36) // the ridge beam
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.5, 0.13), mats.stone), -0.3, 1.2, -0.2)
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.05, 0.18), mats.stone), -0.3, 1.46, -0.2) // the chimney cap
+      for (let i = 0; i < 2; i++) { // the hearth is lit whether you see it or not
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, transparent: true, depthWrite: false }))
+        sp.userData.chim = i * 0.5
+        sp.position.set(-0.3, 1.55, -0.2)
+        g.add(sp)
+      }
     }
     if (n.type === 'store') { // an awning and a crate say 'open for trade'
-      const aw = add(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.03, 0.32), mats.gold), -0.06, 0.62, 0.54)
+      const aw = add(new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.03, 0.34),
+        new THREE.MeshStandardMaterial({ color: 0x9c3b2a, roughness: 0.9,
+          map: clothDetail.albedo, normalMap: clothDetail.normal })), -0.06, 0.68, 0.55)
       aw.rotation.x = 0.35
-      add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), mats.wood), 0.44, 0.1, 0.56)
+      for (const px2 of [-0.36, 0.24])
+        add(new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.6, 5), mats.wood), px2, 0.3, 0.66)
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), mats.wood), 0.44, 0.2, 0.56)
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), mats.wood), 0.42, 0.38, 0.52).rotation.y = 0.5
     }
-    const win = add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.03),
-      new THREE.MeshBasicMaterial({ color: 0xffc46a })), -0.22, 0.45, 0.4, false)
+    const winMat = () => new THREE.MeshStandardMaterial({ color: 0x2a2117,
+      emissive: 0xffc46a, emissiveIntensity: 0, roughness: 0.35 })
+    const win = add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.03), winMat()), -0.22, 0.52, 0.4, false)
     win.userData.window = true
-    const win2 = add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.2, 0.2),
-      new THREE.MeshBasicMaterial({ color: 0xffc46a })), 0.465, 0.45, -0.1, false)
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.03, 0.05), mats.darkwood), -0.22, 0.64, 0.41) // the sill and header
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.03, 0.05), mats.darkwood), -0.22, 0.4, 0.41)
+    const win2 = add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.2, 0.2), winMat()), 0.465, 0.52, -0.1, false)
     win2.userData.window = true
   } else if (n.type === 'wall') {
     add(new THREE.Mesh(new THREE.BoxGeometry(1, 0.7, 0.9), mats.stone), 0, 0.35)
@@ -1316,53 +1367,123 @@ function limb(mat, r, len, s) {
   return p
 }
 // the standing peoples: citizens, goblins, trolls, the knight that
-// forgot to stop. Legs pump, arms swing, eyes face the way they walk.
+// forgot to stop. Legs pump, arms swing, eyes face the way they walk —
+// and now everyone dresses the part: woven tunics over darker trousers,
+// belts, hair, hoods for the citizens; clubs and loincloths for the
+// goblins; moss on the trolls' shoulders and a hunch in their backs;
+// sword, shield, and cold blue eye-lights for the knight. Chests
+// breathe when they stand still.
 function bodyOf(color, scale, own = false, kind = '') {
   const g = new THREE.Group()
   const skel = kind === 'skeleton-knight'
+  const troll = kind === 'troll'
+  const hsh2 = (((color ^ 0x9e3779) >>> 0) * 2654435761) >>> 0
   const garb = new THREE.MeshStandardMaterial({
     color: own ? 0xbe9427 : skel ? 0x3a3a42 : kind ? new THREE.Color(color).multiplyScalar(0.72) : color,
-    roughness: 0.8, metalness: own ? 0.35 : skel ? 0.4 : 0 })
-  const skin = new THREE.MeshStandardMaterial({ color: skel ? 0xd8d4c4 : kind ? color : 0xc9a480, roughness: 0.85 })
+    roughness: 0.85, metalness: own ? 0.35 : skel ? 0.4 : 0,
+    map: clothDetail.albedo, normalMap: clothDetail.normal, normalScale: new THREE.Vector2(0.5, 0.5) })
+  const trouser = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(garb.color).multiplyScalar(0.5), roughness: 0.92,
+    map: clothDetail.albedo, normalMap: clothDetail.normal, normalScale: new THREE.Vector2(0.5, 0.5) })
+  const skin = new THREE.MeshStandardMaterial({ color: skel ? 0xd8d4c4 : kind ? color : 0xc9a480,
+    roughness: 0.85, normalMap: kind ? furDetail.normal : clothDetail.normal,
+    normalScale: new THREE.Vector2(kind ? 0.7 : 0.25, kind ? 0.7 : 0.25) })
   g.__legs = []
   for (const s of [-1, 1]) {
-    const leg = limb(garb, 0.055, 0.3, scale)
+    const leg = limb(skel ? garb : trouser, 0.055, 0.3, scale)
     leg.position.set(0.1 * scale * s, 0.42 * scale, 0)
     g.add(leg); g.__legs.push(leg)
   }
   const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.19 * scale, 0.42 * scale, 4, 10), garb)
   torso.position.y = 0.72 * scale; torso.castShadow = true; g.add(torso)
+  if (troll) torso.rotation.x = 0.16 // the hunch
+  g.__breath = torso
+  const headZ = troll ? 0.09 * scale : 0
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.155 * scale, 12, 10), skin)
-  head.position.y = 1.16 * scale; head.castShadow = true; g.add(head)
-  const eye = new THREE.MeshStandardMaterial({ color: kind === 'troll' ? 0xffcf4a : 0x1a1410, roughness: 0.4 })
+  head.position.set(0, 1.16 * scale, headZ); head.castShadow = true; g.add(head)
+  const eyeCol = troll ? 0xffcf4a : skel ? 0x7fb2ff : 0x1a1410
+  const eye = new THREE.MeshStandardMaterial({ color: eyeCol, roughness: 0.4,
+    emissive: (troll || skel) ? eyeCol : 0x000000, emissiveIntensity: (troll || skel) ? 0.8 : 0 })
   for (const s of [-1, 1]) {
     const e2 = new THREE.Mesh(new THREE.SphereGeometry(0.024 * scale, 6, 5), eye)
-    e2.position.set(0.06 * scale * s, 1.19 * scale, 0.13 * scale)
+    e2.position.set(0.06 * scale * s, 1.19 * scale, 0.13 * scale + headZ)
     g.add(e2)
   }
-  if (kind === 'goblin') for (const s of [-1, 1]) {
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.05 * scale, 0.18 * scale, 5), skin)
-    ear.position.set(0.17 * scale * s, 1.2 * scale, 0)
-    ear.rotation.z = s * -Math.PI / 2.4
-    ear.castShadow = true; g.add(ear)
+  if (!kind) { // a citizen keeps appearances: hair, belt, and for the
+    // window's own citizen a gold buckle and a traveler's hood
+    const hair = new THREE.MeshStandardMaterial({
+      color: [0x2a1c10, 0x4a3216, 0x6b4a1e, 0x1c1c22, 0x7a5a30][hsh2 % 5], roughness: 0.9 })
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.162 * scale, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), hair)
+    cap.position.y = 1.165 * scale; cap.castShadow = true; g.add(cap)
+    if (own) {
+      const hd = new THREE.Mesh(new THREE.ConeGeometry(0.175 * scale, 0.26 * scale, 8), garb)
+      hd.position.y = 1.31 * scale; hd.castShadow = true; g.add(hd)
+    }
+    const belt = new THREE.Mesh(new THREE.TorusGeometry(0.195 * scale, 0.026 * scale, 6, 14),
+      own ? mats.gold : mats.darkwood)
+    belt.position.y = 0.6 * scale; belt.rotation.x = Math.PI / 2; g.add(belt)
+  }
+  if (kind === 'goblin') {
+    for (const s of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.05 * scale, 0.18 * scale, 5), skin)
+      ear.position.set(0.17 * scale * s, 1.2 * scale, 0)
+      ear.rotation.z = s * -Math.PI / 2.4
+      ear.castShadow = true; g.add(ear)
+    }
+    const cloth = new THREE.Mesh(new THREE.ConeGeometry(0.2 * scale, 0.22 * scale, 7), trouser)
+    cloth.position.y = 0.5 * scale; g.add(cloth) // the loincloth
+  }
+  if (troll) for (const s of [-1, 1]) { // moss claims the still parts first
+    const moss = new THREE.Mesh(craggy(0.1 * scale, hsh2 % 71 + s + 2), mats.leaf2)
+    moss.position.set(0.19 * scale * s, 1.02 * scale, -0.03 * scale)
+    g.add(moss)
   }
   g.__arms = []
-  const armLen = kind === 'troll' ? 0.5 : 0.34
+  const armLen = troll ? 0.5 : 0.34
   for (const s of [-1, 1]) {
     const arm = limb(skin, 0.05, armLen, scale)
     arm.position.set(0.235 * scale * s, 0.92 * scale, 0)
     arm.rotation.z = s * -0.14
     g.add(arm); g.__arms.push(arm)
   }
+  if (kind === 'goblin') { // a scrap club rides the leading arm
+    const club = new THREE.Mesh(new THREE.CylinderGeometry(0.055 * scale, 0.028 * scale, 0.38 * scale, 6), mats.wood)
+    club.position.set(0, -(armLen + 0.24) * scale, 0.05 * scale)
+    club.rotation.x = 0.35; club.castShadow = true
+    g.__arms[0].add(club)
+  }
+  if (troll) { // and the troll's club is simply a piece of the mountain
+    const haft = new THREE.Mesh(new THREE.CylinderGeometry(0.03 * scale, 0.04 * scale, 0.42 * scale, 6), mats.bark)
+    haft.position.set(0, -(armLen + 0.26) * scale, 0.04 * scale)
+    haft.rotation.x = 0.3; haft.castShadow = true
+    const headStone = new THREE.Mesh(craggy(0.11 * scale, hsh2 % 67), mats.stone)
+    headStone.position.y = -0.24 * scale; headStone.castShadow = true
+    haft.add(headStone)
+    g.__arms[0].add(haft)
+  }
   if (skel) { // the sword rides the arm, so the swing carries it
     const sw = new THREE.Mesh(new THREE.BoxGeometry(0.045 * scale, 0.5 * scale, 0.03 * scale), mats.iron)
     sw.position.set(0, -(armLen + 0.3) * scale, 0.05 * scale)
     sw.castShadow = true
     g.__arms[0].add(sw)
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.14 * scale, 0.03 * scale, 0.04 * scale), mats.gold)
+    guard.position.set(0, -(armLen + 0.06) * scale, 0.05 * scale)
+    g.__arms[0].add(guard)
+    const shield = new THREE.Mesh(new THREE.CylinderGeometry(0.15 * scale, 0.15 * scale, 0.028 * scale, 12), mats.iron)
+    shield.rotation.z = Math.PI / 2
+    shield.position.set(-0.04 * scale, -armLen * 0.6 * scale, 0)
+    shield.castShadow = true
+    g.__arms[1].add(shield)
+    const boss = new THREE.Mesh(new THREE.SphereGeometry(0.04 * scale, 8, 6), mats.gold)
+    boss.position.set(-0.06 * scale, -armLen * 0.6 * scale, 0)
+    g.__arms[1].add(boss)
     const helm = new THREE.Mesh(new THREE.ConeGeometry(0.16 * scale, 0.2 * scale, 8), mats.iron)
     helm.position.y = 1.3 * scale; helm.castShadow = true; g.add(helm)
+    const plume = new THREE.Mesh(new THREE.ConeGeometry(0.03 * scale, 0.14 * scale, 5),
+      new THREE.MeshStandardMaterial({ color: 0x8a1e1e, roughness: 0.9 }))
+    plume.position.y = 1.45 * scale; g.add(plume)
   }
-  g.__mats = [garb, skin]
+  g.__mats = [garb, skin, trouser]
   return g
 }
 // the four-footed: a barrel of a body, a snout, ears, a tail, and four
@@ -1370,29 +1491,50 @@ function bodyOf(color, scale, own = false, kind = '') {
 // 'arms' the theater already knows how to swing.
 function beastBody(color, scale, kind) {
   const g = new THREE.Group()
-  const fur = new THREE.MeshStandardMaterial({ color, roughness: 0.92 })
+  const fur = new THREE.MeshStandardMaterial({ color, roughness: 0.94,
+    map: furDetail.albedo, normalMap: furDetail.normal, normalScale: new THREE.Vector2(0.9, 0.9) })
+  const darkFur = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.62),
+    roughness: 0.95, map: furDetail.albedo, normalMap: furDetail.normal })
   const bulk = kind === 'bear' ? 1.35 : 1
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.16 * scale * bulk, 0.5 * scale, 4, 10), fur)
   body.rotation.x = Math.PI / 2
   body.position.y = 0.4 * scale * bulk
   body.castShadow = true; g.add(body)
+  g.__breath = body
+  const saddle = new THREE.Mesh(new THREE.CapsuleGeometry(0.13 * scale * bulk, 0.4 * scale, 3, 8), darkFur)
+  saddle.rotation.x = Math.PI / 2 // the darker back every beast carries
+  saddle.position.y = 0.48 * scale * bulk
+  g.add(saddle)
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.14 * scale * bulk, 10, 9), fur)
   head.position.set(0, 0.52 * scale * bulk, 0.4 * scale)
   head.castShadow = true; g.add(head)
+  if (kind === 'wolf') { // the ruff: winter kept around the neck
+    const ruff = new THREE.Mesh(new THREE.SphereGeometry(0.15 * scale, 9, 8), darkFur)
+    ruff.position.set(0, 0.48 * scale, 0.26 * scale)
+    ruff.scale.set(1.15, 1, 0.9); g.add(ruff)
+  }
   const snout = new THREE.Mesh(new THREE.ConeGeometry(0.06 * scale * bulk, 0.18 * scale, 7), fur)
   snout.position.set(0, 0.48 * scale * bulk, 0.55 * scale)
   snout.rotation.x = Math.PI / 2
   g.add(snout)
-  const eye = new THREE.MeshStandardMaterial({ color: kind === 'wolf' ? 0xd8b24a : 0x14100c, roughness: 0.35 })
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.026 * scale * bulk, 6, 5),
+    new THREE.MeshStandardMaterial({ color: 0x14100c, roughness: 0.3 }))
+  nose.position.set(0, 0.48 * scale * bulk, 0.63 * scale)
+  g.add(nose)
+  const eyeCol = kind === 'wolf' ? 0xd8b24a : 0x14100c
+  const eye = new THREE.MeshStandardMaterial({ color: eyeCol, roughness: 0.35,
+    emissive: kind === 'wolf' ? eyeCol : 0x000000, emissiveIntensity: kind === 'wolf' ? 0.6 : 0 })
   for (const s of [-1, 1]) {
     const e2 = new THREE.Mesh(new THREE.SphereGeometry(0.022 * scale, 6, 5), eye)
     e2.position.set(0.06 * scale * s, 0.57 * scale * bulk, 0.5 * scale)
     g.add(e2)
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.035 * scale, (kind === 'wolf' ? 0.11 : 0.05) * scale, 5), fur)
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.035 * scale, (kind === 'wolf' ? 0.11 : 0.05) * scale, 5), darkFur)
     ear.position.set(0.075 * scale * s, 0.66 * scale * bulk, 0.36 * scale)
     ear.castShadow = true; g.add(ear)
   }
-  const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.035 * scale, (kind === 'wolf' ? 0.3 : 0.08) * scale, 3, 6), fur)
+  const tail = kind === 'wolf'
+    ? new THREE.Mesh(new THREE.ConeGeometry(0.055 * scale, 0.4 * scale, 7), darkFur) // the brush
+    : new THREE.Mesh(new THREE.CapsuleGeometry(0.035 * scale, 0.08 * scale, 3, 6), fur)
   tail.position.set(0, 0.48 * scale * bulk, -0.42 * scale)
   tail.rotation.x = -0.9
   g.add(tail)
@@ -1403,7 +1545,7 @@ function beastBody(color, scale, kind) {
     g.add(leg)
     ;(fz === 1 ? g.__arms : g.__legs).push(leg)
   }
-  g.__mats = [fur]
+  g.__mats = [fur, darkFur]
   return g
 }
 
@@ -1488,16 +1630,23 @@ function syncAll(s) {
       g = (m.type === 'wolf' || m.type === 'bear') ? beastBody(c, sc, m.type) : bodyOf(c, sc, false, m.type)
       g.userData = { kind: 'mob', id, type: m.type, tx: m.x, ty: m.y, fx0: m.x, fy0: m.y, moveAt: 0 }
       g.traverse((o) => { o.userData.kind = 'mob'; o.userData.id = id })
-      const lb = label(m.type + ' · ' + m.hp); lb.position.y = 1.6; g.add(lb); g.userData.lb = lb
+      const lb = label(m.type + ' · ' + m.hp); lb.position.y = 1.6
+      lb.userData.kind = 'mob'; lb.userData.id = id // the nameplate is the mob, as far as a finger cares
+      g.add(lb); g.userData.lb = lb
       g.position.set(wx(m.x), groundYAt(m.x, m.y), wz(m.y))
       vis.mob.set(id, g); scene.add(g)
     }
     if (typeof g.userData.hp === 'number' && m.hp < g.userData.hp) g.__hurtAt = performance.now()
     if (g.userData.hp !== m.hp) { g.userData.hp = m.hp
       g.remove(g.userData.lb); g.userData.lb = label(m.type + ' · ' + m.hp)
-      g.userData.lb.position.y = 1.6; g.add(g.userData.lb) }
+      g.userData.lb.position.y = 1.6
+      g.userData.lb.userData.kind = 'mob'; g.userData.lb.userData.id = id
+      g.add(g.userData.lb) }
     if (g.userData.tx !== m.x || g.userData.ty !== m.y) {
-      g.userData.fx0 = g.userData.tx; g.userData.fy0 = g.userData.ty; g.userData.moveAt = clock.at
+      g.userData.fx0 = g.userData.tx; g.userData.fy0 = g.userData.ty
+      // a stride that follows a stride is a walk: remember the chain
+      g.userData.chain = (clock.at - (g.userData.moveAt || -1e9)) < TICK_MS * 1.7 ? (g.userData.chain ?? 0) + 1 : 0
+      g.userData.moveAt = clock.at
     }
     g.userData.tx = m.x; g.userData.ty = m.y
   }
@@ -1510,7 +1659,10 @@ function syncAll(s) {
     const nm = (p.name ?? '') || id.slice(0, 6)
     const cap = nm + ' · ' + p.hp
     if (!g) {
-      g = bodyOf(0x2c4a86, 0.62, id === ownKey?.pub)
+      // every citizen wears a color spun from their own key — the crowd
+      // stops being one blue and starts being a crowd
+      const hue = ([...id].reduce((a, ch) => (a * 33 + ch.charCodeAt(0)) >>> 0, 5381) % 360) / 360
+      g = bodyOf(new THREE.Color().setHSL(hue, 0.45, 0.34).getHex(), 0.62, id === ownKey?.pub)
       g.userData = { kind: 'player', id, tx: p.x, ty: p.y, fx0: p.x, fy0: p.y, moveAt: 0 }
       g.traverse((o) => { o.userData.kind = 'player'; o.userData.id = id })
       g.position.set(wx(p.x), groundYAt(p.x, p.y), wz(p.y))
@@ -1523,9 +1675,13 @@ function syncAll(s) {
     g.userData.actTarget = p.action?.nodeId ?? p.action?.mobId ?? p.action?.targetId ?? null
     if (g.userData.cap !== cap) { g.userData.cap = cap
       if (g.userData.lb) g.remove(g.userData.lb)
-      g.userData.lb = label(cap, id === ownKey?.pub); g.userData.lb.position.y = 1.55; g.add(g.userData.lb) }
+      g.userData.lb = label(cap, id === ownKey?.pub); g.userData.lb.position.y = 1.55
+      g.userData.lb.userData.kind = 'player'; g.userData.lb.userData.id = id
+      g.add(g.userData.lb) }
     if (g.userData.tx !== p.x || g.userData.ty !== p.y) {
-      g.userData.fx0 = g.userData.tx; g.userData.fy0 = g.userData.ty; g.userData.moveAt = clock.at
+      g.userData.fx0 = g.userData.tx; g.userData.fy0 = g.userData.ty
+      g.userData.chain = (clock.at - (g.userData.moveAt || -1e9)) < TICK_MS * 1.7 ? (g.userData.chain ?? 0) + 1 : 0
+      g.userData.moveAt = clock.at
     }
     g.userData.tx = p.x; g.userData.ty = p.y
   }
@@ -1555,9 +1711,13 @@ function syncAll(s) {
 let camYaw = -0.8, camPitch = 0.9, camDist = 12, entered = false
 // first person: the window mounted behind the citizen's own eyes. The
 // body is hidden, so its fidelity stops mattering: only the light is
-// left, and the light is the whole argument of this window.
-let povMode = false
-try { povMode = localStorage.getItem('interval-photo-pov') === '1' } catch {}
+// left, and the light is the whole argument of this window — so the
+// eyes are now the DEFAULT. POV steps back over the shoulder only if
+// you ask it to, and the window remembers which you chose.
+let povMode = true
+try { povMode = localStorage.getItem('interval-photo-pov') !== '0' } catch {}
+camera.fov = povMode ? 68 : 46
+camera.updateProjectionMatrix()
 let fpYaw = 0.6, fpPitch = -0.06
 const ray = new THREE.Raycaster()
 let walkGoal = null, huntTarget = null, workTarget = null
@@ -1589,11 +1749,16 @@ el.addEventListener('pointerup', (e) => {
   for (const h of hits) {
     if (povMode && h.object.userData?.id === ownKey?.pub) continue
     const k = h.object.userData?.kind
-    if (k === 'mob') { huntTarget = h.object.userData.id; workTarget = null; walkGoal = null; return }
-    if (k === 'node') { workTarget = h.object.userData.id; huntTarget = null; walkGoal = null; return }
+    if (k === 'mob') { huntTarget = h.object.userData.id; workTarget = null; walkGoal = null
+      feed('you square up to the ' + (world?.mobs?.[huntTarget]?.type ?? 'beast')); return }
+    if (k === 'node') { workTarget = h.object.userData.id; huntTarget = null; walkGoal = null
+      const nt = world?.nodes?.[workTarget]
+      if (nt && (nt.depletedUntil ?? 0) > (world?.tick ?? 0)) feed('the ' + nt.type + ' is spent; it will come back')
+      else feed('you make for the ' + (nt?.type ?? 'work')); return }
     if (k === 'ground') {
       const it = world?.ground?.[h.object.userData.id]
-      if (it) { walkGoal = { x: it.x, y: it.y }; huntTarget = null; workTarget = null }
+      if (it) { walkGoal = { x: it.x, y: it.y }; huntTarget = null; workTarget = null
+        feed('you go to fetch the ' + (it.item ?? 'thing')) }
       return
     }
     if (h.object === groundMesh) {
@@ -1990,10 +2155,14 @@ function frame() {
       const jump = Math.abs(ud.tx - fx0) + Math.abs(ud.ty - fy0)
       let p = Math.min(1, (now - (ud.moveAt || clock.at)) / TICK_MS)
       if (jump > 3) p = 1 // recall and respawn snap; only strides interpolate
-      const e2 = p * p * (3 - 2 * p)
+      // a stride that continues a stride is LINEAR — constant speed,
+      // tile after tile, no lurch at the seams. Only the first step out
+      // of stillness eases in; the exponential settle below handles the
+      // stop. This is what turns 'teleports every tick' into walking.
+      const e2 = (ud.chain ?? 0) > 0 ? p : p * p * (2 - p)
       const ix = fx0 + (ud.tx - fx0) * e2, iy = fy0 + (ud.ty - fy0) * e2
       const gx2 = wx(ix), gz2 = wz(iy), gy2 = groundYAt(ix, iy)
-      const k = Math.min(1, dt * 14)
+      const k = Math.min(1, dt * ((ud.chain ?? 0) > 0 ? 18 : 11))
       const px0 = g.position.x, pz0 = g.position.z
       g.position.x += (gx2 - g.position.x) * k
       g.position.z += (gz2 - g.position.z) * k
@@ -2033,6 +2202,12 @@ function frame() {
         for (const mm of g.__mats) { mm.emissive.setHex(0xa01414)
           mm.emissiveIntensity = hp2 < 1 ? (1 - hp2) * 0.9 : 0 }
       }
+      // the small lives: a stride puts a bounce in the step, stillness
+      // puts a breath in the chest
+      const spd = g.__speed ?? 0
+      g.position.y += Math.abs(Math.sin(t * 8 + g.position.x * 2)) * Math.min(0.045, spd * 0.028)
+      if (g.__breath) g.__breath.scale.x = g.__breath.scale.z =
+        1 + Math.sin(t * 1.7 + g.position.x * 3) * 0.02 * Math.max(0, 1 - spd * 2)
     }
   }
   glide(vis.player); glide(vis.mob)
@@ -2086,7 +2261,19 @@ function frame() {
     g.traverse((o) => {
       if (o.userData.bob) { const ph = (t * 0.55 + g.position.x) % 1
         o.scale.setScalar(0.4 + ph * 1.3); o.material.opacity = 0.7 * (1 - ph) }
-      if (o.userData.window) o.material.color.setHex(dayAmt < 0.35 ? 0xffc46a : 0x2a2117)
+      if (o.userData.window) { // someone is home, and the bloom knows it
+        const lit = dayAmt < 0.35
+        o.material.emissiveIntensity = lit ? 1.8 : 0
+        o.material.color.setHex(lit ? 0xffc46a : 0x2a2117)
+      }
+      if (o.userData.chim !== undefined) { // the hearth writes on the sky
+        const ph = (t * 0.13 + o.userData.chim + g.position.x * 0.11) % 1
+        o.position.y = 1.55 + ph * 1.7
+        o.position.x = -0.3 + Math.sin(t * 0.6 + ph * 4 + g.position.z) * 0.1 + ph * uWindA.value * 0.9
+        const sc = 0.2 + ph * 0.85
+        o.scale.set(sc, sc, 1)
+        o.material.opacity = 0.3 * (1 - ph) * dayAmtSmoke(dayAmt)
+      }
     })
   }
   if (water) {
