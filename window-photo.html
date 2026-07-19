@@ -1,0 +1,1311 @@
+<!doctype html>
+<!-- INTERVAL · the photo window.
+     The flat window draws the truth in tiles. The deep window gives it
+     geometry. This one gives it weather: a physically-based renderer in
+     your pocket — PBR ground that the window synthesizes for itself,
+     an atmosphere-scattered sky feeding image-based light into every
+     material, planar-reflected water, ACES filmic grading, bloom. Same
+     wire. Same key (localStorage 'interval-ownkey' — the SAME citizen
+     as /play and /deluxe on this device). Same ticks. No window is
+     authoritative; this one just holds the camera steadier.
+     Zero assets: every texture is synthesized on a canvas at load.
+     Optional: ?hdri=<url-to-.hdr> swaps the procedural sky for a real
+     captured one (Poly Haven HDRIs are CC0 and work when the host
+     allows cross-origin reads). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>INTERVAL · the photo window</title>
+<style>
+  :root { --gold: #e2b63e; --parch: #d9d3c0; --dim: #8a8578; --ink: rgba(12,11,9,.78) }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #07090c;
+    font: 14px/1.35 ui-monospace, Menlo, Consolas, monospace; color: var(--parch);
+    touch-action: none; overscroll-behavior: none }
+  canvas { display: block }
+  #top { position: fixed; top: 0; left: 0; right: 0; padding: calc(6px + env(safe-area-inset-top)) 10px 6px;
+    display: flex; gap: 10px; align-items: baseline; pointer-events: none;
+    background: linear-gradient(rgba(7,9,12,.55), transparent); z-index: 5 }
+  #top b { color: var(--gold); font-weight: 600 }
+  #wid { color: var(--dim); font-size: 12px }
+  #region { margin-left: auto; color: var(--parch); font-size: 12px }
+  #feed { position: fixed; left: 10px; bottom: calc(118px + env(safe-area-inset-bottom));
+    max-width: min(78vw, 460px); pointer-events: none; z-index: 5; font-size: 12.5px;
+    text-shadow: 0 1px 2px #000 }
+  #feed div { margin-top: 3px; opacity: .95 }
+  #bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
+    padding: 6px 6px calc(8px + env(safe-area-inset-bottom));
+    background: linear-gradient(transparent, rgba(7,9,12,.72) 30%) }
+  #verbs { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 6px }
+  #verbs button, #pack button, #chatrow button {
+    flex: 0 0 auto; min-height: 42px; padding: 8px 12px; border-radius: 8px;
+    border: 1px solid rgba(226,182,62,.35); background: var(--ink); color: var(--gold);
+    font: 600 13px ui-monospace, Menlo, monospace; letter-spacing: .04em }
+  #verbs button:active { background: rgba(226,182,62,.25) }
+  #pack { display: none; grid-template-columns: repeat(4, 1fr); gap: 4px; padding-bottom: 6px }
+  @media (min-width: 700px) { #pack { grid-template-columns: repeat(7, 1fr) } }
+  #pack button { min-height: 40px; padding: 4px 6px; color: var(--parch); font-weight: 400;
+    font-size: 12px; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis }
+  #pack button.sel { border-color: var(--gold); background: rgba(90,68,16,.75); color: var(--gold) }
+  #chatrow { display: none; gap: 6px }
+  #chatrow input { flex: 1; min-height: 42px; border-radius: 8px; border: 1px solid rgba(226,182,62,.35);
+    background: var(--ink); color: var(--parch); padding: 0 10px; font: 14px ui-monospace, monospace }
+  #splash { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; background: radial-gradient(ellipse at 50% 35%, #10141c, #07090c);
+    text-align: center; padding: 24px }
+  #splash h1 { margin: 0; font-size: 24px; color: var(--gold); font-weight: 600; letter-spacing: .06em }
+  #splash p { margin: 0; color: var(--dim); max-width: 42ch }
+  #splash button { margin-top: 10px; min-height: 48px; padding: 12px 26px; border-radius: 10px;
+    border: 1px solid var(--gold); background: transparent; color: var(--gold);
+    font: 600 15px ui-monospace, monospace; letter-spacing: .08em }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="top"><b>INTERVAL</b><span id="wid">connecting…</span><span id="region"></span></div>
+<div id="feed"></div>
+<div id="bar">
+  <div id="pack"></div>
+  <div id="chatrow"><input id="chatinput" placeholder="say something (80 chars)…" maxlength="80"><button id="chatsend">SAY</button></div>
+  <div id="verbs">
+    <button data-v="pack">PACK</button><button data-v="eat">EAT</button><button data-v="cook">COOK</button>
+    <button data-v="wield">WIELD</button><button data-v="drop">DROP</button><button data-v="light">LIGHT</button>
+    <button data-v="bury">BURY</button><button data-v="take">TAKE</button><button data-v="chat">CHAT</button>
+    <button data-v="pov">POV</button><button data-v="fx">FX</button><button data-v="shot">&#128247;</button>
+  </div>
+</div>
+<div id="splash">
+  <h1>THE PHOTO WINDOW</h1>
+  <p>A physically-based view of the same world <code>/play</code> and <code>/deluxe</code> watch.
+     One key on this device; one citizen in every window.</p>
+  <p>Tap the ground to walk. Tap a tree to work it, a beast to hunt it, litter to fetch it.
+     Drag to look, pinch to breathe in and out.</p>
+  <button id="enter">STEP THROUGH</button>
+</div>
+<script type="module">
+import * as THREE from 'three'
+import { Sky } from 'three/addons/objects/Sky.js'
+import { Water } from 'three/addons/objects/Water.js'
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
+
+const feedEl = document.getElementById('feed')
+const feed = (h) => { const d = document.createElement('div'); d.innerHTML = h
+  feedEl.appendChild(d); while (feedEl.children.length > 5) feedEl.firstChild.remove()
+  setTimeout(() => d.remove(), 9000) }
+addEventListener('error', (e) => feed('[err] ' + (e.message ?? e.type)))
+
+// ---- the same wire AND the same key as /play and /deluxe: one citizen,
+// three windows. Walk here; watch yourself move in pixels over there. ----
+const proto = location.protocol === 'https:' ? 'wss://' : 'ws://'
+const ws = new WebSocket(proto + location.host)
+let myId = null, world = null, prevWorld = null, ownKey = null, lastStamped = 0
+let clock = { tick: 0, at: 0 } // render one tick behind, like every window
+const TICK_MS = 600
+function canonicalJS(obj) {
+  if (obj === null || typeof obj !== 'object') return JSON.stringify(obj)
+  if (Array.isArray(obj)) return '[' + obj.map(canonicalJS).join(',') + ']'
+  return '{' + Object.keys(obj).sort().map(k => JSON.stringify(k) + ':' + canonicalJS(obj[k])).join(',') + '}'
+}
+const toHex = (buf) => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('')
+const fromHex = (h) => new Uint8Array(h.match(/../g).map(x => parseInt(x, 16)))
+async function ownIdentity() {
+  if (!crypto?.subtle) return null
+  try {
+    let saved = null
+    try { saved = localStorage.getItem('interval-ownkey') } catch {} // storage may be walled off: survive it
+    if (saved) {
+      const { pk8, pub } = JSON.parse(saved)
+      const priv = await crypto.subtle.importKey('pkcs8', fromHex(pk8), { name: 'Ed25519' }, true, ['sign'])
+      return { priv, pub }
+    }
+    const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify'])
+    const pub = toHex(await crypto.subtle.exportKey('raw', kp.publicKey))
+    const pk8 = toHex(await crypto.subtle.exportKey('pkcs8', kp.privateKey))
+    try { localStorage.setItem('interval-ownkey', JSON.stringify({ pk8, pub })) } catch {}
+    return { priv: kp.privateKey, pub }
+  } catch { return null }
+}
+const allocTick = () => {
+  const t2 = Math.max((world?.tick ?? 0) + 1, lastStamped + 1)
+  if (t2 > (world?.tick ?? 0) + 2) return null
+  lastStamped = t2
+  return t2
+}
+const BRIDGE = (a) =>
+    a.do === 'move' ? { type: 'move', dx: a.dx, dy: a.dy }
+  : a.do === 'spawn' ? { type: 'spawn' }
+  : a.do === 'attack' ? { type: 'attack', mobId: a.mobId }
+  : a.do === 'gather' ? { type: 'gather', nodeId: a.nodeId }
+  : a.do === 'eat' ? { type: 'eat', slot: a.slot }
+  : a.do === 'drop' ? { type: 'drop', slot: a.slot }
+  : a.do === 'wield' ? { type: 'wield', slot: a.slot }
+  : a.do === 'cook' ? { type: 'cook', slot: a.slot }
+  : a.do === 'light' ? { type: 'light', slot: a.slot }
+  : a.do === 'bury' ? { type: 'bury', slot: a.slot }
+  : a.do === 'plant' ? { type: 'plant', slot: a.slot }
+  : a.do === 'sell' ? { type: 'sell', slot: a.slot }
+  : a.do === 'deposit' ? { type: 'deposit', slot: a.slot }
+  : a.do === 'pickup' ? { type: 'pickup', groundId: a.groundId }
+  : a.do === 'buy' ? { type: 'buy', item: a.item }
+  : a.do === 'withdraw' ? { type: 'withdraw', item: a.item }
+  : a.do === 'unwield' ? { type: 'unwield', gear: a.gear }
+  : a.do === 'smith' ? { type: 'smith', recipe: a.recipe }
+  : a.do === 'fletch' ? { type: 'fletch', slot: a.slot, make: a.make }
+  : a.do === 'read_chart' ? { type: 'read_chart', slot: a.slot }
+  : a.do === 'harvest' ? { type: 'harvest', nodeId: a.nodeId }
+  : a.do === 'attune' ? { type: 'attune', nodeId: a.nodeId }
+  : a.do === 'recall' ? { type: 'recall', to: a.to }
+  : a.do === 'invoke' ? { type: 'invoke' }
+  : a.do === 'cast' ? { type: 'cast', spell: a.spell ?? 'anchor' }
+  : a.do === 'survey' ? { type: 'survey' }
+  : a.do === 'attackp' ? { type: 'attackp', targetId: a.targetId }
+  : a.do === 'build_brewpot' ? { type: 'build_brewpot' }
+  : a.do === 'brew' ? { type: 'brew', nodeId: a.nodeId, slot: a.slot }
+  : a.do === 'collect' ? { type: 'collect', nodeId: a.nodeId }
+  : a.do === 'dismantle' ? { type: 'dismantle', nodeId: a.nodeId }
+  : a.do === 'kindle' ? { type: 'kindle' }
+  : a.do === 'stoke' ? { type: 'stoke', nodeId: a.nodeId, slot: a.slot }
+  : a.do === 'claim_name' ? { type: 'claim_name', name: a.name }
+  : a.do === 'offer_trade' ? { type: 'offer_trade', to: a.to, giveSlot: a.giveSlot, wantItem: a.wantItem, wantGold: a.wantGold }
+  : a.do === 'accept_trade' ? { type: 'accept_trade', from: a.from }
+  : a.do === 'cancel_trade' ? { type: 'cancel_trade' }
+  : null
+// must match engine.js SIG_DOMAINS.input to the byte (fix brief §2.3)
+const DOMAIN_INPUT = 'INTERVAL_INPUT_V1|'
+let curWorldId = ''
+async function send(a) {
+  if (ws.readyState !== 1 || !ownKey || !curWorldId) return
+  const f = BRIDGE(a); if (!f) return
+  const tk = allocTick(); if (tk === null) return
+  const input = { worldId: curWorldId, tick: tk, playerId: ownKey.pub, ...f }
+  const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode(DOMAIN_INPUT + canonicalJS(input))))
+  ws.send(JSON.stringify({ type: 'raw', input: { ...input, sig } }))
+}
+async function sendChat(text) {
+  if (!ownKey || !curWorldId || !text) return
+  const msg = { type: 'chat', worldId: curWorldId, playerId: ownKey.pub, tick: world?.tick ?? 0, text: String(text).slice(0, 80) }
+  const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode('INTERVAL_CHAT_V1|' + canonicalJS(msg))))
+  ws.send(JSON.stringify({ type: 'rawsay', msg: { ...msg, sig } }))
+}
+
+// ---- terrain: the SAME pure functions as every other window ----
+let W = 192, H = 96, DAY = 2400
+const tileHash = (x, y, salt) => { let h = (x * 374761393 + y * 668265263 + salt * 1442695041) >>> 0
+  h = (h ^ (h >> 13)) >>> 0; h = (h * 1274126177) >>> 0; return (h ^ (h >> 16)) >>> 0 }
+// >>> EXPANSE TERRAIN MIRROR (interval-expanse-v1) — integer math only, the
+// same country worldgen-expanse.mjs placed nodes on. test/expanse.test.mjs
+// compares this tile for tile against the engine.
+let GEN = 'interval-classic-v1', GSEED = ''
+let _seedNumC = null, _ssE = null
+function seedNumC() {
+  if (_seedNumC !== null) return _seedNumC
+  let h = 0
+  for (let i = 0; i < GSEED.length; i++) h = Math.imul(h ^ GSEED.charCodeAt(i), 2654435761) | 0
+  return (_seedNumC = h >>> 0)
+}
+function thashE(x, y, k) {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(k | 0, 2246822519) + seedNumC()) | 0
+  h = Math.imul(h ^ (h >>> 13), 1274126177)
+  return (h ^ (h >>> 16)) >>> 0
+}
+function meander(tag, u, seg, amp) {
+  const k = Math.floor(u / seg)
+  const f = (u - k * seg) / seg
+  const a = (thashE(k, 0, tag) % (2 * amp + 1)) - amp
+  const b = (thashE(k + 1, 0, tag) % (2 * amp + 1)) - amp
+  const sf = f * f * (3 - 2 * f)
+  return a + (b - a) * sf
+}
+function riverXE(y) {
+  const cx = Math.floor(W / 2)
+  return cx + Math.round(meander(21, y, 46, 26) + meander(22, y, 14, 5))
+}
+function inSeaE(x, y) {
+  const bx = W * 0.80, by = H * 0.74
+  if (x < bx || y < by) return false
+  return (x - bx) / (W - bx) + (y - by) / (H - by) > 0.55
+}
+function inPoolE(x, y) {
+  if (y < H * 0.66) return false
+  const bx = Math.floor(x / 7), by = Math.floor(y / 7)
+  const h = thashE(bx, by, 7)
+  if ((h & 255) > 34) return false
+  const px = bx * 7 + ((h >>> 8) % 5), py = by * 7 + ((h >>> 16) % 5)
+  return Math.abs(x - px) + Math.abs(y - py) <= 2
+}
+const isWaterE = (x, y) => inSeaE(x, y) || inPoolE(x, y) || Math.abs(x - riverXE(y)) <= 1
+function settlementsE() {
+  const cx = Math.floor(W / 2), cy = Math.floor(H / 2)
+  return [
+    { x: cx, y: cy, w: 24, h: 14 },
+    { x: Math.round(W * 0.46), y: Math.round(H * 0.14), w: 14, h: 10 },
+    { x: Math.round(W * 0.72), y: Math.round(H * 0.24), w: 14, h: 10 },
+    { x: Math.round(W * 0.86), y: Math.round(H * 0.50), w: 14, h: 10 },
+    { x: Math.round(W * 0.74), y: Math.round(H * 0.70), w: 14, h: 10 },
+    { x: Math.round(W * 0.44), y: Math.round(H * 0.84), w: 14, h: 10 },
+    { x: Math.round(W * 0.26), y: Math.round(H * 0.46), w: 16, h: 12 },
+  ]
+}
+const ssE = () => (_ssE ??= settlementsE())
+let _roadSet = null
+function roadTilesE() {
+  if (_roadSet) return _roadSet
+  const ss = ssE(), a = ss[0]
+  const set = new Set()
+  for (let i = 1; i < ss.length; i++) {
+    const s = ss[i]
+    const vx = s.x - a.x, vy = s.y - a.y
+    const L = Math.sqrt(vx * vx + vy * vy)
+    const nx = -vy / L, ny = vx / L
+    const steps = Math.ceil(L * 2)
+    for (let stp = 0; stp <= steps; stp++) {
+      const t = stp / steps
+      const taper = Math.min(1, Math.min(t, 1 - t) * 6)
+      const o = meander(90 + i, t * L, 26, 9) * taper
+      const px = Math.round(a.x + vx * t + nx * o)
+      const py = Math.round(a.y + vy * t + ny * o)
+      set.add(px + ',' + py); set.add((px + 1) + ',' + py)
+    }
+  }
+  return (_roadSet = set)
+}
+const onRoadE = (x, y) => roadTilesE().has(x + ',' + y)
+function biomeAtE(x, y) {
+  if (x <= Math.round(W * 0.19)) return 'wilds'
+  const cx = Math.floor(W / 2), cy = Math.floor(H / 2)
+  const dx = (x - cx) / W, dy = (y - cy) / H
+  if (dx * dx + dy * dy < 0.019) return 'meadow'
+  if (y <= H * 0.32) return 'greenwood'
+  if (x >= W * 0.70) return 'crags'
+  if (y >= H * 0.70) return 'fens'
+  return 'meadow'
+}
+function terrainOfE(x, y) {
+  if (inSeaE(x, y)) return 'sea'
+  if (inPoolE(x, y) || Math.abs(x - riverXE(y)) <= 1) return 'river'
+  for (const t2 of ssE()) if (Math.abs(x - t2.x) <= (t2.w >> 1) && Math.abs(y - t2.y) <= (t2.h >> 1)) return 'cobble'
+  if (onRoadE(x, y)) return 'trail'
+  return biomeAtE(x, y)
+}
+// ---- the countries by their names, mirrored from /play (spec 9d): a
+// region is a pure function of the world, identical in every window, so
+// "meet me at the fens edge" means one place to everyone. ----
+const REGION_NAMES = { greenwood: 'the Greenwood', crags: 'the Crags', fens: 'the Fens',
+  wilds: 'the Wilds', meadow: 'the Heartlands', heartlands: 'the Heartlands' }
+const SETTLEMENT_NAMES = ['Anchor', 'Greenhollow', 'Millbrook', 'Cragfoot', 'Eastmere', 'Fenmarch', 'Norwick']
+const CLASSIC_NAMES = { wilds: 'the Wilds', cave: 'the Deep', scree: 'the Scree',
+  mountain: 'the Mountains', sea: 'the Sea', bridge: 'the Bridge',
+  cobble: 'the City', plaza: 'the Market', trail: 'the Road', meadow: 'the Meadows' }
+function regionNameAt(x, y) {
+  try {
+    if (GEN !== 'interval-expanse-v1') return CLASSIC_NAMES[terrainOf(x, y)] ?? ''
+    const ss = ssE()
+    for (let i = 0; i < ss.length; i++) {
+      const t = ss[i]
+      if (Math.abs(x - t.x) <= (t.w >> 1) && Math.abs(y - t.y) <= (t.h >> 1))
+        return SETTLEMENT_NAMES[i] ?? 'a settlement'
+    }
+    return REGION_NAMES[biomeAtE(x, y)] ?? ''
+  } catch { return '' } // a nameplate must never stop the world drawing
+}
+// <<< EXPANSE TERRAIN MIRROR
+const inWildsC = (x, y) => x >= 1 && x <= 34 && y >= 1 && y <= 22
+function riverXC(y) { const cx2 = Math.floor(W / 2)
+  return cx2 + 22 + Math.round(Math.sin(y / 9) * 7) + (tileHash(0, y, 11) % 3) - 1 }
+function terrainOf(x, y) {
+  if (GEN === 'interval-expanse-v1') return terrainOfE(x, y)
+  const ty = Math.floor(H / 2), cx2 = Math.floor(W / 2), cy0 = 2, cy1 = 10
+  if (x >= W - 4) return 'sea'
+  if (inWildsC(x, y)) return 'wilds'
+  if (x >= W - 30 && x <= W - 10 && y >= 5 && y <= 16) return 'cave'
+  if (x >= W - 46 && y <= 26) return 'scree'
+  if (y <= 8 && (x < cx2 - 10 || x > cx2 + 10)) return 'mountain'
+  if (x >= cx2 - 8 && x <= cx2 + 8 && y >= cy0 && y <= cy1) return 'cobble'
+  const lakeX = cx2 - 10, lakeY = H - 16, mbX = W - 22, mbY = H - 14
+  if (x >= lakeX + 5 && x <= lakeX + 14 && y >= lakeY - 9 && y <= lakeY - 2) return 'plaza'
+  if (Math.abs(x - mbX) <= 6 && Math.abs(y - mbY) <= 6) return 'plaza'
+  const road = (Math.abs(x - cx2) <= (tileHash(0, y, 3) % 2) && y > cy1 && y < ty)
+    || (Math.abs(x - cx2) <= (tileHash(0, y, 4) % 2) && y > ty && y < lakeY - 4)
+    || Math.abs(y - ty) <= (tileHash(x, 0, 3) % 2)
+  if (road) {
+    if (Math.abs(x - riverXC(y)) <= 2 && y >= 6 && y <= lakeY - 4) return 'bridge'
+    return 'trail'
+  }
+  if ((x <= 14 || x >= W - 16) && Math.abs(y - ty) <= 4) return 'plaza'
+  return 'meadow'
+}
+const TERRAIN_COL = { meadow: 0x3d5a23, trail: 0x8a7449, cobble: 0x7a756b, plaza: 0x6e5f3e,
+  scree: 0x5d5a52, cave: 0x22202a, wilds: 0x4a3d2e, sea: 0x1a4a63, mountain: 0x6e6a60, bridge: 0x8a6a3a,
+  // the expanse: north is wood, east is stone, south is water
+  river: 0x2f6a86, greenwood: 0x26401b, crags: 0x6a6358, fens: 0x43512f }
+
+// ---- coords: tiles to meters, one tile = one meter ----
+const wx = (x) => x - W / 2 + 0.5
+const wz = (y) => y - H / 2 + 0.5
+
+// ---- textures the window synthesizes for itself: tileable value noise
+// on a torus lattice, height to normal by Sobel — the photo window's
+// scans, grown, not downloaded ----
+function makeDetail(salt, opts = {}) {
+  const N = 256, L = 8 // lattice
+  const lat = (gx, gy, o) => (tileHash(((gx % L) + L) % L, ((gy % L) + L) % L, salt * 7 + o) % 1000) / 1000
+  const h = new Float32Array(N * N)
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let v = 0, amp = 0.55, freq = L / N
+    for (let o = 0; o < 3; o++) {
+      const fx = x * freq, fy = y * freq
+      const x0 = Math.floor(fx), y0 = Math.floor(fy)
+      const tx = fx - x0, ty = fy - y0
+      const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty)
+      const a = lat(x0, y0, o), b = lat(x0 + 1, y0, o), c = lat(x0, y0 + 1, o), d = lat(x0 + 1, y0 + 1, o)
+      v += ((a * (1 - sx) + b * sx) * (1 - sy) + (c * (1 - sx) + d * sx) * sy) * amp
+      amp *= 0.5; freq *= 2
+    }
+    h[y * N + x] = v
+  }
+  const cnv = (fill) => {
+    const c = document.createElement('canvas'); c.width = c.height = N
+    const ctx = c.getContext('2d'), img = ctx.createImageData(N, N)
+    fill(img.data); ctx.putImageData(img, 0, 0)
+    const t = new THREE.CanvasTexture(c)
+    t.wrapS = t.wrapT = THREE.RepeatWrapping
+    return t
+  }
+  const albedo = cnv((d) => { // near-white mottling: vertex color paints the hue
+    for (let i = 0; i < N * N; i++) {
+      const v = 165 + h[i] * 90 + ((tileHash(i, 1, salt) % 100) < 4 ? 30 : 0)
+      d[i * 4] = v; d[i * 4 + 1] = v; d[i * 4 + 2] = v; d[i * 4 + 3] = 255
+    }
+  })
+  albedo.colorSpace = THREE.SRGBColorSpace
+  const strength = opts.bump ?? 2.2
+  const normal = cnv((d) => {
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const gx = (h[y * N + ((x + 1) % N)] - h[y * N + ((x - 1 + N) % N)]) * strength
+      const gy = (h[((y + 1) % N) * N + x] - h[((y - 1 + N) % N) * N + x]) * strength
+      const inv = 1 / Math.hypot(gx, gy, 1)
+      const i = (y * N + x) * 4
+      d[i] = (-gx * inv * 0.5 + 0.5) * 255
+      d[i + 1] = (-gy * inv * 0.5 + 0.5) * 255
+      d[i + 2] = (inv * 0.5 + 0.5) * 255
+      d[i + 3] = 255
+    }
+  })
+  const rough = cnv((d) => {
+    for (let i = 0; i < N * N; i++) {
+      const v = (opts.roughBase ?? 205) + h[i] * 45
+      d[i * 4] = v; d[i * 4 + 1] = v; d[i * 4 + 2] = v; d[i * 4 + 3] = 255
+    }
+  })
+  return { albedo, normal, rough }
+}
+
+// ---- the stage ----
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+renderer.setSize(innerWidth, innerHeight)
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+renderer.shadowMap.enabled = true
+renderer.shadowMap.type = THREE.PCFSoftShadowMap
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = 0.7
+document.body.appendChild(renderer.domElement)
+const scene = new THREE.Scene()
+scene.fog = new THREE.Fog(0x0a0c12, 30, 150)
+const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.1, 600)
+const composer = new EffectComposer(renderer)
+composer.addPass(new RenderPass(scene, camera))
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.55, 0.88)
+composer.addPass(bloom)
+composer.addPass(new OutputPass())
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix()
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight)
+})
+
+// ---- the sky: scattered light, and the light of everything else.
+// PMREM turns the sky itself into the environment map, so every rough
+// surface is lit by the very dawn it stands under ----
+const sky = new Sky(); sky.scale.setScalar(4000); scene.add(sky)
+const su = sky.material.uniforms
+su.turbidity.value = 7; su.rayleigh.value = 1.8
+su.mieCoefficient.value = 0.005; su.mieDirectionalG.value = 0.8
+const sunDir = new THREE.Vector3()
+const pmrem = new THREE.PMREMGenerator(renderer)
+let envRT = null, lastEnvElev = 99
+let hdriMode = false
+const hdriUrl = new URLSearchParams(location.search).get('hdri')
+if (hdriUrl) new RGBELoader().load(hdriUrl, (tx) => {
+  tx.mapping = THREE.EquirectangularReflectionMapping
+  scene.environment = tx; scene.background = tx; sky.visible = false; hdriMode = true
+  feed('sky: captured (hdri)')
+}, undefined, () => feed('hdri refused; the window grows its own sky'))
+function refreshEnv(elevDeg) {
+  if (hdriMode || Math.abs(elevDeg - lastEnvElev) < 1.2) return
+  lastEnvElev = elevDeg
+  if (envRT) envRT.dispose()
+  sky.scale.setScalar(1) // PMREM samples a unit sky, then the dome returns
+  envRT = pmrem.fromScene(sky, 0.02)
+  sky.scale.setScalar(4000)
+  scene.environment = envRT.texture
+}
+
+const sun = new THREE.DirectionalLight(0xfff1da, 3.2)
+sun.castShadow = true
+sun.shadow.mapSize.set(innerWidth > 900 ? 2048 : 1536, innerWidth > 900 ? 2048 : 1536)
+sun.shadow.camera.left = -30; sun.shadow.camera.right = 30
+sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30
+sun.shadow.camera.far = 120
+sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03
+scene.add(sun, sun.target)
+const moon = new THREE.DirectionalLight(0x93a7ff, 0)
+scene.add(moon, moon.target)
+const hemi = new THREE.HemisphereLight(0xbcd3ea, 0x2a2417, 0.25)
+scene.add(hemi)
+// stars: only the night believes in them
+const starGeo = new THREE.BufferGeometry()
+{ const p = []; for (let i = 0; i < 900; i++) {
+    const a = Math.random() * Math.PI * 2, b = Math.acos(Math.random() * 0.98)
+    p.push(340 * Math.sin(b) * Math.cos(a), 340 * Math.cos(b), 340 * Math.sin(b) * Math.sin(a)) }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)) }
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 0.7, transparent: true, opacity: 0, fog: false }))
+scene.add(stars)
+
+// ---- the ground: the deluxe window's blended heightfield, dressed in
+// synthesized PBR skin. Twice the vertices of the tile grid; biomes
+// blend instead of butt; basins carved wherever the water says ----
+let groundBuilt = false, groundHGrid = null, GW2 = 0
+function groundYAt(tx, ty) {
+  if (!groundHGrid) return 0
+  const u = Math.min(W, Math.max(0, tx + 0.5)) * 2
+  const v = Math.min(H, Math.max(0, ty + 0.5)) * 2
+  const x0 = Math.min(W * 2 - 1, Math.floor(u)), y0 = Math.min(H * 2 - 1, Math.floor(v))
+  const fx = u - x0, fy = v - y0
+  const h00 = groundHGrid[y0 * GW2 + x0], h10 = groundHGrid[y0 * GW2 + x0 + 1]
+  const h01 = groundHGrid[(y0 + 1) * GW2 + x0], h11 = groundHGrid[(y0 + 1) * GW2 + x0 + 1]
+  return (h00 * (1 - fx) + h10 * fx) * (1 - fy) + (h01 * (1 - fx) + h11 * fx) * fy
+}
+const noise2 = (x, y) => ((tileHash(Math.floor(x * 2), Math.floor(y * 2), 21) % 100) / 100
+  + (tileHash(Math.floor(x * 5), Math.floor(y * 5), 22) % 100) / 200) / 1.5
+let groundMesh = null, water = null, waterSet = null
+const WATERY = new Set(['sea', 'river'])
+function buildGround(s0) {
+  waterSet = new Set()
+  if (s0) for (const n of Object.values(s0.nodes)) if (n.type === 'fishing-spot') waterSet.add(n.x + ',' + n.y)
+  for (let gy = 0; gy < H; gy++) for (let gx = 0; gx < W; gx++)
+    if (WATERY.has(terrainOf(gx, gy))) waterSet.add(gx + ',' + gy)
+  const nearWater = (gx, gy) => {
+    for (let dx2 = -1; dx2 <= 0; dx2++) for (let dy2 = -1; dy2 <= 0; dy2++)
+      if (waterSet.has((gx + dx2) + ',' + (gy + dy2))) return true
+    return false
+  }
+  const shoreOf = (gx, gy) => {
+    for (let dx2 = -1; dx2 <= 1; dx2++) for (let dy2 = -1; dy2 <= 1; dy2++)
+      if (waterSet.has((gx + dx2) + ',' + (gy + dy2))) return true
+    return false
+  }
+  const tileH = (t2, gx, gy) => {
+    if (t2 === 'mountain') {
+      const edge = Math.max(0, 8 - gy) / 8
+      const ridge = Math.abs(Math.sin(gx * 0.5 + (tileHash(Math.floor(gx / 5), 0, 55) % 100) / 30))
+      return 0.9 + edge * 1.5 + ridge * 1.2 + (tileHash(gx, gy, 5) % 100) / 150
+    }
+    if (t2 === 'scree' || t2 === 'crags') return 0.25 + (tileHash(gx, gy, 5) % 100) / 400
+    if (t2 === 'sea') return -0.55
+    if (t2 === 'river') return -0.5
+    if (t2 === 'cave') return 0.06
+    if (t2 === 'fens') return -0.06
+    return 0
+  }
+  GW2 = W * 2 + 1
+  groundHGrid = new Float32Array(GW2 * (H * 2 + 1))
+  const geo = new THREE.PlaneGeometry(W, H, W * 2, H * 2)
+  geo.rotateX(-Math.PI / 2)
+  const pos = geo.attributes.position
+  const colors = []
+  const snow = new THREE.Color(0xdfe4ea), sand = new THREE.Color(0x9a8a5e), wetSand = new THREE.Color(0x54462c)
+  const cA = new THREE.Color(), cB = new THREE.Color()
+  for (let i = 0; i < pos.count; i++) {
+    const px = pos.getX(i) + W / 2, pz = pos.getZ(i) + H / 2
+    const gx = Math.min(W - 1, Math.max(0, Math.floor(px)))
+    const gy = Math.min(H - 1, Math.max(0, Math.floor(pz)))
+    const x0 = Math.min(W - 1, Math.max(0, Math.floor(px - 0.5)))
+    const y0 = Math.min(H - 1, Math.max(0, Math.floor(pz - 0.5)))
+    const x1 = Math.min(W - 1, x0 + 1), y1 = Math.min(H - 1, y0 + 1)
+    const fx2 = Math.min(1, Math.max(0, px - 0.5 - x0)), fy2 = Math.min(1, Math.max(0, pz - 0.5 - y0))
+    cA.set(0, 0, 0)
+    let h2 = 0, mountainW = 0
+    for (const [tx3, ty3, w3] of [[x0, y0, (1 - fx2) * (1 - fy2)], [x1, y0, fx2 * (1 - fy2)], [x0, y1, (1 - fx2) * fy2], [x1, y1, fx2 * fy2]]) {
+      const tt = terrainOf(tx3, ty3)
+      cB.set(TERRAIN_COL[tt])
+      cA.r += cB.r * w3; cA.g += cB.g * w3; cA.b += cB.b * w3
+      h2 += tileH(tt, tx3, ty3) * w3
+      if (tt === 'mountain') mountainW += w3
+    }
+    h2 += (noise2(px, pz) - 0.45) * 0.16
+    const shade = 0.82 + (tileHash(Math.round(px * 2), Math.round(pz * 2), 0) % 100) / 260
+    cA.multiplyScalar(shade)
+    if (mountainW > 0 && h2 > 1.4) cA.lerp(snow, Math.min(1, (h2 - 1.4) * 0.9) * mountainW)
+    if (nearWater(gx, gy)) { h2 = Math.min(h2, -0.34); cA.lerp(wetSand, 0.6) }
+    else if (shoreOf(gx, gy)) cA.lerp(sand, 0.4)
+    pos.setY(i, h2)
+    const hx = Math.round(px * 2), hy = Math.round(pz * 2)
+    if (hx >= 0 && hx < GW2 && hy >= 0 && hy <= H * 2) groundHGrid[hy * GW2 + hx] = h2
+    colors.push(cA.r, cA.g, cA.b)
+  }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
+  geo.computeVertexNormals()
+  const det = makeDetail(3, { bump: 2.4, roughBase: 200 })
+  det.albedo.repeat.set(W / 2, H / 2); det.normal.repeat.set(W / 2, H / 2); det.rough.repeat.set(W / 2, H / 2)
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true,
+    map: det.albedo, normalMap: det.normal, roughnessMap: det.rough,
+    normalScale: new THREE.Vector2(0.9, 0.9), roughness: 1, metalness: 0 })
+  groundMesh = new THREE.Mesh(geo, mat)
+  groundMesh.receiveShadow = true
+  groundMesh.userData.kind = 'terrain'
+  scene.add(groundMesh)
+
+  // one water under everything: lakes, river, sea, and the world's rim.
+  // A moving normal field and a planar mirror of the whole scene.
+  const wnorm = makeDetail(9, { bump: 5 }).normal
+  wnorm.repeat.set(24, 24)
+  water = new Water(new THREE.PlaneGeometry(W * 3, H * 3), {
+    textureWidth: innerWidth > 900 ? 512 : 256, textureHeight: innerWidth > 900 ? 512 : 256,
+    waterNormals: wnorm, sunDirection: sunDir.clone(), sunColor: 0xfff1da,
+    waterColor: 0x07333f, distortionScale: 2.4, fog: true })
+  water.rotation.x = -Math.PI / 2
+  water.position.y = -0.18
+  scene.add(water)
+  buildGrass()
+  groundBuilt = true
+}
+
+// ---- grass: instanced blades on every green tile, hashed like every
+// other window hashes its scatter ----
+let grassMesh = null
+function buildGrass() {
+  const GREEN = new Set(['meadow', 'greenwood', 'fens'])
+  const blade = new THREE.ConeGeometry(0.028, 0.34, 4)
+  blade.translate(0, 0.17, 0)
+  const mat = new THREE.MeshStandardMaterial({ color: 0x2d4a17, roughness: 0.95 })
+  const count = Math.min(15000, W * H)
+  grassMesh = new THREE.InstancedMesh(blade, mat, count)
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler()
+  const col = new THREE.Color()
+  let placed = 0
+  for (let i = 0; i < count * 2 && placed < count; i++) {
+    const gx = tileHash(i, 7, 40) % W, gy = tileHash(i, 11, 41) % H
+    if (!GREEN.has(terrainOf(gx, gy))) continue
+    const ox = ((tileHash(i, 3, 42) % 80) - 40) / 100, oz = ((tileHash(i, 5, 43) % 80) - 40) / 100
+    const s = 0.7 + (tileHash(i, 9, 44) % 60) / 100
+    e.set(((tileHash(i, 13, 45) % 16) - 8) * 0.02, (tileHash(i, 17, 46) % 628) / 100, 0)
+    q.setFromEuler(e)
+    m4.compose(new THREE.Vector3(wx(gx) + ox, groundYAt(gx, gy), wz(gy) + oz), q,
+      new THREE.Vector3(s, s, s))
+    grassMesh.setMatrixAt(placed, m4)
+    col.setHSL(0.26 + (tileHash(i, 19, 47) % 20) / 400, 0.5, 0.2 + (tileHash(i, 23, 48) % 20) / 200)
+    grassMesh.setColorAt(placed, col)
+    placed++
+  }
+  grassMesh.count = placed
+  scene.add(grassMesh)
+}
+
+// ---- the standing world: everything the state names, made matter ----
+const mats = { // shared PBR skins
+  bark: new THREE.MeshStandardMaterial({ color: 0x4a2f14, roughness: 0.95 }),
+  leaf0: new THREE.MeshStandardMaterial({ color: 0x1d4210, roughness: 0.9 }),
+  leaf1: new THREE.MeshStandardMaterial({ color: 0x27511a, roughness: 0.9 }),
+  leaf2: new THREE.MeshStandardMaterial({ color: 0x315c22, roughness: 0.9 }),
+  stone: new THREE.MeshStandardMaterial({ color: 0x6f6b64, roughness: 0.85 }),
+  magic: new THREE.MeshStandardMaterial({ color: 0x584f9a, roughness: 0.6, emissive: 0x2a2266, emissiveIntensity: 0.8 }),
+  wood: new THREE.MeshStandardMaterial({ color: 0x5c4426, roughness: 0.9 }),
+  roof: new THREE.MeshStandardMaterial({ color: 0x4d2413, roughness: 0.85 }),
+  iron: new THREE.MeshStandardMaterial({ color: 0x2c2c31, roughness: 0.5, metalness: 0.7 }),
+  gold: new THREE.MeshStandardMaterial({ color: 0xd9a62e, roughness: 0.35, metalness: 0.85 }),
+  bone: new THREE.MeshStandardMaterial({ color: 0xd8d4c4, roughness: 0.8 }),
+  flame: new THREE.MeshBasicMaterial({ color: 0xff7a14, transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending, depthWrite: false }),
+  flameCore: new THREE.MeshBasicMaterial({ color: 0xffd980, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
+  rune: new THREE.MeshBasicMaterial({ color: 0x66aaff }),
+}
+const rockDetail = makeDetail(5, { bump: 3.4, roughBase: 190 })
+mats.stone.map = rockDetail.albedo; mats.stone.normalMap = rockDetail.normal
+mats.stone.roughnessMap = rockDetail.rough
+const craggy = (radius, seed) => {
+  const g = new THREE.IcosahedronGeometry(radius, 1)
+  const p = g.attributes.position
+  for (let i = 0; i < p.count; i++) {
+    const k = 0.72 + (tileHash(i, seed, 61) % 100) / 180
+    p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.72, p.getZ(i) * k)
+  }
+  g.computeVertexNormals()
+  return g
+}
+const label = (text, big = false) => {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 96
+  const ctx = c.getContext('2d')
+  ctx.font = '600 ' + (big ? 44 : 36) + 'px ui-monospace, Menlo, monospace'
+  ctx.textAlign = 'center'
+  ctx.shadowColor = '#000'; ctx.shadowBlur = 8
+  ctx.fillStyle = '#e6ddc2'
+  ctx.fillText(text.slice(0, 26), 256, 60)
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false }))
+  sp.scale.set(2.6, 0.49, 1)
+  return sp
+}
+const smokeTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64
+  const ctx = c.getContext('2d')
+  const g = ctx.createRadialGradient(32, 32, 2, 32, 32, 30)
+  g.addColorStop(0, 'rgba(150,146,140,.55)'); g.addColorStop(1, 'rgba(150,146,140,0)')
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 64)
+  return new THREE.CanvasTexture(c)
+})()
+
+function nodeBody(n) {
+  const g = new THREE.Group()
+  const hsh = [...n.id].reduce((a, ch) => (a * 33 + ch.charCodeAt(0)) >>> 0, 5381)
+  const grow = 0.9 + (hsh % 40) / 100
+  const add = (mesh, x = 0, y = 0, z = 0, shadow = true) => {
+    mesh.position.set(x, y, z); mesh.castShadow = shadow; g.add(mesh); return mesh }
+  if (n.type === 'tree') {
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.09 * grow, 0.2 * grow, 1.5 * grow, 7), mats.bark), 0, 0.75 * grow)
+    const crown = (m, x, y, z, s) => { const k = add(new THREE.Mesh(craggy(0.62 * s * grow, hsh % 97), m), x * grow, y * grow, z * grow); k.userData.canopy = true; return k }
+    crown(mats.leaf1, 0, 1.75, 0, 1.15)
+    crown(mats.leaf0, 0.4, 1.45, 0.25, 0.8)
+    crown(mats.leaf2, -0.33, 1.55, -0.2, 0.85)
+    g.rotation.y = (hsh % 628) / 100
+  } else if (n.type === 'rock' || n.type === 'magic-rock') {
+    add(new THREE.Mesh(craggy(0.5 * grow, hsh % 89), n.type === 'rock' ? mats.stone : mats.magic), 0, 0.26)
+    add(new THREE.Mesh(craggy(0.26 * grow, hsh % 83), mats.stone), 0.34, 0.13, -0.16)
+    if (n.type === 'magic-rock') { const l = new THREE.PointLight(0x8f7dff, 3, 5); add(l, 0, 0.7, 0, false) }
+  } else if (n.type === 'fishing-spot') {
+    const ring = add(new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.02, 6, 24),
+      new THREE.MeshBasicMaterial({ color: 0x9fd4de, transparent: true, opacity: 0.7 })), 0, -0.12, 0, false)
+    ring.rotation.x = -Math.PI / 2; ring.userData.bob = true
+  } else if (n.type === 'campfire' || n.type === 'fire') {
+    for (let i = 0; i < 3; i++) {
+      const log = add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.7, 6), mats.wood), 0, 0.07)
+      log.rotation.z = 1.32; log.rotation.y = i * 2.1
+    }
+    const f = add(new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.62, 8), mats.flame), 0, 0.44, 0, false)
+    f.userData.flame = 1
+    const f2 = add(new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.4, 8), mats.flameCore), 0, 0.36, 0, false)
+    f2.userData.flame = 2
+    const li = new THREE.PointLight(0xff9a3d, 14, 9, 1.6); li.castShadow = innerWidth > 900
+    add(li, 0, 0.7, 0, false); g.userData.fireLight = li
+    const embers = new THREE.Points(new THREE.BufferGeometry(),
+      new THREE.PointsMaterial({ color: 0xffa040, size: 0.05, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }))
+    embers.geometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(18), 3))
+    add(embers, 0, 0, 0, false); g.userData.embers = embers
+    g.userData.smoke = []
+    for (let i = 0; i < 3; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, transparent: true, depthWrite: false }))
+      sp.position.y = 1; g.add(sp); g.userData.smoke.push(sp)
+    }
+  } else if (n.type === 'bank') {
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.1, 0.9), mats.stone), 0, 0.55)
+    add(new THREE.Mesh(new THREE.BoxGeometry(1, 0.14, 1), mats.gold), 0, 1.17)
+  } else if (n.type === 'anvil') {
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.4, 0.3), mats.iron), 0, 0.2)
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.13, 0.3), mats.iron), 0, 0.46)
+  } else if (n.type === 'waystone') {
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.7, 0.32), mats.stone), 0, 0.85).rotation.y = (hsh % 628) / 100
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.34), mats.rune), 0, 1.32, 0, false)
+    add(new THREE.PointLight(0x5f9dff, 5, 6), 0, 1.7, 0, false)
+  } else if (n.type === 'house' || n.type === 'store' || n.type === 'guard' || n.type === 'gatehouse') {
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.2, 0.95), n.type === 'store' ? mats.wood : mats.stone), 0, 0.6)
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.85, 0.62, 4), mats.roof), 0, 1.5).rotation.y = Math.PI / 4
+    const win = add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.22, 0.26),
+      new THREE.MeshBasicMaterial({ color: 0xffc46a })), 0.485, 0.62, 0, false)
+    win.userData.window = true
+  } else if (n.type === 'wall' || n.type === 'gate') {
+    add(new THREE.Mesh(new THREE.BoxGeometry(1, 0.9, 1), mats.stone), 0, 0.45)
+  } else if (n.type === 'well') {
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, 0.5, 10), mats.stone), 0, 0.25)
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.4, 6), mats.roof), 0, 1.1)
+  } else if (n.type === 'signpost') {
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.9, 6), mats.bark), 0, 0.45)
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.05), mats.wood), 0.2, 0.76)
+  } else if (n.type === 'plot') {
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.07, 0.95), mats.wood), 0, 0.03)
+  } else if (n.type === 'brewpot') {
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 0.5, 10), mats.iron), 0, 0.25)
+  } else {
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.5), mats.wood), 0, 0.3)
+  }
+  const lb = label(n.type); lb.position.y = 2.5; lb.material.opacity = 0.85; g.add(lb)
+  g.userData.label = lb
+  return g
+}
+
+const MOB_LOOK = { goblin: [0x5c8a3a, 0.55], wolf: [0x6b6b62, 0.55], troll: [0x4a6b52, 0.95],
+  bear: [0x5c4023, 0.85], 'skeleton-knight': [0xd8d4c4, 0.8] }
+function bodyOf(color, scale, own = false) {
+  const g = new THREE.Group()
+  const garb = new THREE.MeshStandardMaterial({ color: own ? 0xbe9427 : color, roughness: 0.8,
+    metalness: own ? 0.35 : 0 })
+  const skin = new THREE.MeshStandardMaterial({ color: 0xc9a480, roughness: 0.85 })
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.19 * scale, 0.5 * scale, 4, 10), garb)
+  torso.position.y = 0.56 * scale; torso.castShadow = true; g.add(torso)
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16 * scale, 12, 10), skin)
+  head.position.y = 1.06 * scale; head.castShadow = true; g.add(head)
+  g.__arms = []
+  for (const s of [-1, 1]) {
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.05 * scale, 0.34 * scale, 3, 6), skin)
+    arm.position.set(0, 0.6 * scale, 0.24 * scale * s)
+    arm.rotation.x = 0.16 * s; arm.castShadow = true; g.add(arm)
+    g.__arms.push(arm)
+  }
+  g.__mats = [garb, skin]
+  return g
+}
+
+// ---- the theater of consequence: chips fly, sparks jump, water leaps,
+// bodies swing. None of it is authoritative; all of it is owed. ----
+const fx = []
+function burst(x, y3, z, kind) {
+  if (fx.length > 110) return
+  if (kind === 'splash') {
+    const m = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.03, 6, 20),
+      new THREE.MeshBasicMaterial({ color: 0xbfe6ee, transparent: true, opacity: 0.85 }))
+    m.rotation.x = -Math.PI / 2; m.position.set(x, -0.16, z)
+    scene.add(m); fx.push({ m, life: 0.6, t0: 0.6, kind }); return
+  }
+  const col = kind === 'spark' ? 0xffcf6a : kind === 'dust' ? 0x8d8676 : 0x7a4d21
+  const mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 1,
+    blending: kind === 'spark' ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: false })
+  for (let i = 0; i < (kind === 'spark' ? 7 : 5); i++) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.05), mat)
+    m.position.set(x, y3, z)
+    const a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 1.6
+    fx.push({ m, mat, life: 0.65, t0: 0.65, kind,
+      vx: Math.cos(a) * sp * 0.6, vy: 1.4 + Math.random() * 1.6, vz: Math.sin(a) * sp * 0.6 })
+    scene.add(m)
+  }
+}
+const NODE_FX = { tree: 'chip', rock: 'spark', 'magic-rock': 'spark', 'fishing-spot': 'splash', anvil: 'spark' }
+function tickTheater(st) {
+  for (const [pid, p] of Object.entries(st.players)) {
+    const a = p.action; if (!a) continue
+    if (a.type === 'gather' && a.nodeId) {
+      const n = st.nodes[a.nodeId]; if (!n) continue
+      burst(wx(n.x), groundYAt(n.x, n.y) + (n.type === 'tree' ? 0.9 : 0.35), wz(n.y), NODE_FX[n.type] ?? 'dust')
+      const nv = vis.node.get(a.nodeId); if (nv) nv.__shakeAt = performance.now()
+    }
+    if ((a.type === 'attack' && a.mobId) || (a.type === 'attackp' && a.targetId)) {
+      const g = vis.player.get(pid)
+      const tgt = a.type === 'attack' ? st.mobs?.[a.mobId] : st.players?.[a.targetId]
+      if (g && tgt) {
+        g.__lungeAt = performance.now()
+        g.__lungeDx = Math.sign(tgt.x - p.x); g.__lungeDz = Math.sign(tgt.y - p.y)
+      }
+      if (tgt) burst(wx(tgt.x), groundYAt(tgt.x, tgt.y) + 0.5, wz(tgt.y), 'spark')
+    }
+  }
+}
+
+// ---- the census of visible things ----
+const vis = { node: new Map(), mob: new Map(), player: new Map(), ground: new Map() }
+function sweep(map, liveIds) {
+  for (const [id, g] of map) if (!liveIds.has(id)) { scene.remove(g); map.delete(id) }
+}
+function syncAll(s) {
+  const t = s.tick
+  const liveN = new Set()
+  for (const [id, n] of Object.entries(s.nodes)) {
+    liveN.add(id)
+    let g = vis.node.get(id)
+    if (!g || g.userData.type !== n.type) {
+      if (g) scene.remove(g)
+      g = nodeBody({ ...n, id }); g.userData.type = n.type
+      g.userData.kind = 'node'; g.userData.id = id
+      g.traverse((o) => { o.userData.kind = 'node'; o.userData.id = id })
+      vis.node.set(id, g); scene.add(g)
+    }
+    g.position.set(wx(n.x), groundYAt(n.x, n.y), wz(n.y))
+    const depleted = (n.depletedUntil ?? 0) > t
+    if (depleted !== !!g.userData.depleted) {
+      g.userData.depleted = depleted
+      g.traverse((o) => { if (o.userData.canopy) o.visible = !depleted })
+    }
+  }
+  sweep(vis.node, liveN)
+
+  const liveM = new Set()
+  for (const [id, m] of Object.entries(s.mobs)) {
+    if ((m.hp ?? 0) <= 0) continue
+    liveM.add(id)
+    let g = vis.mob.get(id)
+    if (!g) {
+      const [c, sc] = MOB_LOOK[m.type] ?? [0x8a5a5a, 0.7]
+      g = bodyOf(c, sc)
+      g.userData = { kind: 'mob', id, type: m.type, tx: m.x, ty: m.y }
+      g.traverse((o) => { o.userData.kind = 'mob'; o.userData.id = id })
+      const lb = label(m.type + ' · ' + m.hp); lb.position.y = 1.6; g.add(lb); g.userData.lb = lb
+      g.position.set(wx(m.x), groundYAt(m.x, m.y), wz(m.y))
+      vis.mob.set(id, g); scene.add(g)
+    }
+    if (typeof g.userData.hp === 'number' && m.hp < g.userData.hp) g.__hurtAt = performance.now()
+    if (g.userData.hp !== m.hp) { g.userData.hp = m.hp
+      g.remove(g.userData.lb); g.userData.lb = label(m.type + ' · ' + m.hp)
+      g.userData.lb.position.y = 1.6; g.add(g.userData.lb) }
+    g.userData.tx = m.x; g.userData.ty = m.y
+  }
+  sweep(vis.mob, liveM)
+
+  const liveP = new Set()
+  for (const [id, p] of Object.entries(s.players)) {
+    liveP.add(id)
+    let g = vis.player.get(id)
+    const nm = (p.name ?? '') || id.slice(0, 6)
+    const cap = nm + ' · ' + p.hp
+    if (!g) {
+      g = bodyOf(0x2c4a86, 0.62, id === ownKey?.pub)
+      g.userData = { kind: 'player', id, tx: p.x, ty: p.y }
+      g.traverse((o) => { o.userData.kind = 'player'; o.userData.id = id })
+      g.position.set(wx(p.x), groundYAt(p.x, p.y), wz(p.y))
+      if (povMode && id === ownKey?.pub) g.visible = false
+      vis.player.set(id, g); scene.add(g)
+    }
+    if (typeof g.__hp === 'number' && p.hp < g.__hp) g.__hurtAt = performance.now()
+    g.__hp = p.hp
+    g.userData.act = p.action?.type ?? null
+    g.userData.actTarget = p.action?.nodeId ?? p.action?.mobId ?? p.action?.targetId ?? null
+    if (g.userData.cap !== cap) { g.userData.cap = cap
+      if (g.userData.lb) g.remove(g.userData.lb)
+      g.userData.lb = label(cap, id === ownKey?.pub); g.userData.lb.position.y = 1.55; g.add(g.userData.lb) }
+    g.userData.tx = p.x; g.userData.ty = p.y
+  }
+  sweep(vis.player, liveP)
+
+  const liveG = new Set()
+  for (const [id, it] of Object.entries(s.ground ?? {})) {
+    liveG.add(id)
+    let g = vis.ground.get(id)
+    if (!g) {
+      g = new THREE.Group()
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.2), mats.wood)
+      m.position.y = 0.08; m.castShadow = true; g.add(m)
+      g.userData = { kind: 'ground', id }
+      g.traverse((o) => { o.userData.kind = 'ground'; o.userData.id = id })
+      g.position.set(wx(it.x), groundYAt(it.x, it.y), wz(it.y))
+      vis.ground.set(id, g); scene.add(g)
+    }
+  }
+  sweep(vis.ground, liveG)
+}
+
+// ---- the hand: tap to intend, drag to look, pinch to breathe ----
+let camYaw = -0.8, camPitch = 0.9, camDist = 12, entered = false
+// first person: the window mounted behind the citizen's own eyes. The
+// body is hidden, so its fidelity stops mattering: only the light is
+// left, and the light is the whole argument of this window.
+let povMode = false
+try { povMode = localStorage.getItem('interval-photo-pov') === '1' } catch {}
+let fpYaw = 0.6, fpPitch = -0.06
+const ray = new THREE.Raycaster()
+let walkGoal = null, huntTarget = null, workTarget = null
+let lastStepPos = '', lastStepAxisX = false
+const ptr = { down: false, moved: false, x: 0, y: 0, pinch: 0 }
+const el = renderer.domElement
+el.addEventListener('pointerdown', (e) => { ptr.down = true; ptr.moved = false; ptr.x = e.clientX; ptr.y = e.clientY })
+el.addEventListener('pointermove', (e) => {
+  if (!ptr.down) return
+  const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y
+  if (Math.abs(dx) + Math.abs(dy) > 6) ptr.moved = true
+  if (ptr.moved) {
+    if (povMode) {
+      fpYaw -= dx * 0.0062
+      fpPitch = Math.min(1.2, Math.max(-1.2, fpPitch - dy * 0.005))
+    } else {
+      camYaw -= dx * 0.0075
+      camPitch = Math.min(1.35, Math.max(0.28, camPitch + dy * 0.006))
+    }
+    ptr.x = e.clientX; ptr.y = e.clientY
+  }
+})
+el.addEventListener('pointerup', (e) => {
+  const wasDrag = ptr.moved; ptr.down = false
+  if (wasDrag || !entered) return
+  const m2 = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1)
+  ray.setFromCamera(m2, camera)
+  const hits = ray.intersectObjects(scene.children, true)
+  for (const h of hits) {
+    if (povMode && h.object.userData?.id === ownKey?.pub) continue
+    const k = h.object.userData?.kind
+    if (k === 'mob') { huntTarget = h.object.userData.id; workTarget = null; walkGoal = null; return }
+    if (k === 'node') { workTarget = h.object.userData.id; huntTarget = null; walkGoal = null; return }
+    if (k === 'ground') {
+      const it = world?.ground?.[h.object.userData.id]
+      if (it) { walkGoal = { x: it.x, y: it.y }; huntTarget = null; workTarget = null }
+      return
+    }
+    if (h.object === groundMesh) {
+      const gx = Math.floor(h.point.x + W / 2), gy = Math.floor(h.point.z + H / 2)
+      if (gx >= 0 && gx < W && gy >= 0 && gy < H) { walkGoal = { x: gx, y: gy }; huntTarget = null; workTarget = null }
+      return
+    }
+  }
+})
+el.addEventListener('wheel', (e) => { camDist = Math.min(40, Math.max(4, camDist + Math.sign(e.deltaY) * 1.2)) }, { passive: true })
+el.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 2) {
+    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY)
+    if (ptr.pinch) camDist = Math.min(40, Math.max(4, camDist * (ptr.pinch / d)))
+    ptr.pinch = d
+  }
+}, { passive: true })
+el.addEventListener('touchend', () => { ptr.pinch = 0 }, { passive: true })
+
+// desktop legs: WASD steps the grid relative to where the eyes point.
+// The grid stays the truth; the yaw merely chooses which axis is 'forward'.
+addEventListener('keydown', (e) => {
+  if (!entered || !povMode) return
+  if (['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key) < 0) return
+  const f = { x: Math.sin(fpYaw), z: Math.cos(fpYaw) }
+  const r = { x: Math.cos(fpYaw), z: -Math.sin(fpYaw) }
+  let vx = 0, vz = 0
+  if (e.key === 'w' || e.key === 'ArrowUp') { vx = f.x; vz = f.z }
+  if (e.key === 's' || e.key === 'ArrowDown') { vx = -f.x; vz = -f.z }
+  if (e.key === 'a' || e.key === 'ArrowLeft') { vx = -r.x; vz = -r.z }
+  if (e.key === 'd' || e.key === 'ArrowRight') { vx = r.x; vz = r.z }
+  walkGoal = null; huntTarget = null; workTarget = null
+  if (Math.abs(vx) >= Math.abs(vz)) send({ do: 'move', dx: Math.sign(Math.round(vx * 2)), dy: 0 })
+  else send({ do: 'move', dx: 0, dy: Math.sign(Math.round(vz * 2)) })
+})
+
+// one signed intention per interval, never more: step, work, hunt
+function stepToward(txg, tyg, stopAdjacent) {
+  const me = world?.players?.[ownKey?.pub]; if (!me) return
+  const dxT = txg - me.x, dyT = tyg - me.y
+  if (stopAdjacent && Math.abs(dxT) + Math.abs(dyT) <= 1) return
+  if (!dxT && !dyT) return
+  const dx = Math.sign(dxT), dy = Math.sign(dyT)
+  const stuck = lastStepPos === me.x + ',' + me.y
+  const preferX = Math.abs(dxT) >= Math.abs(dyT)
+  if ((preferX && !stuck) || (stuck && !lastStepAxisX)) {
+    send(dx ? { do: 'move', dx, dy: 0 } : { do: 'move', dx: 0, dy })
+    lastStepAxisX = true
+  } else {
+    send(dy ? { do: 'move', dx: 0, dy } : { do: 'move', dx, dy: 0 })
+    lastStepAxisX = false
+  }
+  lastStepPos = me.x + ',' + me.y
+}
+let lastActed = -1
+function actOnTick() {
+  const me = world?.players?.[ownKey?.pub]; if (!me) return
+  if (huntTarget) {
+    const m = world.mobs?.[huntTarget]
+    if (!m || (m.hp ?? 0) <= 0) { huntTarget = null; return }
+    if (Math.abs(m.x - me.x) + Math.abs(m.y - me.y) <= 1) {
+      if (!me.action) send({ do: 'attack', mobId: huntTarget })
+    } else stepToward(m.x, m.y, true)
+    return
+  }
+  if (workTarget) {
+    const n = world.nodes?.[workTarget]
+    if (!n) { workTarget = null; return }
+    if (Math.abs(n.x - me.x) + Math.abs(n.y - me.y) <= 1) {
+      if (!me.action && (n.depletedUntil ?? 0) <= world.tick) send({ do: 'gather', nodeId: workTarget })
+    } else stepToward(n.x, n.y, true)
+    return
+  }
+  if (walkGoal) {
+    if (me.x === walkGoal.x && me.y === walkGoal.y) {
+      walkGoal = null
+      for (const [gid, it] of Object.entries(world.ground ?? {}))
+        if (it.x === me.x && it.y === me.y) { send({ do: 'pickup', groundId: gid }); break }
+      return
+    }
+    stepToward(walkGoal.x, walkGoal.y, false)
+  }
+}
+
+// ---- the pack and the verbs ----
+const packEl = document.getElementById('pack')
+let selSlot = -1, lastInvSig = ''
+function renderPack() {
+  const me = world?.players?.[ownKey?.pub]
+  const inv = me?.inventory ?? []
+  const sig = JSON.stringify(inv) + '|' + selSlot
+  if (sig === lastInvSig) return
+  lastInvSig = sig
+  packEl.innerHTML = ''
+  for (let i = 0; i < 28; i++) {
+    const b = document.createElement('button')
+    const s = inv[i]
+    b.textContent = s?.item ? s.item + (s.qty > 1 ? ' ×' + s.qty : '') : '·'
+    if (i === selSlot) b.className = 'sel'
+    b.onclick = () => { selSlot = selSlot === i ? -1 : i; lastInvSig = '' }
+    packEl.appendChild(b)
+  }
+}
+const chatrow = document.getElementById('chatrow')
+document.getElementById('verbs').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-v]'); if (!b) return
+  const v = b.dataset.v
+  if (v === 'pack') { packEl.style.display = packEl.style.display === 'grid' ? 'none' : 'grid'; return }
+  if (v === 'chat') { chatrow.style.display = chatrow.style.display === 'flex' ? 'none' : 'flex'
+    if (chatrow.style.display === 'flex') document.getElementById('chatinput').focus(); return }
+  if (v === 'pov') {
+    povMode = !povMode
+    try { localStorage.setItem('interval-photo-pov', povMode ? '1' : '0') } catch {}
+    const mine = vis.player.get(ownKey?.pub)
+    if (mine) mine.visible = !povMode
+    camera.fov = povMode ? 68 : 46; camera.updateProjectionMatrix()
+    feed(povMode ? 'behind your own eyes now; drag to look, tap the world to go'
+                 : 'the window steps back behind the shoulder')
+    return
+  }
+  if (v === 'fx') { bloom.enabled = !bloom.enabled
+    feed(bloom.enabled ? 'the light blooms' : 'the light behaves'); return }
+  if (v === 'shot') {
+    composer.render()
+    renderer.domElement.toBlob((blob) => {
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = 'interval-' + (world?.tick ?? 0) + '.png'
+      a.click()
+    })
+    feed('a photograph, tick ' + (world?.tick ?? 0))
+    return
+  }
+  if (v === 'take') {
+    const me = world?.players?.[ownKey?.pub]; if (!me) return
+    for (const [gid, it] of Object.entries(world.ground ?? {}))
+      if (it.x === me.x && it.y === me.y) { send({ do: 'pickup', groundId: gid }); return }
+    feed('nothing at your feet')
+    return
+  }
+  if (selSlot < 0) { feed('open PACK and choose a slot first'); packEl.style.display = 'grid'; return }
+  send({ do: v, slot: selSlot })
+  selSlot = -1; lastInvSig = ''
+})
+const chatgo = () => { const inp = document.getElementById('chatinput')
+  if (inp.value.trim()) sendChat(inp.value.trim()); inp.value = ''; chatrow.style.display = 'none' }
+document.getElementById('chatsend').onclick = chatgo
+document.getElementById('chatinput').addEventListener('keydown', (e) => { if (e.key === 'Enter') chatgo() })
+document.getElementById('enter').onclick = () => {
+  entered = true
+  document.getElementById('splash').remove()
+  if (ownKey && world && !world.players[ownKey.pub]) send({ do: 'spawn' })
+}
+
+// ---- the wire listens ----
+ws.onopen = async () => {
+  ownKey = await ownIdentity()
+  if (ownKey) ws.send(JSON.stringify({ type: 'adopt', pub: ownKey.pub }))
+  else feed('no WebCrypto Ed25519 here: spectating only')
+}
+ws.onmessage = (ev) => {
+  const m = JSON.parse(ev.data)
+  if (m.type === 'hello') myId = m.playerId
+  if (m.type === 'state') {
+    prevWorld = world; world = m.state
+    if (m.worldId) curWorldId = m.worldId
+    clock = { tick: m.state.tick, at: performance.now() }
+    if (entered && ownKey && !m.state.players[ownKey.pub] && m.state.tick % 3 === 0) send({ do: 'spawn' })
+    if (!groundBuilt) {
+      W = m.state.genesis.worldW; H = m.state.genesis.worldH
+      GEN = m.state.genesis.worldGenerator ?? GEN
+      GSEED = m.state.genesis.genesisSeed ?? ''
+      _seedNumC = null; _ssE = null; _roadSet = null
+      buildGround(m.state)
+      document.getElementById('wid').textContent = 'world ' + (m.worldId ?? '').slice(0, 12) + '…'
+    }
+    syncAll(m.state)
+    tickTheater(m.state)
+    renderPack()
+    if (world.tick !== lastActed) { lastActed = world.tick; if (entered) actOnTick() }
+  }
+  if (m.type === 'chat') {
+    feed('<b style="color:#f2ecd8">' + String(m.name ?? 'someone').replace(/</g, '&lt;') + ':</b> '
+      + String(m.text).replace(/</g, '&lt;'))
+  }
+}
+ws.onclose = () => feed('the wire went quiet; refresh to return')
+
+// ---- the day, the frame ----
+const tmpV = new THREE.Vector3()
+let lastT = performance.now()
+function frame() {
+  requestAnimationFrame(frame)
+  const now = performance.now()
+  const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now
+  const t = now / 1000
+
+  // the constitutional day drives a scattered sky; PMREM feeds it back
+  // into every material as the light of the world
+  const dayF = world ? (((world.tick % DAY) + Math.min(1, (now - clock.at) / TICK_MS)) / DAY) : 0.3
+  const elev = Math.sin(dayF * Math.PI * 2) // + by day
+  const elevDeg = elev * 62
+  const azim = dayF * Math.PI * 2 + 0.6
+  sunDir.setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - Math.max(elevDeg, -12)), azim)
+  if (!hdriMode) { su.sunPosition.value.copy(sunDir); refreshEnv(elevDeg) }
+  const dayAmt = THREE.MathUtils.clamp(elev * 4, 0, 1)
+  const warm = THREE.MathUtils.clamp(1 - Math.abs(elev) * 2.6, 0, 1)
+  sun.color.setHSL(0.09 - warm * 0.045, 0.5 + warm * 0.4, 0.72 - warm * 0.16)
+  sun.intensity = 0.04 + dayAmt * 3.4
+  moon.intensity = (1 - dayAmt) * 0.22
+  hemi.intensity = 0.06 + dayAmt * 0.24
+  stars.material.opacity = (1 - dayAmt) * 0.9
+  renderer.toneMappingExposure = 0.5 + dayAmt * 0.28
+  scene.fog.color.setHSL(0.58, 0.25, 0.04 + dayAmt * 0.42)
+  if (!hdriMode && scene.environment) scene.environmentIntensity = 0.25 + dayAmt * 0.75
+
+  // the camera hangs from its citizen
+  const me = world?.players?.[ownKey?.pub]
+  const meVis = me && vis.player.get(ownKey.pub)
+  const focus = meVis ? meVis.position : tmpV.set(0, 0, 0)
+  if (povMode && meVis) {
+    const walking = me && (Math.abs(wx(me.x) - meVis.position.x) + Math.abs(wz(me.y) - meVis.position.z)) > 0.03
+    let bob = walking ? Math.sin(t * 8.5) * 0.028 : 0
+    if (me?.action) bob += Math.sin(Math.min(1, (now - clock.at) / 320) * Math.PI) * -0.05 // the swing lands
+    camera.position.set(focus.x, focus.y + 0.72 + bob, focus.z)
+    camera.lookAt(
+      focus.x + Math.sin(fpYaw) * Math.cos(fpPitch),
+      focus.y + 0.72 + bob + Math.sin(fpPitch),
+      focus.z + Math.cos(fpYaw) * Math.cos(fpPitch))
+  } else {
+    camera.position.set(
+      focus.x + Math.sin(camYaw) * Math.cos(camPitch) * camDist,
+      focus.y + Math.sin(camPitch) * camDist,
+      focus.z + Math.cos(camYaw) * Math.cos(camPitch) * camDist)
+    camera.lookAt(focus.x, focus.y + 0.9, focus.z)
+  }
+  sun.position.copy(focus).addScaledVector(sunDir, 60)
+  sun.target.position.copy(focus)
+  moon.position.copy(focus).addScaledVector(sunDir, -60)
+  moon.target.position.copy(focus)
+  stars.position.copy(focus)
+
+  // bodies glide between the ticks they were told about
+  const glide = (map) => {
+    for (const g of map.values()) {
+      const ty2 = g.userData.ty, tx2 = g.userData.tx
+      if (tx2 === undefined) continue
+      const gx2 = wx(tx2), gz2 = wz(ty2), gy2 = groundYAt(tx2, ty2)
+      const k = Math.min(1, dt * 6)
+      const px0 = g.position.x, pz0 = g.position.z
+      g.position.x += (gx2 - g.position.x) * k
+      g.position.z += (gz2 - g.position.z) * k
+      g.position.y += (gy2 - g.position.y) * k
+      g.__speed = (g.__speed ?? 0) * 0.85 + (Math.hypot(g.position.x - px0, g.position.z - pz0) / Math.max(dt, 1e-4)) * 0.15
+      const ddx = gx2 - g.position.x, ddz = gz2 - g.position.z
+      if (ddx * ddx + ddz * ddz > 0.001) g.rotation.y = Math.atan2(ddx, ddz)
+
+      // acting bodies face their work and swing at it; walking bodies
+      // pump their arms; hurt bodies remember it in red for a beat
+      const act = g.userData.act
+      if (act && g.userData.actTarget && world) {
+        const tg = world.nodes?.[g.userData.actTarget] ?? world.mobs?.[g.userData.actTarget] ?? world.players?.[g.userData.actTarget]
+        if (tg) g.rotation.y = Math.atan2(wx(tg.x) - g.position.x, wz(tg.y) - g.position.z)
+      }
+      if (g.__arms) {
+        const walkAmp = Math.min(0.7, (g.__speed ?? 0) * 0.5)
+        for (let ai = 0; ai < g.__arms.length; ai++) {
+          const arm = g.__arms[ai]
+          if (act === 'gather') arm.rotation.x = ai === 0 ? -0.9 + Math.sin(t * 9) * 0.85 : 0.2
+          else if (act === 'attack' || act === 'attackp') arm.rotation.x = ai === 0 ? -0.7 + Math.sin(t * 13) * 1 : 0.3 + Math.sin(t * 13 + 2) * 0.4
+          else arm.rotation.x = Math.sin(t * 8 + ai * Math.PI) * walkAmp + 0.16 * (ai ? 1 : -1)
+        }
+      }
+      if (g.__lungeAt) {
+        const lp = (now - g.__lungeAt) / 220
+        if (lp < 1) { const env = Math.sin(lp * Math.PI) * 0.2
+          g.position.x += (g.__lungeDx ?? 0) * env; g.position.z += (g.__lungeDz ?? 0) * env }
+      }
+      if (g.__mats && g.__hurtAt) {
+        const hp2 = (now - g.__hurtAt) / 320
+        for (const mm of g.__mats) { mm.emissive.setHex(0xa01414)
+          mm.emissiveIntensity = hp2 < 1 ? (1 - hp2) * 0.9 : 0 }
+      }
+    }
+  }
+  glide(vis.player); glide(vis.mob)
+
+  // struck trees shudder; the fallen chips obey gravity like anything else
+  for (const g of vis.node.values()) {
+    if (!g.__shakeAt) continue
+    const sp2 = (now - g.__shakeAt) / 300
+    g.rotation.z = sp2 < 1 ? Math.sin(sp2 * 28) * 0.045 * (1 - sp2) : 0
+  }
+  for (let i = fx.length - 1; i >= 0; i--) {
+    const f = fx[i]
+    f.life -= dt
+    if (f.life <= 0) { scene.remove(f.m); fx.splice(i, 1); continue }
+    if (f.kind === 'splash') {
+      const k2 = 1 - f.life / f.t0
+      f.m.scale.setScalar(1 + k2 * 4); f.m.material.opacity = 0.85 * (1 - k2)
+    } else {
+      f.vy -= 6.5 * dt
+      f.m.position.x += f.vx * dt; f.m.position.y += f.vy * dt; f.m.position.z += f.vz * dt
+      f.m.rotation.x += dt * 7; f.m.rotation.z += dt * 5
+      f.mat.opacity = Math.min(1, f.life / 0.25)
+    }
+  }
+
+  // fires breathe; rings ripple; windows warm after dark
+  for (const g of vis.node.values()) {
+    if (g.userData.fireLight) {
+      const s = t + g.position.x
+      g.userData.fireLight.intensity = 12 + Math.sin(s * 9) * 2 + Math.sin(s * 23) * 1.4
+      g.traverse((o) => {
+        if (o.userData.flame) {
+          const k = 1 + 0.13 * Math.sin(s * (o.userData.flame === 1 ? 9 : 13))
+          o.scale.set(k, 2 - k, k)
+        }
+      })
+      const ep = g.userData.embers.geometry.attributes.position
+      for (let i = 0; i < 6; i++) {
+        const ph = ((t * (0.45 + i * 0.13) + i * 0.37) % 1)
+        ep.setXYZ(i, 0.16 * Math.sin(s * 3 + i * 2.1), 0.5 + ph * 1.5, 0.16 * Math.cos(s * 2.6 + i * 1.7))
+      }
+      ep.needsUpdate = true
+      g.userData.smoke.forEach((sp, i) => {
+        const ph = ((t * 0.2 + i * 0.33) % 1)
+        sp.position.set(ph * 0.7 + 0.12 * Math.sin(t + i), 1 + ph * 2.6, 0.1 * Math.sin(t * 0.7 + i))
+        const sc = 0.35 + ph * 1.1
+        sp.scale.set(sc, sc, 1)
+        sp.material.opacity = 0.5 * (1 - ph) * dayAmtSmoke(dayAmt)
+      })
+    }
+    g.traverse((o) => {
+      if (o.userData.bob) { const ph = (t * 0.55 + g.position.x) % 1
+        o.scale.setScalar(0.4 + ph * 1.3); o.material.opacity = 0.7 * (1 - ph) }
+      if (o.userData.window) o.material.color.setHex(dayAmt < 0.35 ? 0xffc46a : 0x2a2117)
+    })
+  }
+  if (water) {
+    water.material.uniforms.time.value += dt * 0.55
+    water.material.uniforms.sunDirection.value.copy(sunDir)
+    water.position.x = focus.x * 0 // the sheet is world-fixed; the mirror follows for free
+  }
+
+  // the country's name, spoken by the corner of the frame
+  if (me) {
+    const rn = regionNameAt(me.x, me.y)
+    const rEl = document.getElementById('region')
+    const txt = (rn ? rn + ' · ' : '') + 'hp ' + me.hp + (me.gold ? ' · ' + me.gold + 'g' : '')
+      + (me.action ? ' · ' + me.action.type : '')
+    if (rEl.textContent !== txt) rEl.textContent = txt
+  }
+  composer.render()
+}
+const dayAmtSmoke = (d) => 0.55 + d * 0.45 // smoke reads against sky, faintly at night
+frame()
+</script>
+</body>
+</html>
