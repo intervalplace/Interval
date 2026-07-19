@@ -20,9 +20,17 @@ document.querySelectorAll('nav a').forEach(a => {
   if (a.getAttribute('href') === here) a.classList.add('here')
 })
 
-// the source belongs at the end of the reading, not at the top of it
-document.body.insertAdjacentHTML('beforeend', `
+// The source belongs at the end of the reading, not the top of it. This script
+// runs at the START of <body>, so appending immediately put the footer directly
+// under the nav: at that moment there was nothing else in the document to be
+// below. Wait for the page to exist first.
+function addFootLink() {
+  document.body.insertAdjacentHTML('beforeend', `
 <div class="page">
   <p class="footlink">the world's constitution and every line that runs it:
     <a href="https://github.com/intervalplace/interval" id="ghlink">github.com/intervalplace/interval</a></p>
 </div>`)
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', addFootLink, { once: true })
+} else addFootLink()
