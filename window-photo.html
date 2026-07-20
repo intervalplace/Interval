@@ -343,6 +343,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js'
 import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 
 // ---- the air itself: the fog chunks get rewritten before any material
 // compiles, so EVERY fogged surface in the world inherits aerial
@@ -3060,7 +3061,6 @@ function makeAdventurer(id) {
       new THREE.MeshBasicMaterial({ color: 0xfff2d9, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }))
     trail.position.set(0.2, 0.75, 0.1); trail.rotation.y = Math.PI / 2
     g.add(trail); g.userData.trail = trail
-    g.add(g.userData.name)
 
   g.__adventurer = true
   initAn(g, id)
@@ -3358,6 +3358,415 @@ function spawnArrowX(fx2, fy2, fz2, tx3, ty3, tz3) {
 // BEATEN, the head with a mind of its own, the job putting its tool in
 // the hand and the wielded thing shown or slung by the same contract ----
 const lerpN = (a, b, k) => a + (b - a) * k
+
+// =====================================================================
+// THE SEWN SKIN. The window has grown its textures, its weather and its
+// moon from hashes; now it grows its people the same way. One
+// continuous SkinnedMesh per citizen, bones placed in code, weights
+// computed per vertex — so a knee is a CURVE, not a hinge. The face,
+// the hair, the cloak and every tool ride rigidly on the bones; the
+// deep window's animator drives it unchanged, because the bones answer
+// to the same names the old groups did. No file was downloaded. This
+// body has no author but arithmetic.
+// =====================================================================
+const SEWN_SKIN = true
+// the skeleton's measure: the deep window's exact joints, so every
+// boot, mitt and hatchet steps across without an offset changing
+const RIG = {
+  hips: [0, 0.40, 0], spine: [0, 0.16, 0], chest: [0, 0.24, 0],
+  head: [0, 0.18, 0],
+  shoulder: 0.20, shoulderY: 0.86, elbowDrop: 0.20, wristDrop: 0.20,
+  hipX: 0.07, thighY: 0.36, kneeDrop: 0.19, ankleDrop: 0.17,
+}
+function buildSkinCore(hv, tunicHex, skinHex, trouserUp, trouserLo, clothTex) {
+  const limbF = 0.92 + ((hv >>> 16) % 16) / 100   // wiry to broad
+  const chestF = 0.94 + ((hv >>> 20) % 14) / 100
+  const B = (name, px, py, pz, parent) => {
+    const b = new THREE.Bone(); b.name = name; b.position.set(px, py, pz)
+    if (parent) parent.add(b)
+    return b
+  }
+  const hips = B('hips', ...RIG.hips, null)
+  const spine = B('spine', ...RIG.spine, hips)
+  const chest = B('chest', ...RIG.chest, spine)
+  const head = B('head', ...RIG.head, chest)
+  const shL = B('shL', -RIG.shoulder, RIG.shoulderY - 0.80, 0, chest)
+  const shR = B('shR', RIG.shoulder, RIG.shoulderY - 0.80, 0, chest)
+  const fkL = B('fkL', 0, -RIG.elbowDrop, 0, shL)
+  const fkR = B('fkR', 0, -RIG.elbowDrop, 0, shR)
+  const thL = B('thL', -RIG.hipX, RIG.thighY - 0.40, 0, hips)
+  const thR = B('thR', RIG.hipX, RIG.thighY - 0.40, 0, hips)
+  const snL = B('snL', 0, -RIG.kneeDrop, 0, thL)
+  const snR = B('snR', 0, -RIG.kneeDrop, 0, thR)
+  const bones = [hips, spine, chest, head, shL, shR, fkL, fkR, thL, thR, snL, snR]
+  const BI = {}; bones.forEach((b, i) => { BI[b.name] = i })
+
+  // a part is authored in model space; its weights are a function of
+  // height, feathered through the joint so the skin bends as one cloth
+  const parts = [], plateRanges = []
+  let vBase = 0
+  const smooth = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u) }
+  const addPart = (geo, colorAt, weightAt, isPlate = false) => {
+    const pos = geo.attributes.position, n = pos.count
+    const col = new Float32Array(n * 3), sIdx = new Uint16Array(n * 4), sWt = new Float32Array(n * 4)
+    const c = new THREE.Color()
+    for (let i = 0; i < n; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i)
+      c.set(colorAt(x, y, z))
+      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b
+      const [ia, wa, ib, wb] = weightAt(x, y, z)
+      sIdx[i * 4] = ia; sIdx[i * 4 + 1] = ib
+      sWt[i * 4] = wa; sWt[i * 4 + 1] = wb
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    geo.setAttribute('skinIndex', new THREE.BufferAttribute(sIdx, 4))
+    geo.setAttribute('skinWeight', new THREE.BufferAttribute(sWt, 4))
+    if (isPlate) plateRanges.push([vBase, vBase + n])
+    vBase += n
+    parts.push(geo)
+  }
+  const blend2 = (a, b, k) => [a, 1 - k, b, k]
+
+  // torso: the deep window's own lathe profile, sewn to three spine bones
+  const prof = [[0.02, -0.34], [0.13, -0.30], [0.145, -0.16], [0.135, -0.04],
+    [0.165, 0.10], [0.155, 0.22], [0.10, 0.30], [0.03, 0.34]].map(q => new THREE.Vector2(q[0] * chestF, q[1]))
+  const torsoG = new THREE.LatheGeometry(prof, 16)
+  torsoG.translate(0, 0.62, 0)
+  addPart(torsoG, () => tunicHex, (x, y) => {
+    if (y < 0.52) return blend2(BI.hips, BI.spine, smooth(0.40, 0.52, y) * 0.5)
+    if (y < 0.74) return blend2(BI.spine, BI.chest, smooth(0.56, 0.74, y))
+    return [BI.chest, 1, 0, 0]
+  }, true)
+  // the shoulder mound rides the chest
+  const shG = new THREE.SphereGeometry(0.17, 12, 8)
+  shG.scale(1.3 * chestF, 0.5, 0.85); shG.translate(0, 0.88, 0)
+  addPart(shG, () => tunicHex, () => [BI.chest, 1, 0, 0], true)
+  // the neck breathes between chest and head
+  const neckG = new THREE.CylinderGeometry(0.05, 0.06, 0.12, 10)
+  neckG.translate(0, 0.955, 0)
+  addPart(neckG, () => skinHex, (x, y) => blend2(BI.chest, BI.head, smooth(0.90, 1.0, y)))
+  // limbs: ONE capsule each, the joint sewn through its middle
+  const limb = (sx, topY, botY, r1, r2, upBone, loBone, jointY, colAt) => {
+    const len = topY - botY
+    // a segmented tube: fourteen rings so the joint band holds real
+    // vertices to feather through — the lesson the capsule taught
+    const ggeo = new THREE.CylinderGeometry(1, 1, len, 10, 14)
+    const posA = ggeo.attributes.position
+    for (let i = 0; i < posA.count; i++) {
+      const yy = posA.getY(i)
+      const u = Math.min(1, Math.max(0, (yy + len / 2) / len))
+      const rr = (r2 + (r1 - r2) * u) * limbF
+      // a knuckle of extra width at the joint reads as knee and elbow
+      const kn = 1 + 0.10 * Math.exp(-Math.pow(((yy + (topY + botY) / 2) - jointY) / 0.05, 2))
+      posA.setX(i, posA.getX(i) * rr * kn); posA.setZ(i, posA.getZ(i) * rr * kn)
+    }
+    ggeo.translate(sx, (topY + botY) / 2, 0)
+    addPart(ggeo, (x, y) => colAt(y),
+      (x, y) => blend2(BI[upBone], BI[loBone], smooth(jointY + 0.05, jointY - 0.05, y)))
+  }
+  // arms: sleeve to just past the elbow, then skin
+  limb(-RIG.shoulder, RIG.shoulderY + 0.02, RIG.shoulderY - RIG.elbowDrop - RIG.wristDrop, 0.052, 0.038,
+    'shL', 'fkL', RIG.shoulderY - RIG.elbowDrop, (y) => y > RIG.shoulderY - RIG.elbowDrop - 0.03 ? tunicHex : skinHex)
+  limb(RIG.shoulder, RIG.shoulderY + 0.02, RIG.shoulderY - RIG.elbowDrop - RIG.wristDrop, 0.052, 0.038,
+    'shR', 'fkR', RIG.shoulderY - RIG.elbowDrop, (y) => y > RIG.shoulderY - RIG.elbowDrop - 0.03 ? tunicHex : skinHex)
+  // legs: trouser above the knee, boot-leather tone below
+  limb(-RIG.hipX, RIG.thighY + 0.03, RIG.thighY - RIG.kneeDrop - RIG.ankleDrop, 0.062, 0.046,
+    'thL', 'snL', RIG.thighY - RIG.kneeDrop, (y) => y > RIG.thighY - RIG.kneeDrop ? trouserUp : trouserLo)
+  limb(RIG.hipX, RIG.thighY + 0.03, RIG.thighY - RIG.kneeDrop - RIG.ankleDrop, 0.062, 0.046,
+    'thR', 'snR', RIG.thighY - RIG.kneeDrop, (y) => y > RIG.thighY - RIG.kneeDrop ? trouserUp : trouserLo)
+  // the hip skirt closes the seam between torso and legs
+  const hipG = new THREE.CylinderGeometry(0.15, 0.13, 0.14, 12)
+  hipG.translate(0, 0.36, 0)
+  addPart(hipG, () => trouserUp, () => [BI.hips, 1, 0, 0])
+
+  const merged = mergeGeometries(parts)
+  merged.computeVertexNormals()
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0,
+    map: clothTex?.albedo ?? null, normalMap: clothTex?.normal ?? null,
+    normalScale: new THREE.Vector2(0.5, 0.5) })
+  const mesh = new THREE.SkinnedMesh(merged, mat)
+  mesh.castShadow = true
+  mesh.add(hips)
+  hips.updateMatrixWorld(true)
+  mesh.bind(new THREE.Skeleton(bones))
+  return { mesh, mat, bones: BI, boneList: bones, hips, spine, chest, head, shL, shR, fkL, fkR, thL, thR, snL, snR, plateRanges, merged }
+}
+
+// ---- the beasts, sewn: a horizontal spine, four feathered legs, a
+// tail with two bones and opinions. Wolves and bears get flesh that
+// bends; goblins and trolls borrow the citizen's skeleton at their own
+// proportions; the skeleton-knight is EXEMPT on principle — sewn skin
+// is exactly what a skeleton must not have, so his bones stay hinged,
+// which for him is anatomy. ----
+function buildBeastCore(type) {
+  const wolf = type === 'wolf'
+  const L = wolf ? 0.72 : 0.92          // shoulder-to-haunch
+  const bodyH = wolf ? 0.42 : 0.52      // spine height
+  const bodyR = wolf ? 0.13 : 0.20
+  const legR = wolf ? 0.045 : 0.07
+  const hide = wolf ? 0x6b6b62 : 0x5c4023
+  const belly = wolf ? 0x8a8a80 : 0x6e5030
+  const B = (name, px, py, pz, parent) => {
+    const b = new THREE.Bone(); b.name = name; b.position.set(px, py, pz)
+    if (parent) parent.add(b); return b
+  }
+  const hips = B('hips', 0, bodyH, -L / 2, null)
+  const spine = B('spine', 0, 0, L / 2, hips)
+  const chest = B('chest', 0, 0.02, L / 2, spine)
+  const neck = B('neck', 0, wolf ? 0.08 : 0.10, wolf ? 0.10 : 0.10, chest)
+  const head = B('head', 0, wolf ? 0.06 : 0.08, wolf ? 0.13 : 0.12, neck)
+  const legW = wolf ? 0.09 : 0.14
+  const upFL = B('upFL', -legW, -0.06, 0.02, chest), loFL = B('loFL', 0, -(bodyH - 0.06) / 2, 0, upFL)
+  const upFR = B('upFR', legW, -0.06, 0.02, chest), loFR = B('loFR', 0, -(bodyH - 0.06) / 2, 0, upFR)
+  const upBL = B('upBL', -legW, -0.04, 0.02, hips), loBL = B('loBL', 0, -(bodyH - 0.04) / 2, 0, upBL)
+  const upBR = B('upBR', legW, -0.04, 0.02, hips), loBR = B('loBR', 0, -(bodyH - 0.04) / 2, 0, upBR)
+  const tail1 = B('tail1', 0, 0.02, -0.10, hips)
+  const tail2 = B('tail2', 0, 0.01, -0.14, tail1)
+  const bones = [hips, spine, chest, neck, head, upFL, loFL, upFR, loFR, upBL, loBL, upBR, loBR, tail1, tail2]
+  const BI = {}; bones.forEach((b, i) => { BI[b.name] = i })
+  const smooth = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u) }
+  const parts = []
+  const addPart = (geo, colorAt, weightAt) => {
+    const pos = geo.attributes.position, n = pos.count
+    const col = new Float32Array(n * 3), sIdx = new Uint16Array(n * 4), sWt = new Float32Array(n * 4)
+    const c = new THREE.Color()
+    for (let i = 0; i < n; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i)
+      c.set(colorAt(x, y, z))
+      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b
+      const [ia, wa, ib, wb] = weightAt(x, y, z)
+      sIdx[i * 4] = ia; sIdx[i * 4 + 1] = ib
+      sWt[i * 4] = wa; sWt[i * 4 + 1] = wb
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    geo.setAttribute('skinIndex', new THREE.BufferAttribute(sIdx, 4))
+    geo.setAttribute('skinWeight', new THREE.BufferAttribute(sWt, 4))
+    parts.push(geo)
+  }
+  const blend2 = (a, b, k) => [a, 1 - k, b, k]
+  // the barrel: a tube laid along the spine, haunches to shoulders
+  const body = new THREE.CylinderGeometry(1, 1, L + bodyR * 1.4, 12, 14)
+  { const pos = body.attributes.position
+    for (let i = 0; i < pos.count; i++) {
+      const yy = pos.getY(i)
+      const u = Math.min(1, Math.max(0, (yy + (L + bodyR * 1.4) / 2) / (L + bodyR * 1.4)))
+      const swell = 0.82 + 0.36 * Math.sin(u * Math.PI)  // deep chest, tucked waist
+      pos.setX(i, pos.getX(i) * bodyR * swell)
+      pos.setZ(i, pos.getZ(i) * bodyR * (wolf ? 1.06 : 1.15) * swell)
+    } }
+  body.rotateX(Math.PI / 2)
+  body.translate(0, bodyH, 0)
+  addPart(body, (x, y) => y < bodyH - bodyR * 0.35 ? belly : hide,
+    (x, y, z) => {
+      if (z < -0.1) return blend2(BI.hips, BI.spine, smooth(-0.25, -0.1, z) * 0.5)
+      return blend2(BI.spine, BI.chest, smooth(-0.1, 0.28, z))
+    })
+  // the neck: chest into skull, one bending tube
+  const neckG = new THREE.CylinderGeometry(bodyR * 0.62, bodyR * 0.8, wolf ? 0.22 : 0.24, 10, 8)
+  neckG.rotateX(Math.PI / 2 - (wolf ? 0.7 : 0.8))
+  neckG.translate(0, bodyH + (wolf ? 0.11 : 0.13), L / 2 + (wolf ? 0.10 : 0.09))
+  addPart(neckG, () => hide, (x, y, z) => blend2(BI.chest, BI.neck, smooth(bodyH + 0.02, bodyH + 0.2, y)))
+  // four legs, each one tube through a feathered knee
+  const mkLeg = (sx, sz, upName, loName, rootY) => {
+    const topY = rootY, botY = 0.015, len = topY - botY
+    const kneeY = topY - (topY - botY) / 2
+    const gg = new THREE.CylinderGeometry(1, 1, len, 8, 12)
+    const pos = gg.attributes.position
+    for (let i = 0; i < pos.count; i++) {
+      const yy = pos.getY(i)
+      const u = Math.min(1, Math.max(0, (yy + len / 2) / len))
+      const rr = legR * (0.7 + 0.5 * u)
+      const kn = 1 + 0.12 * Math.exp(-Math.pow(((yy + (topY + botY) / 2) - kneeY) / 0.04, 2))
+      pos.setX(i, pos.getX(i) * rr * kn); pos.setZ(i, pos.getZ(i) * rr * kn)
+    }
+    gg.translate(sx, (topY + botY) / 2, sz)
+    addPart(gg, () => hide, (x, y) => blend2(BI[upName], BI[loName], smooth(kneeY + 0.04, kneeY - 0.04, y)))
+  }
+  mkLeg(-legW, L / 2 + 0.02, 'upFL', 'loFL', bodyH - 0.06)
+  mkLeg(legW, L / 2 + 0.02, 'upFR', 'loFR', bodyH - 0.06)
+  mkLeg(-legW, -L / 2 + 0.02, 'upBL', 'loBL', bodyH - 0.04)
+  mkLeg(legW, -L / 2 + 0.02, 'upBR', 'loBR', bodyH - 0.04)
+  // the tail: two bones of opinion
+  const tailLen = wolf ? 0.34 : 0.14
+  const tailG = new THREE.CylinderGeometry(wolf ? 0.035 : 0.05, 0.012, tailLen, 6, 8)
+  tailG.rotateX(Math.PI / 2 + 0.5)
+  tailG.translate(0, bodyH + 0.05, -L / 2 - tailLen / 2 + 0.02)
+  addPart(tailG, () => hide, (x, y, z) => blend2(BI.tail1, BI.tail2, smooth(-L / 2 - 0.06, -L / 2 - tailLen, z)))
+  const merged = mergeGeometries(parts)
+  merged.computeVertexNormals()
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0,
+    normalMap: clothDetail?.normal ?? null, normalScale: new THREE.Vector2(0.7, 0.7) })
+  const mesh = new THREE.SkinnedMesh(merged, mat)
+  mesh.castShadow = true
+  mesh.add(hips)
+  hips.updateMatrixWorld(true)
+  mesh.bind(new THREE.Skeleton(bones))
+  return { mesh, mat, hips, chest, neck, head, tail1, tail2,
+    legsQ: [[BI, upFL, loFL], [BI, upFR, loFR], [BI, upBL, loBL], [BI, upBR, loBR]].map(a => [a[1], a[2]]),
+    bodyH, wolf }
+}
+function makeSewnBeast(id, type) {
+  if (type === 'wolf' || type === 'bear') {
+    const g = new THREE.Group()
+    g.rotation.order = 'YXZ'
+    const core = buildBeastCore(type)
+    g.add(core.mesh)
+    // the face is rigid on the skull: snout, ears, eyes that catch light
+    const wolf = core.wolf
+    const hide = new THREE.MeshStandardMaterial({ color: wolf ? 0x60605a : 0x523c1e, roughness: 0.95 })
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(wolf ? 0.085 : 0.12, 10, 8), hide)
+    skull.castShadow = true; core.head.add(skull)
+    const snout = new THREE.Mesh(new THREE.BoxGeometry(wolf ? 0.06 : 0.09, wolf ? 0.05 : 0.07, wolf ? 0.11 : 0.10), hide)
+    snout.position.set(0, wolf ? -0.015 : -0.02, wolf ? 0.09 : 0.10); snout.castShadow = true; core.head.add(snout)
+    const noseM = new THREE.MeshStandardMaterial({ color: 0x14100c, roughness: 0.4 })
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.025, 0.02), noseM)
+    nose.position.set(0, wolf ? 0 : -0.005, wolf ? 0.15 : 0.155); core.head.add(nose)
+    for (const ex of [-1, 1]) {
+      const ear = new THREE.Mesh(wolf ? new THREE.ConeGeometry(0.028, 0.07, 5) : new THREE.SphereGeometry(0.035, 6, 5), hide)
+      ear.position.set(ex * (wolf ? 0.05 : 0.075), wolf ? 0.09 : 0.1, wolf ? -0.01 : 0); ear.castShadow = true; core.head.add(ear)
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 5),
+        new THREE.MeshStandardMaterial({ color: wolf ? 0xc8a23a : 0x2a1c10, roughness: 0.25 }))
+      eye.position.set(ex * 0.045, 0.015, wolf ? 0.075 : 0.1); core.head.add(eye)
+    }
+    g.userData.core = core
+    g.__quad = core
+    g.__skinnedMat = core.mat
+    g.__mats = [core.mat, hide]
+    initAn(g, id)
+    return g
+  }
+  if (type === 'goblin' || type === 'troll') {
+    // the citizen's skeleton, worn at a beast's proportions
+    const troll = type === 'troll'
+    const hv = ([...id].reduce((a, ch) => (a * 33 + ch.charCodeAt(0)) >>> 0, 5381))
+    const hide = troll ? 0x4a6b52 : 0x5c8a3a
+    const rags = troll ? 0x30302a : 0x3a2c18
+    const core = buildSkinCore(hv, rags, hide, rags, hide, null)
+    const g = new THREE.Group()
+    g.rotation.order = 'YXZ'
+    g.add(core.mesh)
+    // the skull, the ears, the underbite: rigid on the head bone
+    const hideM = new THREE.MeshStandardMaterial({ color: hide, roughness: 0.9 })
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(troll ? 0.17 : 0.15, 12, 10), hideM)
+    skull.position.y = 0.1; skull.scale.set(1, troll ? 0.95 : 0.9, 0.95); skull.castShadow = true
+    core.head.add(skull)
+    for (const ex of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.035, troll ? 0.1 : 0.13, 5), hideM)
+      ear.position.set(ex * (troll ? 0.16 : 0.14), 0.13, -0.01)
+      ear.rotation.z = -ex * 1.35; ear.castShadow = true; core.head.add(ear)
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 5),
+        new THREE.MeshStandardMaterial({ color: 0xd8c23a, roughness: 0.3, emissive: 0x4a3a00, emissiveIntensity: 0.5 }))
+      eye.position.set(ex * 0.06, 0.1, 0.12); core.head.add(eye)
+    }
+    for (const tx of [-0.03, 0.03]) {
+      const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.04, 4),
+        new THREE.MeshStandardMaterial({ color: 0xe8e2cc, roughness: 0.5 }))
+      tooth.position.set(tx, 0.03, 0.13); core.head.add(tooth)
+    }
+    // the hunch is a REST POSE, not a costume: the spine leans and the
+    // animator's lean rides on top of it
+    core.spine.rotation.x = troll ? 0.34 : 0.18
+    core.head.rotation.x = troll ? -0.22 : -0.1
+    core.shL.userData.joint = core.fkL
+    core.shR.userData.joint = core.fkR
+    core.thL.userData.joint = core.snL
+    core.thR.userData.joint = core.snR
+    g.userData.arms = [core.shL, core.shR]
+    g.userData.legs = [core.thL, core.thR]
+    g.userData.torso = core.spine
+    g.__skinnedMat = core.mat
+    g.__spineBone = core.spine
+    g.__spineRest = core.spine.rotation.x
+    g.__mats = [core.mat, hideM]
+    g.scale.setScalar(troll ? 1.35 : 0.62)
+    g.__sewn = true
+    initAn(g, id)
+    return g
+  }
+  // skeleton-knight and the unnamed: hinged bones, as is right for them
+  return makeBeast(id, type)
+}
+
+function makeSkinnedAdventurer(id) {
+  // dress a rigid adventurer first, then move its life onto the bones
+  const g = makeAdventurer(id)
+  const hv = parseInt(id.slice(0, 8), 16)
+  const skinC = [0xe8c9a0, 0xd9a877, 0xc98a5e, 0xa8724a, 0x8a5a3a, 0x6b4428][hv % 6]
+  const tunic = g.userData.tunic
+  const core = buildSkinCore(hv, tunic.getHex(), skinC, 0x2f2820, 0x241d16, clothDetail)
+  // the rigid parts the skin replaces step aside
+  for (const key of ['torso']) { /* the lathe */ }
+  const oldArms = g.userData.arms, oldLegs = g.userData.legs
+  // hands, bracers and the entire toolkit move from elbow-groups to
+  // forearm BONES — same origin, same local offsets, nothing re-aimed
+  for (const [oldArm, bone] of [[oldArms[0], core.fkL], [oldArms[1], core.fkR]]) {
+    for (const child of [...oldArm.userData.joint.children]) bone.add(child)
+  }
+  for (const [oldLeg, bone] of [[oldLegs[0], core.snL], [oldLegs[1], core.snR]]) {
+    for (const child of [...oldLeg.userData.joint.children]) bone.add(child)
+  }
+  // the head — face, hair, helm and all — rides the head bone whole
+  const headGrp = g.userData.headGrp
+  g.remove(headGrp); headGrp.position.set(0, -0.98, 0); core.head.add(headGrp)
+  // chest keeps the heraldry, the collar, the pauldrons and the cloak
+  const chestCarrier = new THREE.Group(); chestCarrier.position.set(0, -0.80, 0)
+  core.chest.add(chestCarrier)
+  const hipCarrier = new THREE.Group(); hipCarrier.position.set(0, -0.40, 0)
+  core.hips.add(hipCarrier)
+  const yOf = (o) => o.position.y
+  for (const child of [...g.children]) {
+    if (child === g.userData.trail || child.isSprite) continue
+    if (child.userData?.canopy) continue
+    // rigid body shells the skin replaces: lathe torso, shoulder mound,
+    // hips block, neck, the old hinged limbs
+    if (child === g.userData.torso || child === g.userData.shoulders
+      || child === oldArms[0] || child === oldArms[1]
+      || child === oldLegs[0] || child === oldLegs[1]) { g.remove(child); continue }
+    if (child.geometry && yOf(child) < 0.5 && yOf(child) > 0.3) { // belt, buckle, hips trim
+      g.remove(child); child.position.y -= 0.40; hipCarrier.add(child); continue
+    }
+    if (child.geometry || child.userData === undefined) continue
+  }
+  // emblem, collar, pauldrons, cloak, clasp: everything hung between
+  // waist and neck leans with the chest now
+  for (const child of [...g.children]) {
+    if (child.isSprite || child === g.userData.trail) continue
+    // the rigid neck dies inside the sewn one: no two throats
+    if (child.geometry?.type === 'CylinderGeometry' && Math.abs(child.position.y - 0.95) < 0.001) { g.remove(child); continue }
+    if (!child.isBone && child !== core.mesh && child.position && child.position.y >= 0.5 && child.position.y <= 0.95 && !child.isGroup) {
+      g.remove(child); child.position.y -= 0.80; chestCarrier.add(child)
+    } else if (child === g.userData.cloak) {
+      g.remove(child); child.position.y -= 0.80; chestCarrier.add(child)
+    }
+  }
+  g.add(core.mesh)
+  // the animator finds the same names it always knew — now they are bones
+  core.shL.userData.joint = core.fkL
+  core.shR.userData.joint = core.fkR
+  core.thL.userData.joint = core.snL
+  core.thR.userData.joint = core.snR
+  g.userData.arms = [core.shL, core.shR]
+  g.userData.legs = [core.thL, core.thR]
+  g.userData.torso = core.spine
+  g.userData.headGrp = headGrp
+  g.__skinnedMat = core.mat
+  g.__spineBone = core.spine
+  // plate recolors the CLOTH vertices and only those: the skin stays skin
+  const colAttr = core.merged.attributes.color
+  const tunicRGB = [tunic.r, tunic.g, tunic.b]
+  g.userData.setPlate = (hex) => {
+    const c = new THREE.Color(hex ?? 0)
+    const [r2, g2, b2] = hex == null ? tunicRGB : [c.r, c.g, c.b]
+    for (const [a, b] of core.plateRanges)
+      for (let i = a; i < b; i++) { colAttr.setXYZ(i, r2, g2, b2) }
+    colAttr.needsUpdate = true
+  }
+  // proportion is a fact about a key, not a costume
+  g.scale.setScalar(0.96 + ((hv >>> 13) % 10) / 90)
+  g.__sewn = true
+  return g
+}
+
 function animateBeing(g, thing, id, dt, now, t) {
   const an = g.userData.an
   if (!an || !thing) return
@@ -3371,6 +3780,30 @@ function animateBeing(g, thing, id, dt, now, t) {
 
   // beasts first: fewer bones, same intent
   if (!g.__adventurer) {
+    if (g.__quad) { // the sewn quadruped: diagonal pairs, a tail of moods
+      const q = g.__quad
+      const gaitPh = an.ph * 1.15
+      const pairs = [0, Math.PI, Math.PI, 0] // FL+BR against FR+BL
+      for (let li = 0; li < 4; li++) {
+        const s6 = Math.sin(gaitPh + pairs[li])
+        q.legsQ[li][0].rotation.x = s6 * 0.55 * mvA
+        q.legsQ[li][1].rotation.x = Math.max(0, -s6) * 0.9 * mvA
+      }
+      q.hips.position.y = q.bodyH + Math.abs(Math.cos(gaitPh)) * 0.03 * mvA
+      q.chest.rotation.x = mvA * 0.05 + Math.sin(now / 900 + an.seed) * 0.02 * (1 - mvA) // breath in the ribs
+      const wag = (g.userData.act ? 2.2 : mvA * 1.4 + 0.3)
+      q.tail1.rotation.y = Math.sin(t * wag * 2.2 + an.seed) * (q.wolf ? 0.35 : 0.15)
+      q.tail2.rotation.y = Math.sin(t * wag * 2.2 + an.seed - 0.6) * (q.wolf ? 0.4 : 0.18)
+      q.neck.rotation.x = -mvA * 0.12 + Math.sin(now / 1400 + an.seed) * 0.05 * (1 - mvA)
+      const hitK2 = Math.max(0, 1 - (now - (g.__hurtAt ?? -1e9)) / 160)
+      if (hitK2 > 0) g.rotation.x = -hitK2 * 0.12
+      else g.rotation.x = 0
+      g.position.y += Math.abs(Math.cos(gaitPh)) * 0.03 * mvA
+      return
+    }
+    if (g.__spineRest !== undefined) { // sewn goblin & troll: the hunch breathes
+      ;(g.__spineBone).rotation.x = g.__spineRest + Math.sin(now / 800 + an.seed) * 0.03
+    }
     if (g.userData.legs4) for (let li = 0; li < 4; li++)
       g.userData.legs4[li].rotation.x = moving ? Math.sin(now / 130 + li * Math.PI / 2) * 0.6 : 0
     if (g.userData.hunch) g.userData.hunch.rotation.x = 0.32 + Math.sin(now / 700 + g.position.x) * 0.04
@@ -3487,7 +3920,7 @@ function animateBeing(g, thing, id, dt, now, t) {
   g.userData.torso.rotation.x = an.lean * 0.6
   g.userData.torso.rotation.z = an.roll + Math.sin(now / 2600 + an.seed) * 0.015 * (1 - mvA)
   const hitK = Math.max(0, 1 - (now - (g.__hurtAt ?? -1e9)) / 160)
-  g.userData.torso.material.emissive.setScalar(hitK * 0.55)
+  ;(g.__skinnedMat ?? g.userData.torso.material)?.emissive.setScalar(hitK * 0.55)
   if (hitK > 0) {
     const fl2 = hitK * 0.045
     g.position.x -= Math.sin(g.rotation.y) * fl2
@@ -3560,7 +3993,7 @@ function animateBeing(g, thing, id, dt, now, t) {
     hg.rotation.y = an.hYaw
     hg.rotation.x = an.hPit + Math.abs(Math.cos(an.ph + 0.5)) * 0.02 * mvA
   }
-  g.userData.torso.scale.y = 1 + Math.sin(now / 900 + g.position.x) * 0.015
+  ;(g.__spineBone ?? g.userData.torso).scale.y = 1 + Math.sin(now / 900 + g.position.x) * 0.015
   if (g.userData.cloak) g.userData.cloak.rotation.x = 0.08 + mvA * (0.26 + Math.sin(an.ph * 2) * 0.05) + Math.sin(now / 1100) * 0.03 * (1 - mvA)
 
   // the job puts its tool in the hand; the wielded thing obeys the contract
@@ -3583,7 +4016,9 @@ function animateBeing(g, thing, id, dt, now, t) {
   g.userData.hair.visible = !hd
   const bd = thing.equipment?.body?.item
   const plateC = bd === 'star-plate' ? 0x5cb8d9 : bd === 'bronze-plate' ? 0xa3743a : null
-  if (plateC) { g.userData.torso.material.color.set(plateC); g.userData.shoulders.material.color.set(plateC) }
+  if (g.userData.setPlate) {
+    if (g.__plateNow !== plateC) { g.__plateNow = plateC; g.userData.setPlate(plateC) }
+  } else if (plateC) { g.userData.torso.material.color.set(plateC); g.userData.shoulders.material.color.set(plateC) }
   else { g.userData.torso.material.color.copy(g.userData.tunic); g.userData.shoulders.material.color.copy(g.userData.tunic) }
 
   // fine parts step back at distance: the LOD the deep window keeps
@@ -3672,7 +4107,7 @@ function syncAll(s) {
     let g = vis.mob.get(id)
     if (!g) {
       const [c, sc] = MOB_LOOK[m.type] ?? [0x8a5a5a, 0.7]
-      g = makeBeast(id, m.type) // the deep window's beasts, same joints
+      g = SEWN_SKIN ? makeSewnBeast(id, m.type) : makeBeast(id, m.type) // sewn hide, hinged bones for the boneless-by-rights
       g.userData = { kind: 'mob', id, type: m.type, tx: m.x, ty: m.y, fx0: m.x, fy0: m.y, moveAt: 0 }
       g.traverse((o) => { o.userData.kind = 'mob'; o.userData.id = id })
       const lb = label(m.type + ' · ' + m.hp); lb.position.y = 1.6
@@ -3709,7 +4144,7 @@ function syncAll(s) {
     if (!g) {
       // every citizen wears a color spun from their own key — the crowd
       // stops being one blue and starts being a crowd
-      g = makeAdventurer(id) // the deep window's people, under this light
+      g = SEWN_SKIN ? makeSkinnedAdventurer(id) : makeAdventurer(id) // sewn skin, or the hinged original
       g.userData = { kind: 'player', id, tx: p.x, ty: p.y, fx0: p.x, fy0: p.y, moveAt: 0 }
       g.traverse((o) => { o.userData.kind = 'player'; o.userData.id = id })
       g.position.set(wx(p.x), groundYAt(p.x, p.y), wz(p.y))
