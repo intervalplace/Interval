@@ -3547,6 +3547,20 @@ function makeBeast(id, type) {
 }
 
 // ---- the celebration: pools, rockets, the banner, the fanfare ----
+// (the glow the pools breathe through: the one texture the port left
+// behind in the deluxe window — a soft radial white, synthesized like
+// everything else)
+function softTex(inner, mid) {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64
+  const g2 = c.getContext('2d')
+  const gr = g2.createRadialGradient(32, 32, 0, 32, 32, 32)
+  gr.addColorStop(0, inner ?? 'rgba(255,255,255,1)')
+  gr.addColorStop(0.4, mid ?? 'rgba(255,255,255,.45)')
+  gr.addColorStop(1, 'rgba(255,255,255,0)')
+  g2.fillStyle = gr; g2.fillRect(0, 0, 64, 64)
+  return new THREE.CanvasTexture(c)
+}
+const GLOW_TEX = softTex()
 function makePool(n, color, blending) {
   const items = []
   for (let i = 0; i < n; i++) {
