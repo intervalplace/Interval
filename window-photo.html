@@ -4571,7 +4571,7 @@ function syncAll(s) {
     liveP.add(id)
     let g = vis.player.get(id)
     const nm = (p.name ?? '') || id.slice(0, 6)
-    const cap = nm + ' · ' + p.hp
+    const cap = nm + ' · ' + callingOf(p) + ' (' + standingOf(p) + ')'
     if (!g) {
       // every citizen wears a color spun from their own key — the crowd
       // stops being one blue and starts being a crowd
@@ -4802,8 +4802,17 @@ function actOnTick() {
   if (workTarget) {
     const n = world.nodes?.[workTarget]
     if (!n) { workTarget = null; return }
-    if (Math.abs(n.x - me.x) + Math.abs(n.y - me.y) <= 1) {
-      if (!me.action && (n.depletedUntil ?? 0) <= world.tick) send({ do: 'gather', nodeId: workTarget })
+    const beside = Math.abs(n.x - me.x) + Math.abs(n.y - me.y) <= 1
+    if (beside && (n.depletedUntil ?? 0) > world.tick) {
+      // the order was for the node, not for its afterlife: when the
+      // thing you were working runs out, the work is DONE — not paused
+      // until it regrows into an eternity of unattended farming
+      workTarget = null
+      feed('the ' + n.type + ' is spent; the work is done')
+      return
+    }
+    if (beside) {
+      if (!me.action) send({ do: 'gather', nodeId: workTarget })
     } else stepToward(n.x, n.y, true)
     return
   }
@@ -4909,6 +4918,7 @@ function renderPack() {
 const SKILL_LIST = ['woodcutting', 'mining', 'fishing', 'cooking', 'smithing', 'firemaking',
   'prayer', 'ranged', 'magic', 'farming', 'fletching', 'attack', 'defence', 'hitpoints',
   'exploration', 'brewing']
+// (calling & standing read via the engine mirror already ported above)
 let lastSkillSig = ''
 function renderSkills() {
   if (skillsEl.style.display !== 'block') return
@@ -4917,6 +4927,10 @@ function renderSkills() {
   if (sig === lastSkillSig) return
   lastSkillSig = sig
   skillsEl.innerHTML = ''
+  const ttl = document.createElement('div'); ttl.className = 'tot'
+  ttl.textContent = callingOf(me) + ' · standing ' + standingOf(me)
+  ttl.style.color = 'var(--gold)'
+  skillsEl.appendChild(ttl)
   let total = 0
   for (const sk of SKILL_LIST) {
     const xp = me?.skills?.[sk] ?? 0
@@ -5206,6 +5220,11 @@ ws.onmessage = (ev) => {
       // the body reports its own news: a grunt when struck, a fall when done
       if (meN && meO && (meN.hp ?? 0) < (meO.hp ?? 0)) sndX((meN.hp ?? 0) <= 0 ? 'death' : 'hurt')
       if (meO && !meN && (meO.hp ?? 0) > 0) sndX('death')
+      // death cancels every standing order: the next life wakes at the
+      // spawn UNBOUND, not mid-march back to the wolf that ended it
+      const died = (meO && !meN && (meO.hp ?? 0) > 0)
+        || (meN && meO && (meN.hp ?? 0) <= 0 && (meO.hp ?? 0) > 0)
+      if (died) { huntTarget = null; workTarget = null; walkGoal = null; holdWalk = false }
       for (const [pid2, pN] of Object.entries(m.state.players)) {
         const pO = prevWorld.players[pid2]
         if (!pN?.skills || !pO?.skills) continue
@@ -6109,8 +6128,8 @@ function frame() {
       else if (now - localePendAt > 2500) { lastLocale = rn; showTitle('you come to', rn) }
     } else localePend = ''
     const rEl = document.getElementById('region')
-    const txt = (rn ? rn + ' · ' : '') + 'hp ' + me.hp + (me.gold ? ' · ' + me.gold + 'g' : '')
-      + (me.action ? ' · ' + me.action.type : '')
+    const txt = (rn ? rn + ' · ' : '') + callingOf(me) + ' (' + standingOf(me) + ') · hp ' + me.hp
+      + (me.gold ? ' · ' + me.gold + 'g' : '') + (me.action ? ' · ' + me.action.type : '')
     if (rEl.textContent !== txt) rEl.textContent = txt
   }
   composer.render()
