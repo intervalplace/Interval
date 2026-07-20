@@ -248,6 +248,22 @@
     font: 600 11px ui-monospace, monospace }
   #tunestats { margin-top: 8px; font-size: 11px; color: var(--dim) }
   #pack { display: none; grid-template-columns: repeat(4, 1fr); gap: 4px; padding-bottom: 6px }
+  #sheet { display: none; position: fixed; left: 50%; bottom: calc(120px + env(safe-area-inset-bottom));
+    transform: translateX(-50%); z-index: 8; min-width: 224px; max-width: 320px; padding: 10px 12px;
+    border-radius: 12px; border: 1px solid rgba(226,182,62,.4); background: rgba(12,11,9,.95) }
+  #sheet h4 { margin: 0 0 4px; color: var(--gold); font-size: 13px; font-weight: 600; letter-spacing: .06em }
+  #sheet button { display: block; width: 100%; margin-top: 6px; padding: 9px 10px; border-radius: 8px;
+    border: 1px solid rgba(226,182,62,.3); background: none; color: var(--parch);
+    font: inherit; font-size: 13px; text-align: left }
+  #sheet button:disabled { opacity: .38 }
+  #sheet button.cancel { color: var(--dim); text-align: center; border-color: rgba(226,182,62,.15) }
+  #skillsEl { display: none; padding-bottom: 6px; max-height: 40vh; overflow-y: auto }
+  #skillsEl .sk { display: flex; align-items: center; gap: 8px; padding: 4px 2px; font-size: 12px; color: var(--parch) }
+  #skillsEl .sk b { width: 92px; font-weight: 400; color: var(--dim) }
+  #skillsEl .sk i { font-style: normal; width: 24px; text-align: right; color: var(--gold) }
+  #skillsEl .bar { flex: 1; height: 5px; border-radius: 3px; background: rgba(226,182,62,.12); overflow: hidden }
+  #skillsEl .bar div { height: 100%; background: var(--gold); opacity: .7 }
+  #skillsEl .tot { padding: 6px 2px 2px; font-size: 11px; color: var(--dim); letter-spacing: .06em }
   @media (min-width: 700px) { #pack { grid-template-columns: repeat(7, 1fr) } }
   #pack button { min-height: 40px; padding: 4px 6px; color: var(--parch); font-weight: 400;
     font-size: 12px; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis }
@@ -333,14 +349,15 @@
 <div id="feed"></div>
 <div id="bar">
   <div id="pack"></div>
+  <div id="skillsEl"></div>
   <div id="chatrow"><input id="chatinput" placeholder="say something (80 chars)…" maxlength="80"><button id="chatsend">SAY</button></div>
   <div id="verbs">
-    <button data-v="pack">PACK</button><button data-v="eat">EAT</button><button data-v="cook">COOK</button>
-    <button data-v="wield">WIELD</button><button data-v="drop">DROP</button><button data-v="light">LIGHT</button>
-    <button data-v="bury">BURY</button><button data-v="take">TAKE</button><button data-v="chat">CHAT</button>
+    <button data-v="pack">PACK</button><button data-v="skills">SKILLS</button>
+    <button data-v="take">TAKE</button><button data-v="chat">CHAT</button>
     <button data-v="pov">POV</button><button data-v="fx">FX</button><button data-v="tune">TUNE</button><button data-v="cine">CINE</button><button data-v="shot">&#128247;</button>
   </div>
 </div>
+<div id="sheet"></div>
 <div id="tune"></div>
 <div id="cinex">&#10005;</div>
 <div id="locale"></div>
@@ -4801,9 +4818,75 @@ function actOnTick() {
   }
 }
 
-// ---- the pack and the verbs ----
+// ---- the pack and the verbs: ITEM-FIRST now. The old design made you
+// speak like a verb table ('LIGHT... which thing?'); people think the
+// other way around ('logs... what can I do with these?'). So tapping a
+// thing opens a sheet of everything the constitution allows done with
+// it, right now, right here — context verbs included: the sheet knows
+// whether a fire, a plot, a store, a bank, or a watchfire stands
+// beside you, and says so on the button. ----
 const packEl = document.getElementById('pack')
+const sheetEl = document.getElementById('sheet')
+const skillsEl = document.getElementById('skillsEl')
 let selSlot = -1, lastInvSig = ''
+const EQUIP_SET = new Set(['bronze-dagger', 'bronze-spear', 'bronze-maul', 'star-spear', 'star-maul',
+  'bronze-sword', 'bronze-hatchet', 'bronze-pickaxe', 'bronze-helm', 'bronze-plate',
+  'star-sword', 'star-helm', 'star-plate', 'star-dagger', 'wooden-bow', 'horn-bow', 'old-chain'])
+function nearNodeEnt(types, pred) { // [id, node] of an adjacent node of type, or null
+  const set = types instanceof Set ? types : new Set([types])
+  const me = world?.players?.[ownKey?.pub]; if (!me) return null
+  for (const [nid, n] of Object.entries(world?.nodes ?? {}))
+    if (set.has(n.type) && Math.abs(n.x - me.x) <= 1 && Math.abs(n.y - me.y) <= 1 && (!pred || pred(n)))
+      return [nid, n]
+  return null
+}
+function openSheet(slot) {
+  const me = world?.players?.[ownKey?.pub]
+  const sl = me?.inventory?.[slot]; if (!sl) return
+  const it = sl.item
+  const acts = [] // [key, label, enabled]
+  if (['cooked-fish', 'ale', 'broth'].includes(it)) acts.push(['eat', 'eat', true])
+  if (it === 'raw-fish') { const f = nearNodeEnt(new Set(['campfire', 'fire']))
+    acts.push(['cook', f ? 'cook on the fire' : 'cook — find a fire', !!f]) }
+  if (it === 'logs') {
+    acts.push(['light', 'light a fire', true], ['fletch-bow', 'fletch a bow', true])
+    if (nearNodeEnt('watchfire')) acts.push(['stoke', 'stoke the watchfire', true])
+  }
+  if (it === 'bones') acts.push(['bury', 'bury', true], ['fletch-arrows', 'fletch arrows', true])
+  if (it === 'seeds') { const pl = nearNodeEnt('plot', (n) => !n.plantedAt)
+    acts.push(['plant', pl ? 'plant in the plot' : 'plant — find an empty plot', !!pl]) }
+  if (/^chart:/i.test(it)) acts.push(['read_chart', 'read the chart', true])
+  if (EQUIP_SET.has(it)) acts.push(['wield', 'wield', true])
+  if (nearNodeEnt('store')) acts.push(['sell', 'sell at the store', true])
+  if (nearNodeEnt('bank')) acts.push(['deposit', 'deposit at the bank', true])
+  acts.push(['drop', 'drop', true])
+  sheetEl.innerHTML = ''
+  const h4 = document.createElement('h4')
+  h4.textContent = it + (sl.qty > 1 ? ' ×' + sl.qty : '')
+  sheetEl.appendChild(h4)
+  for (const [key, lbl, ok] of acts) {
+    const b = document.createElement('button')
+    b.textContent = lbl; b.disabled = !ok
+    b.onclick = () => doItem(slot, key)
+    sheetEl.appendChild(b)
+  }
+  const c = document.createElement('button')
+  c.textContent = 'never mind'; c.className = 'cancel'
+  c.onclick = () => { sheetEl.style.display = 'none'; selSlot = -1; lastInvSig = '' }
+  sheetEl.appendChild(c)
+  sheetEl.style.display = 'block'
+  selSlot = slot; lastInvSig = ''
+}
+function doItem(slot, key) {
+  if (key === 'fletch-bow') send({ do: 'fletch', slot, make: 'bow' })
+  else if (key === 'fletch-arrows') send({ do: 'fletch', slot, make: 'arrows' })
+  else if (key === 'stoke') { const wf = nearNodeEnt('watchfire'); if (wf) send({ do: 'stoke', slot, nodeId: wf[0] }) }
+  else send({ do: key, slot })
+  if (key === 'eat') sndX('eat') // the hands are audible too
+  else if (['wield', 'drop', 'bury'].includes(key)) sndX('pickup')
+  sheetEl.style.display = 'none'
+  selSlot = -1; lastInvSig = ''
+}
 function renderPack() {
   const me = world?.players?.[ownKey?.pub]
   const inv = me?.inventory ?? []
@@ -4816,9 +4899,42 @@ function renderPack() {
     const s = inv[i]
     b.textContent = s?.item ? s.item + (s.qty > 1 ? ' ×' + s.qty : '') : '·'
     if (i === selSlot) b.className = 'sel'
-    b.onclick = () => { selSlot = selSlot === i ? -1 : i; lastInvSig = '' }
+    b.onclick = () => { if (inv[i]) openSheet(i) }
     packEl.appendChild(b)
   }
+}
+// ---- the ledger of the self, on demand: every calling, its level, and
+// how far the next one stands. The bars use the same constitutional
+// XP table the fireworks do. ----
+const SKILL_LIST = ['woodcutting', 'mining', 'fishing', 'cooking', 'smithing', 'firemaking',
+  'prayer', 'ranged', 'magic', 'farming', 'fletching', 'attack', 'defence', 'hitpoints',
+  'exploration', 'brewing']
+let lastSkillSig = ''
+function renderSkills() {
+  if (skillsEl.style.display !== 'block') return
+  const me = world?.players?.[ownKey?.pub]
+  const sig = JSON.stringify(me?.skills ?? {})
+  if (sig === lastSkillSig) return
+  lastSkillSig = sig
+  skillsEl.innerHTML = ''
+  let total = 0
+  for (const sk of SKILL_LIST) {
+    const xp = me?.skills?.[sk] ?? 0
+    const lvl = XP_LVL(xp); total += lvl
+    const a2 = XP_AT(lvl), b2 = XP_AT(lvl + 1)
+    const pct = b2 > a2 ? Math.min(1, (xp - a2) / (b2 - a2)) : 1
+    const row = document.createElement('div'); row.className = 'sk'
+    const nm = document.createElement('b'); nm.textContent = sk
+    const bar = document.createElement('div'); bar.className = 'bar'
+    const fill = document.createElement('div'); fill.style.width = (pct * 100).toFixed(0) + '%'
+    bar.appendChild(fill)
+    const lv = document.createElement('i'); lv.textContent = lvl
+    row.appendChild(nm); row.appendChild(bar); row.appendChild(lv)
+    skillsEl.appendChild(row)
+  }
+  const tot = document.createElement('div'); tot.className = 'tot'
+  tot.textContent = 'total level ' + total
+  skillsEl.appendChild(tot)
 }
 // CINE: the frame with nothing on it. Every scrap of interface steps
 // out; the labels hold their breath; the camera drifts like it's being
@@ -4939,7 +5055,19 @@ const chatrow = document.getElementById('chatrow')
 document.getElementById('verbs').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-v]'); if (!b) return
   const v = b.dataset.v
-  if (v === 'pack') { packEl.style.display = packEl.style.display === 'grid' ? 'none' : 'grid'; return }
+  if (v === 'pack') {
+    const on = packEl.style.display !== 'grid'
+    packEl.style.display = on ? 'grid' : 'none'
+    skillsEl.style.display = 'none'; sheetEl.style.display = 'none'
+    return
+  }
+  if (v === 'skills') {
+    const on = skillsEl.style.display !== 'block'
+    skillsEl.style.display = on ? 'block' : 'none'
+    packEl.style.display = 'none'; sheetEl.style.display = 'none'
+    lastSkillSig = ''
+    return
+  }
   if (v === 'chat') { chatrow.style.display = chatrow.style.display === 'flex' ? 'none' : 'flex'
     if (chatrow.style.display === 'flex') document.getElementById('chatinput').focus(); return }
   if (v === 'pov') {
@@ -5028,11 +5156,6 @@ document.getElementById('verbs').addEventListener('click', (e) => {
     feed('nothing at your feet')
     return
   }
-  if (selSlot < 0) { feed('open PACK and choose a slot first'); packEl.style.display = 'grid'; return }
-  send({ do: v, slot: selSlot })
-  if (v === 'eat') sndX('eat') // the hands are audible too
-  else if (v === 'wield' || v === 'drop' || v === 'bury') sndX('pickup')
-  selSlot = -1; lastInvSig = ''
 })
 const chatgo = () => { const inp = document.getElementById('chatinput')
   if (inp.value.trim()) sendChat(inp.value.trim()); inp.value = ''; chatrow.style.display = 'none' }
@@ -5069,16 +5192,37 @@ ws.onmessage = (ev) => {
     }
     syncAll(m.state)
     tickTheater(m.state)
-    // a level won is a public holiday of one: banner, rockets, THE fanfare
+    // a level won is a public holiday — and no longer a holiday of one.
+    // Everyone's skills already ride the state every tick, so every
+    // window can see ANY citizen's level cross, at their true position,
+    // in perfect agreement. Your own gets the full ceremony: banner,
+    // rockets over your head, THE fanfare. A stranger's gets rockets
+    // over THEIR head, the fanfare from their true direction fading
+    // with distance, and a line in the feed — so standing in the
+    // village you sometimes see fireworks go up across the meadow and
+    // know that someone, somewhere, just got better at something.
     if (ownKey && prevWorld?.players) {
       const meN = m.state.players[ownKey.pub], meO = prevWorld.players[ownKey.pub]
       // the body reports its own news: a grunt when struck, a fall when done
       if (meN && meO && (meN.hp ?? 0) < (meO.hp ?? 0)) sndX((meN.hp ?? 0) <= 0 ? 'death' : 'hurt')
       if (meO && !meN && (meO.hp ?? 0) > 0) sndX('death')
-      if (meN?.skills && meO?.skills) {
-        for (const k2 of Object.keys(meN.skills)) {
-          const l1 = XP_LVL(meO.skills[k2] ?? 0), l2 = XP_LVL(meN.skills[k2] ?? 0)
-          if (l2 > l1) { ensurePools(); celebrateLevel(k2, l2) }
+      for (const [pid2, pN] of Object.entries(m.state.players)) {
+        const pO = prevWorld.players[pid2]
+        if (!pN?.skills || !pO?.skills) continue
+        for (const k2 of Object.keys(pN.skills)) {
+          const l1 = XP_LVL(pO.skills[k2] ?? 0), l2 = XP_LVL(pN.skills[k2] ?? 0)
+          if (l2 <= l1) continue
+          ensurePools()
+          if (pid2 === ownKey.pub) { celebrateLevel(k2, l2); continue }
+          // a neighbor's triumph, witnessed from where you stand
+          const gv2 = vis.player.get(pid2)
+          const px4 = gv2 ? gv2.position.x : wx(pN.x), pz4 = gv2 ? gv2.position.z : wz(pN.y)
+          const py4 = gv2 ? gv2.position.y : groundYAt(pN.x, pN.y)
+          if (Math.hypot(px4 - camera.position.x, pz4 - camera.position.z) > 70) continue
+          const who = (pN.name ?? '') || pid2.slice(0, 6)
+          feed('\u269C ' + who + "'s " + k2 + ' rises to ' + l2)
+          fireworksAt(V3TMP.set(px4, py4, pz4))
+          sndX('level', { x: px4, y: py4, z: pz4 })
         }
       }
     }
@@ -5093,6 +5237,7 @@ ws.onmessage = (ev) => {
       }
     }
     renderPack()
+    renderSkills()
     if (world.tick !== lastActed) { lastActed = world.tick; if (entered) actOnTick() }
   }
   if (m.type === 'chat') {
