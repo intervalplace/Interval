@@ -180,6 +180,26 @@
      catchlight), and citizen skin took a sheen apart from the weave
      of the cloth. Realistic world, stylized figures, honest motion —
      the valley is for other engines to fall into.
+     And then the CINEMA round — three departments the frame was still
+     missing. The camera department: CINE now hands the camera to a
+     DIRECTOR who watches the scene and hard-cuts between composed
+     shots every six to nine seconds — a low dolly through the grass, a
+     crane from the boots to the rooftops, a lead shot sliding across a
+     walking face, a 22-degree long lens compressing the meadow from
+     thirty meters, a low-angle sky frame, a slow orbit of the hearth,
+     a tight arc around a fight the moment one starts — each cut
+     landing with its own focal length, terrain-clamped, tracking live,
+     while you keep playing inside the frame. The titles department:
+     places announce themselves in wide-tracked type rising from the
+     lower third ('you come to · THE MEADOWS'), and every dawn gets a
+     date card subtitled by the constitutional season, one soft plucked
+     note under each. The lens department: true internal-reflection
+     GHOSTS walk the optical axis when something genuinely hot is in
+     frame — a cool ghost past center, a warm one beyond, a green fleck
+     far out, a halo ring at fixed radius, all image-driven so only
+     real highlights ghost (fader fourteen on the bench) — and in CINE
+     the gate WEAVES a third of a pixel on a film gate's slow drift,
+     which is most of why footage feels shot rather than computed.
      Zero assets: every texture is synthesized on a canvas at load.
      Optional: ?hdri=<url-to-.hdr> swaps the procedural sky for a real
      captured one (Poly Haven HDRIs are CC0 and work when the host
@@ -247,6 +267,12 @@
     transition: box-shadow .25s, background .25s }
   #splash button:hover, #splash button:active { background: rgba(226,182,62,.12);
     box-shadow: 0 0 22px rgba(226,182,62,.28) }
+  #locale { position: fixed; left: 0; right: 0; bottom: 23%; text-align: center; z-index: 6;
+    pointer-events: none; opacity: 0; transition: opacity 2.4s ease }
+  #locale .over { font-size: 11px; letter-spacing: .5em; color: var(--dim);
+    text-transform: uppercase; margin-bottom: 10px; padding-left: .5em }
+  #locale .name { font-size: 30px; letter-spacing: .42em; color: #eee6cf; font-weight: 600;
+    padding-left: .42em; text-shadow: 0 2px 26px rgba(0,0,0,.85), 0 0 60px rgba(0,0,0,.5) }
   #cinex { position: fixed; top: calc(10px + env(safe-area-inset-top)); right: 10px; z-index: 30;
     width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(226,182,62,.5);
     color: var(--gold); background: rgba(12,11,9,.45); display: none; align-items: center;
@@ -317,6 +343,7 @@
 </div>
 <div id="tune"></div>
 <div id="cinex">&#10005;</div>
+<div id="locale"></div>
 <div id="lbT" class="lb"></div><div id="lbB" class="lb"></div>
 <div id="shutter"></div>
 <div id="splash">
@@ -398,7 +425,7 @@ addEventListener('error', (e) => feed('[err] ' + (e.message ?? e.type)))
 // on this device, COPY hands the whole state to whoever holds the
 // source so the argument can be settled in the file. ----
 const TUNE_DEF = { expo: 1, bloom: 1, sharp: 1, dof: 1, vol: 1, volDens: 1,
-  cloud: 1, cover: 0, mist: 1, scatter: 1, foam: 1, wet: 1, rim: 1 }
+  cloud: 1, cover: 0, mist: 1, scatter: 1, foam: 1, wet: 1, rim: 1, ghost: 1 }
 const TUNE = { ...TUNE_DEF }
 try { Object.assign(TUNE, JSON.parse(localStorage.getItem('interval-tune') || '{}')) } catch {}
 
@@ -986,6 +1013,40 @@ if (!MOBILE) {
   composer.addPass(dof)
 }
 composer.addPass(new OutputPass())
+// the lens confesses the rest of it: when something genuinely hot sits
+// in frame — the sun, the bolt, a hearth window at night — internal
+// reflections walk the optical axis as GHOSTS: a cool one past center,
+// a warm one beyond it, a green fleck far out, and a halo ring smeared
+// at fixed radius. All image-driven, so only true highlights ghost.
+// And in CINE the gate WEAVES: the whole frame wanders a third of a
+// pixel on the slow drift of a mechanical film gate, which is most of
+// why footage feels shot rather than computed.
+const lensPass = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uAmt: { value: 0 }, uWeave: { value: new THREE.Vector2(0, 0) } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: `varying vec2 vUv; uniform sampler2D tDiffuse; uniform float uAmt; uniform vec2 uWeave;
+    vec3 gtap(vec2 uv, float th) {
+      vec3 c = texture2D(tDiffuse, uv).rgb;
+      return c * smoothstep(th, 1., max(c.r, max(c.g, c.b)));
+    }
+    void main(){
+      vec2 uv = vUv + uWeave;
+      vec3 col = texture2D(tDiffuse, uv).rgb;
+      if (uAmt > .002) {
+        vec2 cv = vec2(.5) - uv;
+        vec3 gh = vec3(0.);
+        gh += gtap(uv + cv * 0.66, .82) * vec3(.5, .75, 1.) * .5;
+        gh += gtap(uv + cv * 1.32, .85) * vec3(1., .62, .38) * .4;
+        gh += gtap(uv + cv * 2.15, .88) * vec3(.55, 1., .6) * .3;
+        gh += gtap(vec2(.5) - cv * .38, .8) * vec3(1., .8, .55) * .35;
+        vec2 hv = uv + normalize(cv + 1e-6) * .42;
+        float hw = pow(max(0., 1. - length(vec2(.5) - hv) * 2.), 3.);
+        gh += gtap(hv, .84) * vec3(.7, .85, 1.) * hw * .6;
+        col += gh * uAmt * smoothstep(1.2, .25, length(cv) * 2.);
+      }
+      gl_FragColor = vec4(col, 1.);
+    }` })
+composer.addPass(lensPass)
 // the darkroom: a last pass over the developed frame — vignette, grain,
 // a breath of chromatic fringe at the edges, a nudge of saturation.
 // This is where 'render' becomes 'photograph'.
@@ -3728,7 +3789,7 @@ function makeSkinnedAdventurer(id) {
       || child === oldArms[0] || child === oldArms[1]
       || child === oldLegs[0] || child === oldLegs[1]) { g.remove(child); continue }
     if (child.geometry && yOf(child) < 0.5 && yOf(child) > 0.3) { // belt, buckle, hips trim
-      g.remove(child); child.position.y -= 0.40; hipCarrier.add(child); continue
+      g.remove(child); hipCarrier.add(child); continue
     }
     if (child.geometry || child.userData === undefined) continue
   }
@@ -3739,9 +3800,9 @@ function makeSkinnedAdventurer(id) {
     // the rigid neck dies inside the sewn one: no two throats
     if (child.geometry?.type === 'CylinderGeometry' && Math.abs(child.position.y - 0.95) < 0.001) { g.remove(child); continue }
     if (!child.isBone && child !== core.mesh && child.position && child.position.y >= 0.5 && child.position.y <= 0.95 && !child.isGroup) {
-      g.remove(child); child.position.y -= 0.80; chestCarrier.add(child)
+      g.remove(child); chestCarrier.add(child)
     } else if (child === g.userData.cloak) {
-      g.remove(child); child.position.y -= 0.80; chestCarrier.add(child)
+      g.remove(child); chestCarrier.add(child)
     }
   }
   g.add(core.mesh)
@@ -4115,7 +4176,7 @@ function syncAll(s) {
     if (!g) {
       const [c, sc] = MOB_LOOK[m.type] ?? [0x8a5a5a, 0.7]
       g = SEWN_SKIN ? makeSewnBeast(id, m.type) : makeBeast(id, m.type) // sewn hide, hinged bones for the boneless-by-rights
-      g.userData = { kind: 'mob', id, type: m.type, tx: m.x, ty: m.y, fx0: m.x, fy0: m.y, moveAt: 0 }
+      Object.assign(g.userData, { kind: 'mob', id, type: m.type, tx: m.x, ty: m.y, fx0: m.x, fy0: m.y, moveAt: 0 })
       g.traverse((o) => { o.userData.kind = 'mob'; o.userData.id = id })
       const lb = label(m.type + ' · ' + m.hp); lb.position.y = 1.6
       lb.userData.kind = 'mob'; lb.userData.id = id // the nameplate is the mob, as far as a finger cares
@@ -4152,7 +4213,7 @@ function syncAll(s) {
       // every citizen wears a color spun from their own key — the crowd
       // stops being one blue and starts being a crowd
       g = SEWN_SKIN ? makeSkinnedAdventurer(id) : makeAdventurer(id) // sewn skin, or the hinged original
-      g.userData = { kind: 'player', id, tx: p.x, ty: p.y, fx0: p.x, fy0: p.y, moveAt: 0 }
+      Object.assign(g.userData, { kind: 'player', id, tx: p.x, ty: p.y, fx0: p.x, fy0: p.y, moveAt: 0 })
       g.traverse((o) => { o.userData.kind = 'player'; o.userData.id = id })
       g.position.set(wx(p.x), groundYAt(p.x, p.y), wz(p.y))
       if (povMode && id === ownKey?.pub) g.visible = false
@@ -4418,10 +4479,111 @@ function renderPack() {
 // held rather than worn. For screenshots, screen recordings, and
 // standing at a window for its own sake. The ✕ brings the world back.
 let cine = false, cineAmt = 0
+// ---- THE DIRECTOR: CINE stops being a hidden UI and becomes actual
+// cinematography. A director watches the scene — is there a hearth
+// close by? is the citizen walking? fighting? is it deep night? — and
+// CUTS between composed shots every six to nine seconds: a low lateral
+// dolly through the grass, a crane that starts at the boots and rises
+// to the rooftops, a lead shot backing away in front of a walking
+// face, a 22-degree long lens compressing the meadow from thirty
+// meters, a low-angle sky frame that silhouettes the subject, a slow
+// orbit of the fire, a tight urgent arc around a fight. Hard cuts,
+// per-shot focal lengths, terrain-clamped, tracking live. You keep
+// playing; the director keeps filming. ----
+let dirShot = null
+const dirGroundY = (x2, z2) => groundYAt(x2 + W / 2 - 0.5, z2 + H / 2 - 0.5)
+function pickShot(nowMs, focusV, fighting, walking, nightish) {
+  let fire = null, fd = 1e9
+  for (const g of vis.node.values())
+    if (g.userData.fireLight) { const d2 = g.position.distanceTo(focusV); if (d2 < fd) { fd = d2; fire = g } }
+  const mobT = huntTarget ? vis.mob.get(huntTarget) : null
+  const az = Math.random() * Math.PI * 2
+  const r = Math.random()
+  const type = (fighting && mobT) ? 'arena'
+    : (fire && fd < 11 && r < 0.4) ? 'hearth'
+    : (walking && r < 0.55) ? 'lead'
+    : (nightish && r < 0.3) ? 'low'
+    : r < 0.3 ? 'crane' : r < 0.62 ? 'dolly' : r < 0.86 ? 'long' : 'low'
+  const S = { type, t0: nowMs, az, dur: 8000, fov: 36 }
+  if (type === 'dolly') { S.dur = 8000; S.fov = 34; S.azB = az + (r < 0.5 ? 0.55 : -0.55) }
+  if (type === 'crane') { S.dur = 9000; S.fov = 42 }
+  if (type === 'lead') { S.dur = 7000; S.fov = 30 }
+  if (type === 'long') { S.dur = 8500; S.fov = 22 }
+  if (type === 'low') { S.dur = 8000; S.fov = 50 }
+  if (type === 'hearth') { S.dur = 9000; S.fov = 36; S.anchor = fire.position; S.azB = az + 0.85 }
+  if (type === 'arena') { S.dur = 5000; S.fov = 40; S.mob = mobT; S.azB = az + 1.3 }
+  camera.fov = S.fov // the CUT: focal length lands with the frame
+  camera.updateProjectionMatrix()
+  return S
+}
+function directShot(S, p, focusV, meBody, tSec) {
+  const az2 = S.azB !== undefined ? S.az + (S.azB - S.az) * p : S.az
+  const sA = Math.sin(az2), cA = Math.cos(az2)
+  let lx = focusV.x, ly = focusV.y + 1.2, lz = focusV.z
+  if (S.type === 'dolly') {
+    const r3 = 4.6 - p * 0.6
+    camera.position.set(focusV.x + sA * r3, 0, focusV.z + cA * r3)
+    camera.position.y = dirGroundY(camera.position.x, camera.position.z) + 0.5
+  } else if (S.type === 'crane') {
+    const r3 = 2.6 + p * 3.6
+    camera.position.set(focusV.x + sA * r3, 0, focusV.z + cA * r3)
+    camera.position.y = dirGroundY(camera.position.x, camera.position.z) + 0.55 + p * 7.2
+  } else if (S.type === 'lead') {
+    const h2 = meBody ? meBody.rotation.y : 0
+    const fx2 = Math.sin(h2), fz2 = Math.cos(h2)
+    const side = 1.3 - p * 2.6 // the lens slides across the walking face
+    camera.position.set(
+      focusV.x + fx2 * 4.4 + Math.cos(h2) * side, 0,
+      focusV.z + fz2 * 4.4 - Math.sin(h2) * side)
+    camera.position.y = dirGroundY(camera.position.x, camera.position.z) + 1.05
+  } else if (S.type === 'long') {
+    camera.position.set(focusV.x + Math.sin(az2 + p * 0.06) * 26, 0, focusV.z + Math.cos(az2 + p * 0.06) * 26)
+    camera.position.y = dirGroundY(camera.position.x, camera.position.z) + 1.6
+  } else if (S.type === 'low') {
+    const r3 = 2.5 - p * 0.5
+    camera.position.set(focusV.x + sA * r3, 0, focusV.z + cA * r3)
+    camera.position.y = dirGroundY(camera.position.x, camera.position.z) + 0.3
+    lx = focusV.x - sA * 9; ly = focusV.y + 5.5; lz = focusV.z - cA * 9 // past the subject, into the sky
+  } else if (S.type === 'hearth') {
+    camera.position.set(S.anchor.x + sA * 3.8, S.anchor.y + 1.5 + Math.sin(p * Math.PI) * 0.7, S.anchor.z + cA * 3.8)
+    lx = S.anchor.x * 0.7 + focusV.x * 0.3; ly = S.anchor.y + 0.75; lz = S.anchor.z * 0.7 + focusV.z * 0.3
+  } else if (S.type === 'arena') {
+    const mp = S.mob.position
+    const mx2 = (focusV.x + mp.x) / 2, mz2 = (focusV.z + mp.z) / 2
+    camera.position.set(mx2 + sA * 3.2, 0, mz2 + cA * 3.2)
+    camera.position.y = dirGroundY(camera.position.x, camera.position.z) + 1.1
+    lx = mx2; ly = (focusV.y + mp.y) / 2 + 0.9; lz = mz2
+  }
+  // the director never buries the lens, and every hand trembles a little
+  camera.position.y = Math.max(camera.position.y,
+    dirGroundY(camera.position.x, camera.position.z) + 0.3)
+  camera.position.x += Math.sin(tSec * 1.9 + S.az * 7) * 0.02
+  camera.position.y += Math.sin(tSec * 1.4 + S.az * 3) * 0.015
+  camera.lookAt(lx, ly, lz)
+}
 let wetAmt = 0     // how much rain the ground is still wearing
+
+// ---- THE TITLES: places announce themselves the way films announce
+// them — wide-tracked type rising out of the lower third, holding four
+// seconds, dissolving. A region card when you cross into somewhere
+// with a name; a date card at every dawn, subtitled by the season the
+// constitutional calendar says it is. One soft plucked note under
+// each, from the score that was already playing. ----
+let lastLocale = '', lastDayShown = -1, localeTimer = null
+function showTitle(over, name) {
+  const el2 = document.getElementById('locale')
+  el2.innerHTML = '<div class="over"></div><div class="name"></div>'
+  el2.firstChild.textContent = over
+  el2.lastChild.textContent = name
+  el2.style.opacity = 1
+  clearTimeout(localeTimer)
+  localeTimer = setTimeout(() => { el2.style.opacity = 0 }, 4200)
+  if (audio) audio.pluck(false, 0.045, 0)
+}
 let expoState = 0.8 // the eye's current adaptation, in exposure units
 const setCine = (on) => {
   cine = on
+  dirShot = null // a fresh director every screening
   for (const id of ['top', 'bar', 'feed']) document.getElementById(id).style.display = on ? 'none' : ''
   document.getElementById('cinex').style.display = on ? 'flex' : 'none'
   document.body.classList.toggle('cine', on) // the letterbox comes down
@@ -4453,7 +4615,8 @@ document.getElementById('verbs').addEventListener('click', (e) => {
         ['dof', 'depth of field', 0, 2], ['vol', 'god rays', 0, 2], ['volDens', 'air density', 0, 2],
         ['cloud', 'clouds', 0, 2], ['cover', 'cloud cover', -0.3, 0.3],
         ['mist', 'ground fog', 0, 2], ['scatter', 'sun in-scatter', 0, 2],
-        ['foam', 'shore foam', 0, 2], ['wet', 'wet gloss', 0, 2], ['rim', 'rim light', 0, 2]]
+        ['foam', 'shore foam', 0, 2], ['wet', 'wet gloss', 0, 2], ['rim', 'rim light', 0, 2],
+        ['ghost', 'lens ghosts', 0, 2]]
       tp.innerHTML = '<h3>THE TUNING BENCH</h3>' + KNOBS.map(([k, n, a, b2]) =>
         '<label>' + n + '<b id="tv_' + k + '">' + TUNE[k].toFixed(2) + '</b></label>'
         + '<input type="range" data-k="' + k + '" min="' + a + '" max="' + b2 + '" step="0.01" value="' + TUNE[k] + '">').join('')
@@ -4636,6 +4799,13 @@ function frame() {
   const yearF = ((dayIdx % 28) + dayF) / 28
   const petal = (c2) => Math.max(0, 1 - Math.abs(((yearF - c2 + 1.5) % 1) - 0.5) * 4)
   const sprAmt = petal(0.125), autAmt = petal(0.625), winAmt = petal(0.875)
+  // each dawn gets its date card, subtitled by the season
+  if (world && entered && dayIdx !== lastDayShown && dayF > 0.02 && dayF < 0.45) {
+    lastDayShown = dayIdx
+    const seasonWord = winAmt > 0.5 ? 'deep winter' : autAmt > 0.5 ? 'autumn'
+      : sprAmt > 0.5 ? 'spring' : 'high summer'
+    showTitle(seasonWord, 'day ' + dayIdx)
+  }
   if (!seasonBase.leaf) seasonBase.leaf = [mats.leaf0, mats.leaf1, mats.leaf2].map((m2) => m2.color.clone())
   for (let si = 0; si < 3; si++) {
     const m2 = [mats.leaf0, mats.leaf1, mats.leaf2][si], b2 = seasonBase.leaf[si]
@@ -4748,7 +4918,17 @@ function frame() {
     dof.uniforms.aperture.value = (0.000045 + cineAmt * 0.00009) * TUNE.dof
     dof.uniforms.maxblur.value = 0.005 + cineAmt * 0.004
   }
-  if (povMode && meVis) {
+  if (cine && meVis) {
+    // the director has the camera; you just live in the frame
+    const walking2 = (meVis.__speed ?? 0) > 0.3
+    const fighting = !!(me?.action && String(me.action.type).startsWith('attack'))
+      || (!!huntTarget && vis.mob.has(huntTarget))
+    if (dirShot?.type === 'arena' && !dirShot.mob?.parent) dirShot = null // the fight ended mid-shot
+    if (!dirShot || now > dirShot.t0 + dirShot.dur
+      || (fighting && dirShot.type !== 'arena' && huntTarget && vis.mob.has(huntTarget)))
+      dirShot = pickShot(now, focus, fighting, walking2, nightAmt > 0.5)
+    directShot(dirShot, Math.min(1, (now - dirShot.t0) / dirShot.dur), focus, meVis, t)
+  } else if (povMode && meVis) {
     const walking = me && (Math.abs(wx(me.x) - meVis.position.x) + Math.abs(wz(me.y) - meVis.position.z)) > 0.03
     let bob = walking ? Math.sin(t * 8.5) * 0.028 : 0
     if (audio && walking) { // every other bob-trough is a footfall,
@@ -4786,7 +4966,8 @@ function frame() {
   }
   // speed widens the eye a touch; a blow or a close thunderclap shakes it
   const mySpd = Math.min(1.6, meVis?.__speed ?? 0)
-  const fovT = povMode ? (68 - spyZoom * 46) + mySpd * 4.5 * (1 - spyZoom) : 46
+  const fovT = (cine && dirShot) ? dirShot.fov
+    : povMode ? (68 - spyZoom * 46) + mySpd * 4.5 * (1 - spyZoom) : 46
   if (Math.abs(camera.fov - fovT) > 0.02) {
     camera.fov += (fovT - camera.fov) * Math.min(1, dt * 3)
     camera.updateProjectionMatrix()
@@ -4854,6 +5035,12 @@ function frame() {
     : nightAmt * 0.1 * (1 - overcast * 0.7)
   raysPass.uniforms.uAmt.value += (rayTarget - raysPass.uniforms.uAmt.value) * Math.min(1, dt * 5)
   raysPass.uniforms.uTint.value.setHSL(sunUp ? 0.09 - warm * 0.045 : 0.62, sunUp ? 0.55 + warm * 0.2 : 0.35, 0.55)
+  // the lens confesses: ghosts walk the axis while the light is in frame
+  const ghostT = (inFrame ? (sunUp ? dayAmt * (1 - overcast) * (0.35 + warm * 0.4) : nightAmt * 0.12) : 0) + flash * 0.55
+  lensPass.uniforms.uAmt.value += (ghostT * TUNE.ghost - lensPass.uniforms.uAmt.value) * Math.min(1, dt * 5)
+  lensPass.uniforms.uWeave.value.set(
+    (Math.sin(t * 1.7) + Math.sin(t * 2.63)) * 0.0006 * cineAmt,
+    (Math.sin(t * 1.31) + Math.sin(t * 2.11)) * 0.0006 * cineAmt)
 
   // ---- the rest of the atmosphere hangs from the same numbers ----
   moonSp.position.copy(focus).addScaledVector(sunDir, -300)
@@ -5424,6 +5611,7 @@ function frame() {
 
   if (me) {
     const rn = regionNameAt(me.x, me.y)
+    if (rn && rn !== lastLocale && entered) { lastLocale = rn; showTitle('you come to', rn) }
     const rEl = document.getElementById('region')
     const txt = (rn ? rn + ' · ' : '') + 'hp ' + me.hp + (me.gold ? ' · ' + me.gold + 'g' : '')
       + (me.action ? ' · ' + me.action.type : '')
