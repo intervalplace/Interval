@@ -77,6 +77,20 @@ export class IntervalClient {
   invoke() { return this.#send({ type: 'invoke' }) }
   cast(spell) { return this.#send({ type: 'cast', spell }) }
   unequip(gear) { return this.#send({ type: 'unwield', gear }) }
+
+  // ---- exploration ----
+  survey() { return this.#send({ type: 'survey' }) }
+  readChart(slot) { return this.#send({ type: 'read_chart', slot }) }
+
+  // ---- brewing ----
+  buildBrewpot() { return this.#send({ type: 'build_brewpot' }) }
+  brew(nodeId, slot) { return this.#send({ type: 'brew', nodeId, slot }) }
+  collect(nodeId) { return this.#send({ type: 'collect', nodeId }) }
+  dismantle(nodeId) { return this.#send({ type: 'dismantle', nodeId }) }
+
+  // ---- watchfires: the public good, kept alight by whoever passes ----
+  kindle() { return this.#send({ type: 'kindle' }) }
+  stoke(nodeId, slot) { return this.#send({ type: 'stoke', nodeId, slot }) }
   deposit(slot) { return this.#send({ type: 'deposit', slot }) }
   withdraw(item) { return this.#send({ type: 'withdraw', item }) }
   smith(recipe) { return this.#send({ type: 'smith', recipe }) }

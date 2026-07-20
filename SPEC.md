@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.69 ("The Constitution")
+# Interval: Protocol Specification v0.73 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -14,6 +14,13 @@ happens, happens on one.
    correct implementation computes byte-identical state for tick N+1.
 2. **Discreteness.** All quantities are integers. No floating point
    anywhere in consensus-relevant logic.
+
+   A note on words. The protocol field is `tick`, and this document uses
+   that name whenever it is describing the field, the wire, or the
+   arithmetic. The world's word for the same span is an **interval**,
+   and the manual, the windows and the site use that. They are the same
+   600 milliseconds. Neither is more correct: one is what implementers
+   type, the other is what citizens say.
 3. **Verifiability.** Randomness derives from a public beacon; every drop
    roll can be re-computed and audited by any peer.
 4. **Bot indifference.** The protocol does not attempt to detect bots:
@@ -176,6 +183,18 @@ alike; there is no fast blade in this world, only a patient one.
 combat action: swallowing a fish mid-fight is the veteran's way. All
 other inputs still interrupt as before.
 
+**One gullet, one speed.** A citizen may eat at most once every **8
+ticks**; an `eat` inside that span is invalid. The arm has a rhythm and
+so does the throat. Without one, a citizen ate every tick while the
+fight held, and broth restores 5 against the 2 HP per tick a
+skeleton-knight can manage at its absolute ceiling: nobody carrying
+brews could be killed by anything in this world, which made death, the
+Wilds and the brand ornamental. Eating mid-fight remains legal. It has
+a rate, and that rate is what makes a beast dangerous to the unready
+while leaving it merely expensive to a veteran. It also gives the three
+restoratives distinct worth, at 0.625, 0.5 and 0.375 HP per tick
+sustained, which is the brewer's market made real.
+
 **A struck citizen strikes back.** In the Wilds, when a citizen with
 no combat action of their own is hit by another citizen, they
 automatically engage their attacker. Flight remains possible: any
@@ -200,8 +219,8 @@ with the world: `x in [1, 34], y in [1, 22]`.
 The founding grows again, to 288 x 144, lengthening every road the
 constitution already draws. Fixed near the Wilds' southern border,
 at `x in [36, 50], y in [24, 36]`, stands **Norwick**: a walled
-garrison town, smaller and grimmer than Anchor, built for one reason
-— holding the line against the lawless quarter at its back. Walls
+garrison town, smaller and grimmer than Anchor, built for one reason:
+holding the line against the lawless quarter at its back. Walls
 trace its perimeter, broken by a gate in the south wall flanked by
 guards; **no mob may enter its bounds**, the same law that protects
 Anchor. Inside stand a bank, an anvil, houses, a well, a hearth, and
@@ -236,7 +255,7 @@ modest bank-and-anvil founding. Eastmere trades its anvil for a
 store and two dockside fishing spots: a port, not a second
 Westhearth. Anchor gains a second forge and its own store: the
 capital both smiths and trades. Milbrook keeps no forge at all: bank,
-well, houses, plots, nothing else — a farming town and only that.
+well, houses, plots, nothing else: a farming town and only that.
 
 **Danger now shows before it bites.** Approaching the mountains, the
 Wilds, or the cave, trees thin probabilistically the closer a tile
@@ -255,7 +274,7 @@ optional extra-fields object, merged onto the node. Signposts carry
 a `text` field: unique flavor per post, shown on interaction, in
 place of one generic message repeated at every post. Eight stand
 along the founding's roads, plus two solitary `wall` nodes standing
-alone in open country as ruins — nothing built beside them, on
+alone in open country as ruins: nothing built beside them, on
 purpose.
 
 New founding constant: none. New node field: `text` (optional,
@@ -267,7 +286,7 @@ Each settlement holds a **waystone** node. Stand orthogonally beside one
 and you **attune** to it: its id is appended to your `attuned` list, and
 the world remembers it forever. Thereafter `recall {to}` steps you out of
 the world beside one waystone and back in beside another you have walked
-to — instant, free, no material spent. Convenience, not power.
+to: instant, free, no material spent. Convenience, not power.
 
 Two rules keep it honest. You may only recall to a stone you have
 **attuned**, so the first journey to any place is always made on foot and
@@ -413,13 +432,13 @@ that founds this world (currently `"interval-classic-v1"`), so a
 founding record can never be ambiguous about which world it founds; a
 node that does not implement the named generator refuses to build the
 world rather than guessing. The genesis schema is EXACT: the seven
-fields above plus the optional trio `witnesses`/`quorum`/`imported` —
+fields above plus the optional trio `witnesses`/`quorum`/`imported`  
 any other key is refused (a key execution ignores still changes the
 worldId, minting a distinct founding identity with identical behavior),
 and `witnesses` and `quorum` are supplied together or not at all.
 Signed inputs are equally exact: one canonical serialized form per
 action (per-type field schemas with explicit types; trade offers carry
-BOTH demand fields, `wantItem: null` or `wantGold: 0` written out —
+BOTH demand fields, `wantItem: null` or `wantGold: 0` written out  
 omission is not a representation).
 
 ### 3.1 Player
@@ -484,7 +503,7 @@ ore, and rarely a bronze-plate it has no use for); and, from v0.30,
 `bear` (14 hp, hits up to 2, keeps the deep forest, drops bones and
 rarely the hatchet of the last woodcutter who argued); and, from v0.42,
 the **`skeleton-knight`** (18 hp, defence 6, hits up to 4, respawns 120
-ticks) — a horned, shield-bearing warrior that musters in **warbands** in
+ticks), a horned, shield-bearing warrior that musters in **warbands** in
 and around the Wilds, seldom alone. Its round shield makes it hard to
 strike; its longsword bites back. A fallen knight gives up **double
 bones** (the frontier's best prayer), sometimes scavenged ore, and rarely
@@ -512,7 +531,7 @@ xp(L) = floor( (1/4) * sum_{n=1}^{L-1} floor(n + 300 * 2^(n/7)) )
 The table is **hardcoded as spec constants** (see the reference
 implementation's `XP_TABLE`); implementations MUST use the constants,
 not recompute them. Anchor values: level 2 = 83 XP, level 50 = 101,333,
-level 99 = 13,034,431. Levels range 1–99.
+level 99 = 13,034,431. Levels range 1-99.
 
 ## 4b. Beyond mastery
 
@@ -596,11 +615,12 @@ v0.1 input types:
   expiring 100 ticks later (§3.4).
 - `pickup` → `{groundId}`; valid iff the item exists, the player stands
   on its tile, and a free inventory slot exists.
-- `eat` → `{slot}`; slot must hold `cooked-fish`. Consumes it, heals
-  3 HP (capped at max HP), and **clears the player's current action**,
-  you stop what you are doing to eat. Re-engaging costs a future input,
-  so eating mid-fight trades a swing for the heal. Resolves in the
-  same tick.
+- `eat` → `{slot}`; slot must hold `cooked-fish`, `ale` or `broth`.
+  Consumes one, heals 3, 4 or 5 HP respectively (capped at max HP).
+  It does **not** clear the player's current action: swallowing a fish
+  mid-fight is the veteran's way (§6m). It may be done at most once
+  every **8 ticks**; an `eat` inside that span is invalid, exactly as a
+  swing before the arm recovers is invalid. Resolves in the same tick.
 
 Rules:
 
@@ -622,10 +642,19 @@ Names are in-world objects governed by the constitution, not an
 external service.
 
 - A name matches `^[a-z0-9-]{1,12}$` and may not start or end with `-`.
-- `claim_name` is valid iff the name is unclaimed AND the claiming
-  player has no name. First valid claim wins, forever (v0.4 has no
-  release or transfer; a future constitution may add them: that is a
-  fork, as always).
+- `claim_name` is valid iff the name is unclaimed, the claiming player
+  has no name, AND the claiming player's standing is at least 50.
+  First valid claim wins, forever (there is no release and no transfer;
+  a future constitution may add them: that is a fork, as always).
+
+  The standing requirement exists because a name is permanent and the
+  supply of good ones is small. Identities are free, so without a toll
+  one machine could mint keys and take every short word in the language
+  before anyone arrived, and no rule in this constitution could give
+  them back. Standing cannot be minted: it is time spent acting in the
+  world at one deed per interval, which is the only cost here that an
+  attacker cannot parallelize away. A citizen reaches 50 in an
+  afternoon; a squatter pays that afternoon again for every name.
 - On success: `names[name] = playerId` and `player.name = name`.
 - Clients SHOULD render names where known and MUST fall back to the
   playerId prefix otherwise.
@@ -641,6 +670,35 @@ A player need not exist in genesis to join a world.
   empty inventory, no name, no action, level-1 skills.
 - Spawning is permanent: there is no despawn in v0.6. Identities are
   free, but each playerId spawns at most once, ever.
+
+## 5.4. How many inputs a tick applies
+
+A tick applies at most **4096** inputs. When more than that many distinct
+players submit a valid input for the same tick, WHICH ones apply is
+decided by this rule and not by which arrived first:
+
+1. Players that already exist in `state.players` are taken before
+   players that do not.
+2. Within each group, canonical ascending `playerId` order.
+3. The first 4096 of that ordering apply. The rest are discarded as
+   though they had never been sent, and their senders may retry on a
+   later tick.
+
+Arrival order differs between nodes and always will. A cap applied at
+the door therefore let two correct nodes hold different inputs for the
+same tick, compute different states, and reach no quorum: a flood of
+worthless keys could stop the world without breaking a single rule.
+This ordering is computable from the state and the inputs alone, so
+every node discards exactly the same ones.
+
+Placing existing citizens first is deliberate. Identities are free, so
+an attacker can always fill the field with keys that have never done
+anything. Under such a flood the world becomes hard to ENTER, which is
+recoverable, rather than impossible to PLAY, which is not.
+
+Nodes SHOULD buffer more than 4096 inputs per tick so that this
+selection is made over the whole field rather than over an arbitrary
+subset of it.
 
 ## 5c. Trade
 
@@ -693,7 +751,7 @@ of at most 24 recent `{tick, text}` entries, and a permanent honors
 roll, `state.firsts`, mapping a milestone key to the id of the citizen
 who reached it first. Both are written only by the deterministic rules
 below, so every node computes byte-identical announcements and one
-agreed record of who was first — "first ever" is a fact of the state,
+agreed record of who was first: "first ever" is a fact of the state,
 not a claim any window can invent.
 
 **Mastery.** When a citizen's XP in a skill first crosses the mastery
@@ -702,7 +760,7 @@ first citizen ever to master a given skill is named as such (and
 recorded in `firsts` under `master:<skill>`); everyone after is
 announced plainly. When the crossing that a tick produces leaves a
 citizen at mastery in **all** skills for the first time, the world
-announces a **Master of Interval** — and the first ever to achieve it is
+announces a **Master of Interval**: and the first ever to achieve it is
 recorded under `firsts.totalmaster`. This is expected to be
 vanishingly rare; the honor is permanent.
 
@@ -758,10 +816,25 @@ respawns are processed:
 3. If the mob dies: drops roll on the beacon and go to the killer's
    free inventory slots (full inventory forfeits that drop);
    `respawnAt = tick + respawn`; action ends.
-4. Otherwise the mob retaliates: threshold
-   `clamp(128 + 4*(mobAtk − defenceLvl), 16, 240)`; on hit the player
-   loses `1 + (roll(beacon, playerId, "mobdmg") mod mobMaxHit)` HP;
-   on a miss the player gains 4 defence XP.
+4. Otherwise the mob retaliates, but only on its own swing intervals
+   and only if it can reach the player. If either is false the mob does
+   nothing and no experience of any kind is earned. On a swing:
+   threshold `clamp(128 + 4*(mobAtk - defenceLvl), 16, 240)`; on hit
+   the player loses `max(1, 1 + (roll(beacon, playerId, "mobdmg") mod
+   mobMaxHit) - soak)` HP; on a miss the player gains 4 defence XP.
+
+   A blow that lands always costs at least one hit point. Armour makes
+   a citizen harder to hurt, never impossible to hurt: a full suit of
+   starmetal turns aside four, which is the hardest blow any beast in
+   this world can throw, and without that floor the best-equipped
+   citizen alive would walk the Wilds in no danger at all.
+
+   Defence is the only skill paid for in danger rather than in time, so
+   the danger has to be real. A citizen shooting from beyond a beast's
+   reach is never swung at, and therefore never defends: they train
+   ranged and hitpoints, and nothing else. This costs an archer nothing
+   they earned, and it stops the safest way to fight from also being a
+   way to train the skill for surviving being fought.
 
 ## 6c. Death (provisional: the most fork-worthy rule in this document)
 
@@ -852,28 +925,28 @@ nothing, and now it eats plate.
 
 A fourth star recipe: `star-dagger` (2 magic-stone, 1 ore; smithing 20,
 magic 15; wield attack 20). It strikes for less than the star-sword (a
-+2 hit, not +4) — its worth is not the edge but the **root**.
++2 hit, not +4): its worth is not the edge but the **root**.
 
-When a successful star-dagger blow lands on a living target — mob or
-citizen — and the wielder's root is ready and the target is neither
+When a successful star-dagger blow lands on a living target: mob or
+citizen: and the wielder's root is ready and the target is neither
 already rooted nor within its post-root immunity, three things happen
 together: the target is **rooted** for `ROOT_TICKS` (3) ticks and cannot
 move for their duration; the target gains **immunity** for a further
 `ROOT_IMMUNE` (10) ticks, during which no dagger may root it again; and
 the wielder's dagger goes on **cooldown** for `ROOT_CD` (120) ticks. A
 rooted entity's move inputs resolve to no motion; a rooted mob does not
-wander or pursue. Damage is unaffected by any of this — only the root
+wander or pursue. Damage is unaffected by any of this: only the root
 is gated. Roots never stack and never chain: at most one target is held
 by one dagger at a time, and the immunity window forbids a second
 dagger from seizing a body the instant the first releases it. The long
-cooldown makes landing a root a decision, not a rhythm — a rare, earned,
+cooldown makes landing a root a decision, not a rhythm: a rare, earned,
 expensive thing, as a frontier weapon forged from compressed night
 should be.
 
 ## 7. Exploration: the world as profession (v0.50)
 
 The fifteenth skill. Its verb is `survey`; its XP is paid in distance;
-its goods are **charts**. Every value below is deterministic — markers,
+its goods are **charts**. Every value below is deterministic: markers,
 rewards, and charts are pure functions of the beacon and the state, so
 every node agrees without a word passing between them.
 
@@ -884,7 +957,7 @@ every node agrees without a word passing between them.
 the world holds fewer than `k`, the top-up mints replacements. Marker
 position and kind are drawn from `H(beacon || tick || index || salt)`,
 rejected until the tile is in-bounds, outside every city, and off every
-node — and **distance-weighted**, so most markers land in the near and
+node: and **distance-weighted**, so most markers land in the near and
 middle country and the deep-Wilds ones are genuinely rare. A marker
 unclaimed after `MARKER_LIFE` (3000) ticks relocates: the frontier
 never goes stale.
@@ -895,7 +968,7 @@ minted beside a waystone; surveying one yields that waystone's chart.
 ### 7b. `survey`
 
 `survey` is valid when a living citizen stands on a marker's tile. It is
-**instant** — the cost was the walk, not a channel. On resolution it
+**instant**: the cost was the walk, not a channel. On resolution it
 pays Exploration XP by distance (7c), yields a chart if the marker was a
 rumor and the pack has room, records the first-ever surveyor in the
 honors roll, and **relocates the marker**. First-come and single-claim:
@@ -908,9 +981,9 @@ xp = min( survey.max, survey.base + survey.perTile * chebyshev(marker, anchor) )
 ```
 
 **These constants live in the genesis, not the protocol.** The classic
-world founds itself with `{ k: 8, base: 40, perTile: 10, max: 1800 }` —
+world founds itself with `{ k: 8, base: 40, perTile: 10, max: 1800 }`  
 values *derived from a survey-simulation of its own geometry*. They
-are not a universal curve. A larger world is free — indeed expected — to
+are not a universal curve. A larger world is free: indeed expected: to
 found itself with a different `k`, `base`, `perTile`, and `max`, derived
 from *its* geometry by *its* own simulation. One numerical curve does
 not fit every world scale, and the constitution does not pretend it
@@ -919,21 +992,21 @@ are a property of the founded world.
 
 Why this reaches mastery on a finite map: it is not coverage that is the
 grind but *journeys*. Markers relocate forever, so the XP is bounded
-only by traversal time — exactly as a finite set of respawning rocks
+only by traversal time: exactly as a finite set of respawning rocks
 supports mining to 99. A bot cartographer pays for it in the same walked
 ticks a human does.
 
-### 7d. Charts — knowledge as a portable capability
+### 7d. Charts: knowledge as a portable capability
 
 A chart is `chart:<waystoneId>`: an ordinary, stackable, **tradeable**
 inventory item. Because canonical state is public, a chart is not secret
-information — the waystone's location was always derivable. A chart is a
+information: the waystone's location was always derivable. A chart is a
 transferable **capability**: `read_chart` spends it to add that waystone
 to the bearer's `attuned` set, granting recall access *without ever
 walking there*. The explorer converts distance walked into charts and
 sells recall access to citizens who would rather pay than walk. The
 waystone set is fixed at founding, so charts are a small set of fixed
-variants — no per-item payload, no change to the slot schema.
+variants: no per-item payload, no change to the slot schema.
 
 ### 7e. Constitutional consequences
 
@@ -950,7 +1023,7 @@ sells charts is a load-bearing citizen, not an exploit.
 The sixteenth skill, and the first whose passive part is genuine: the
 *world* does the waiting. A brewer starts a batch, lives the rest of
 their day, and returns to a finished, tradeable draught. It stays honest
-the way every passive thing must — **the gain consumes a good that took
+the way every passive thing must: **the gain consumes a good that took
 active effort to make** (grain, fish, and the logs and ore of the pot
 itself), so a bot earns nothing it did not first gather.
 
@@ -959,30 +1032,30 @@ itself), so a bot earns nothing it did not first gather.
 A brewpot is an owned, placed node (`type: 'brewpot'`, fields `by`, and
 while fermenting `readyAt` + `brewKind`). `build_brewpot` raises one on a
 free tile beside the founder, consuming `brew.buildLogs` logs and
-`brew.buildOre` ore — **but only adjacent to a `house`.** The protocol
+`brew.buildOre` ore: **but only adjacent to a `house`.** The protocol
 knows nothing of taverns; it knows only "a brewpot must stand by a
-roof." A brewhouse — a house ringed with brewpots and the people who
-gather there — is a meaning *players* assign, the way they made trade
+roof." A brewhouse: a house ringed with brewpots and the people who
+gather there: is a meaning *players* assign, the way they made trade
 routes of waystones. A citizen may own at most `brew.potCap` brewpots.
-The cap is flat: capacity is bought, not leveled — running four pots is
+The cap is flat: capacity is bought, not leveled: running four pots is
 an act of supply and organization, not a reward the protocol hands out
 for grinding.
 
-A brewpot is **walkable** — a citizen may stand on or step through its
-tile — so no arrangement of pots can ever wall a doorway or fence a
+A brewpot is **walkable**: a citizen may stand on or step through its
+tile: so no arrangement of pots can ever wall a doorway or fence a
 citizen in or out; the commons stays passable. A pot **abandoned** (not
 built, brewed, or collected at) for longer than `brew.decayTicks`
 crumbles and returns its tile to the world, so brewpots can never
-permanently enclose the buildable space against newcomers — active pots
+permanently enclose the buildable space against newcomers: active pots
 reset the clock, only neglect reclaims. And a founder may `dismantle`
 their own pot, recovering half its makings and freeing the ground, so a
-brewhouse can be moved rather than merely abandoned. Owned, yes — but
+brewhouse can be moved rather than merely abandoned. Owned, yes: but
 never a permanent private claim on the common ground.
 
 ### 8b. Brew, wait, collect
 
-At an idle brewpot they own, a founder `brew`s, consuming one input —
-`grain → ale`, `raw-fish → broth` — and setting `readyAt = tick +
+At an idle brewpot they own, a founder `brew`s, consuming one input  
+`grain → ale`, `raw-fish → broth`: and setting `readyAt = tick +
 brew.ferment`. Nothing more happens until the world reaches that tick;
 fermentation is **deterministic**, so a brewer knows exactly when a
 batch lands (Interval treats time constitutionally; a brewer should not
@@ -995,7 +1068,7 @@ and the pot returns to idle. Active at both ends, patient in the middle.
 
 `ale` and `broth` are ordinary, stackable, tradeable items that
 **restore** on `eat` (broth a little more than a cooked fish, ale a
-little less) — restoration, not buffs, so Brewing stays inside the food
+little less): restoration, not buffs, so Brewing stays inside the food
 system without a layer of buff-management. Their point is the market:
 farmer → grain → brewer → ale → everyone; fisher → fish → brewer →
 broth. Brewing couples the professions that already exist.
@@ -1005,10 +1078,10 @@ broth. Brewing couples the professions that already exist.
 `brew: { ferment, potCap, buildLogs, buildOre, xpPerBatch }` lives in the
 **genesis**, part of the founding record. The classic world founds
 itself with values derived from a brew-simulation of a brewer tending a
-rotation of pots — sized so mastery is a matter of *regular brewing over
+rotation of pots: sized so mastery is a matter of *regular brewing over
 time*, not a number of hours anyone announces. A larger or busier world
-tunes its own. What is constitutional is the *shape* — start, wait,
-collect, at a flat-capped rotation — not the numbers.
+tunes its own. What is constitutional is the *shape*: start, wait,
+collect, at a flat-capped rotation: not the numbers.
 
 ### 8e. Watchfires: Firemaking as public infrastructure (v0.53)
 
@@ -1093,7 +1166,7 @@ spent the evening at one of them. Only a tie in raw experience falls to
 the constitutional skill order, so every node still answers identically.
 
 Hitpoints is excluded, being a consequence of fighting rather than a
-trade, and starting at 10 — without that exclusion every citizen would
+trade, and starting at 10: without that exclusion every citizen would
 be born a fighter. A citizen whose every trade is still level 1 has no
 calling yet and is a **newcomer**.
 
@@ -1215,7 +1288,7 @@ written as constants when there was only one world. The Wilds in
 particular are **law**, not scenery: recall is refused from inside them
 and the Brand is earned inside them, so where they lie is a
 constitutional question. A constant cannot answer it for a world of a
-different size — on a map four times the classic one, a fixed 34-by-22
+different size: on a map four times the classic one, a fixed 34-by-22
 rectangle is a rounding error in a corner.
 
 So the three rectangles join the founding record as `genesis.geo`:
@@ -1280,8 +1353,8 @@ approximating, for the same reason.
 
 A generator's landscape is not decoration: it decides where nodes stand,
 and those nodes are the founded world. So terrain may use only the
-operations IEEE-754 requires to be **exactly rounded** — addition,
-subtraction, multiplication, division, and square root — and never the
+operations IEEE-754 requires to be **exactly rounded**: addition,
+subtraction, multiplication, division, and square root: and never the
 transcendentals (`Math.sin`, `cos`, `pow`, `exp`, `log`), which ECMA-262
 leaves implementation-defined. Two engines that disagree in the last
 place about a sine would place a river one tile apart and found two
@@ -1294,7 +1367,7 @@ footpaths than a sine wave does anyway.
 
 A second generator, and the first world designed for the founding record
 rather than around it. Where the classic generator reads "a safe town,
-then danger" — a radial gradient, identical in every direction — the
+then danger": a radial gradient, identical in every direction: the
 expanse gives every direction a meaning: **north is wood, east is stone,
 south is water, west is danger, and the middle is home.** Five
 countries, seven walled settlements, every road a spoke to Anchor, and
@@ -1309,7 +1382,7 @@ navigated the way people actually navigate: left at the split rock,
 rather than by counting tiles. A landmark is an ordinary resource too,
 so the thing you steer by is also somewhere to work.
 
-The generator is not part of the rules hash — `SPEC.md` is — but the
+The generator is not part of the rules hash: `SPEC.md` is: but the
 world it founds is named in the genesis, and a node that does not
 implement that generator refuses to guess at its landscape rather than
 grow a different one.
@@ -1323,7 +1396,7 @@ items (`ale`, `broth`), and three actions (`build_brewpot`, `brew`,
 `collect`) join the vocabulary. Watchfires add the `watchfire` node, the
 `kindle` and `stoke` actions, `genesis.watch`, and a first `watchfire`. Bot indifference holds: a bot brewer
 still has to gather every log, every grain, and tend the rotation in
-real returns — it simply runs a small business, like anyone else.
+real returns: it simply runs a small business, like anyone else.
 
 ## 6j. Ranged (the bow and the bone arrow)
 
@@ -1561,8 +1634,8 @@ A genesis that lists a **witness set** (§9f) is an *authoritative
 world*: intervals finalize only through quorum-attested bundles, and
 the claim "one finalized world every honest node independently
 verifies" holds against the network model in §9f. A genesis without one
-runs the older optimistic mode — deterministic peer-to-peer input
-propagation with state-hash divergence detection — which remains
+runs the older optimistic mode: deterministic peer-to-peer input
+propagation with state-hash divergence detection: which remains
 accurately described as a prototype: adverse timing can make honest
 nodes apply different input sets for a tick, and hash gossip detects
 but does not repair this. Optimistic worlds exist for development and
@@ -1576,7 +1649,7 @@ tick, one canonical, certified set of inputs.
 
 **Witnesses and quorum.** `genesis.witnesses` is an ordered list of
 ed25519 public keys; `genesis.quorum` is an integer with
-`1 <= quorum <= |witnesses|` and — constitutionally —
+`1 <= quorum <= |witnesses|` and: constitutionally  
 `2 * quorum > |witnesses|`, so any two quorums intersect. A genesis
 violating this MUST be refused at founding and by every verifier. Both
 are founding facts: immutable forever, committed to by the worldId, and
@@ -1605,7 +1678,7 @@ resultingStateHash, witness, sig}` under domain
 `INTERVAL_ATTESTATION_V1|`. Voting is governed by the **tick lock**
 (CONSENSUS.md §4): the first valid bundle a witness signs for a tick is
 written durably to disk *before* the attestation is broadcast, and the
-witness thereafter signs no other bundle hash for that tick — across
+witness thereafter signs no other bundle hash for that tick: across
 ALL rounds, across restarts. The identical bundle may be re-attested
 and rebroadcast freely. Locks are released only by finalization of the
 tick, never by rounds or timeouts.
@@ -1632,20 +1705,20 @@ is the accepted price of fork-freedom.
 execution and deterministic finality; it does NOT guarantee complete
 input inclusion. The round's proposer chooses the bundle from what it
 saw; an omitted input dies with its tick (inputs are tick-bound) and
-the client resubmits. Proposer misbehavior — omission or signing two
-bundles for one round — is detectable, and proposer equivocation yields
+the client resubmits. Proposer misbehavior: omission or signing two
+bundles for one round: is detectable, and proposer equivocation yields
 portable evidence. See CONSENSUS.md §7.
 
 **Mismatch means halt.** A node whose own computation of a certified
 bundle's result differs from the quorum-certified
-`resultingStateHash` — or that observes a quorum certify a structurally
-invalid bundle — HALTS: it refuses to finalize further intervals,
+`resultingStateHash`: or that observes a quorum certify a structurally
+invalid bundle: HALTS: it refuses to finalize further intervals,
 preserves the conflicting evidence, and recovers only from a certified
 checkpoint. Silent self-repair onto an unverified state is forbidden.
 
-**The consensus specification.** The full agreement protocol — model,
+**The consensus specification.** The full agreement protocol: model,
 fault assumptions, locking rules, the common verifier, liveness limits,
-halting conditions, and witness lifecycle — is normatively specified in
+halting conditions, and witness lifecycle: is normatively specified in
 CONSENSUS.md v1.0. Where implementation and CONSENSUS.md disagree, the
 document wins.
 

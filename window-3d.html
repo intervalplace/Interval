@@ -731,6 +731,8 @@ const allocTick = () => {
 const BRIDGE = (a) =>
     a.do === 'move' ? { type: 'move', dx: a.dx, dy: a.dy }
   : a.do === 'spawn' ? { type: 'spawn' }
+  // stop: put down what you are doing. Every window should be able to say it.
+  : a.do === 'stop' ? { type: 'stop' }
   : a.do === 'attack' ? { type: 'attack', mobId: a.mobId }
   : a.do === 'gather' ? { type: 'gather', nodeId: a.nodeId }
   : a.do === 'eat' ? { type: 'eat', slot: a.slot }
@@ -3334,6 +3336,36 @@ function callingOf(p) { // the trade you have the most experience in, as a word
   // mastery is the milestone the world announces, so the calling says it
   return (bestXp >= XP_TABLE[99] ? 'master ' : '') + CALLINGS[best]
 }
+// the mobs, character for character from engine.js MOB_STATS (spec 6c). A
+// window cannot ask the world how hard a troll hits: the state carries a mob's
+// type and its current hp and nothing else. These are the real numbers, and
+// test/identity.test.mjs holds them to the engine's.
+const MOB_STATS = {
+  goblin:            { maxHp: 5,  atk: 1, def: 1, maxHit: 1, respawn: 16 },
+  wolf:              { maxHp: 8,  atk: 2, def: 2, maxHit: 2, respawn: 150 },
+  troll:             { maxHp: 20, atk: 4, def: 4, maxHit: 3, respawn: 300 },
+  bear:              { maxHp: 14, atk: 3, def: 3, maxHit: 2, respawn: 220 },
+  'skeleton-knight': { maxHp: 18, atk: 5, def: 6, maxHit: 4, respawn: 120 },
+}
+const mobMaxHp = (type) => MOB_STATS[type]?.maxHp ?? 1
+// the keeper's ledger, character for character from engine.js PRICES (spec 6l).
+// The flat window carried thirteen of these twenty-three by hand, so ten items
+// simply could not be sold in it: star gear, the horn-bow, grain, and every
+// dagger, spear and maul. A window that copies a table copies it at a moment
+// in time; test/identity.test.mjs holds this one to the engine's.
+const PRICES = {
+  'bronze-dagger': 8, 'bronze-spear': 14, 'bronze-maul': 22,
+  'star-spear': 100, 'star-maul': 160, 'horn-bow': 90,
+  'logs': 2, 'ore': 5, 'raw-fish': 3, 'cooked-fish': 6, 'bones': 2, 'arrows': 1,
+  'magic-stone': 20, 'bronze-sword': 15, 'bronze-hatchet': 10, 'bronze-pickaxe': 10,
+  'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8, 'grain': 4,
+  'star-sword': 120, 'star-helm': 60, 'star-plate': 200,
+}
+// what the keeper offers, from engine.js STORE_SELLS (spec 6l). One line, and
+// it is the whole of the store's stock: the world sells seeds and nothing
+// else, because everything else is meant to be made or found. A window that
+// guesses at this offers a citizen things they cannot buy.
+const STORE_SELLS = { seeds: 15 }
 // <<< CONSTITUTIONAL IDENTITY BLOCK
 function XP_AT(l) { // xp at the foot of level l, past mastery included
   if (l <= 99) return XP_TABLE[Math.max(1, l)] ?? 0
@@ -3346,11 +3378,11 @@ function XP_AT(l) { // xp at the foot of level l, past mastery included
 // already blessed by the engine; these are merely its counters. ----
 const ICON_URL = {}
 const iconUrl = (item) => ICON_URL[item] ?? (ICON_URL[item] = itemSprite(item).toDataURL())
-const STORE_SELLS3 = { seeds: 15 } // what the store offers (engine STORE_SELLS)
+const STORE_SELLS3 = STORE_SELLS // one stock list, in the identity block above
 const RECIPES3 = { 'bronze-dagger': {"ore": 1}, 'bronze-spear': {"ore": 1, "logs": 1}, 'bronze-maul': {"ore": 2, "logs": 1}, 'star-spear': {"magic-stone": 2, "ore": 1, "logs": 1}, 'star-maul': {"magic-stone": 3, "ore": 2, "logs": 1}, 'bronze-sword': {"ore": 2, "logs": 1}, 'bronze-hatchet': {"ore": 1, "logs": 1}, 'bronze-pickaxe': {"ore": 1, "logs": 1}, 'bronze-helm': {"ore": 1, "logs": 1}, 'bronze-plate': {"ore": 3, "logs": 1}, 'star-sword': {"magic-stone": 3, "ore": 2}, 'star-helm': {"magic-stone": 2, "ore": 1}, 'star-plate': {"magic-stone": 4, "ore": 3}, 'star-dagger': {"magic-stone": 2, "ore": 1} }
 const SMITH_REQS3 = { 'star-sword': { smithing: 20, magic: 10 }, 'star-helm': { smithing: 15, magic: 5 },
   'star-plate': { smithing: 30, magic: 15 }, 'star-dagger': { smithing: 20, magic: 15 } }
-const PRICES3 = { 'bronze-dagger': 8, 'bronze-spear': 14, 'bronze-maul': 22, 'star-spear': 100, 'star-maul': 160, 'horn-bow': 90, 'logs': 2, 'ore': 5, 'raw-fish': 3, 'cooked-fish': 6, 'bones': 2, 'arrows': 1, 'magic-stone': 20, 'bronze-sword': 15, 'bronze-hatchet': 10, 'bronze-pickaxe': 10, 'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8, 'grain': 4, 'star-sword': 120, 'star-helm': 60, 'star-plate': 200 } // mirrors engine PRICES
+const PRICES3 = PRICES // one ledger per window, in the identity block above
 function nearNodeOf(me2, tt) {
   return Object.values(world?.nodes ?? {}).some((n2) => n2.type === tt && Math.abs(n2.x - me2.x) <= 1 && Math.abs(n2.y - me2.y) <= 1)
 }

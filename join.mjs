@@ -79,6 +79,13 @@ if (!URL_) {
   }
 }
 const NAME = (NAME_ARG || '').toLowerCase().replace(/^--.*/, '')
+// The name is what YOUR window calls you until the ledger agrees. Claiming a
+// name in the world asks for a standing of 50 (SPEC 5a), so a citizen plays
+// first and is named afterwards. Say so once, rather than letting someone
+// wonder why the hiscores show a key where they typed a word.
+if (NAME) console.log('called ' + NAME + ' in this window. A name in the ledger'
+  + ' is claimed once and held forever, and asks for a standing of 50: play a'
+  + ' while, then claim it.')
 
 // 1. fetch the founding record: from the pillar if it lives, from our
 // own cache if it does not. A node that needs the pillar to be BORN
@@ -191,31 +198,71 @@ for (const a of book) {
 // ---- the mesh, not the star: dial every peer the pillar knows, and keep
 // looking. If the pillar dies, the world keeps talking around the hole.
 const dialedPeers = new Set([node.peerId()]) // never dial ourselves
+// A mesh that fails silently looks exactly like a mesh with nobody in it. Both
+// of these once swallowed their errors, so a pillar too old to know about
+// /api/announce produced a node with one peer and no explanation. Say it once,
+// then stop saying it: a sweep runs every few seconds and nobody needs that in
+// their log forever.
+const meshSaid = new Set()
+const sayOnce = (k, msg) => { if (!meshSaid.has(k)) { meshSaid.add(k); console.log(msg) } }
+
 async function meshUp() {
+  const port = node.listenPort()
+  if (!port) return
+  // 1. announce our own door: our listening port, paired server-side with the
+  //    address the pillar observes us calling from
   try {
-    // 1. announce our own door: our listening port, paired server-side
-    //    with the address the pillar observes us calling from
-    const port = node.listenPort()
-    if (port) await fetch(URL_ + '/api/announce', {
-      method: 'POST',
-      body: JSON.stringify({ peerId: node.peerId(), port }),
-    }).catch(() => {})
-    // 2. dial every announced door we have not yet knocked on
-    const r = await fetch(URL_ + '/api/peers').then(x => x.json())
-    for (const a of r.peers ?? []) {
-      const pid2 = /\/p2p\/(.+)$/.exec(a)?.[1]
-      if (!pid2 || dialedPeers.has(pid2) || !usableDoor(a)) continue
-      dialedPeers.add(pid2)
-      try {
-        await node.dial(multiaddr(a))
-        console.log('[mesh] peer connected: ' + a)
-        remember(a)
-      } catch {
-        dialedPeers.delete(pid2) // try again next sweep
-        console.log('[mesh] could not reach ' + a + ' (firewall? their port must be open inbound)')
-      }
+    const r = await fetch(URL_ + '/api/announce', {
+      method: 'POST', body: JSON.stringify({ peerId: node.peerId(), port }),
+    })
+    if (r.status === 404) {
+      sayOnce('ann404', '[mesh] this pillar does not keep a peer directory (no /api/announce).'
+        + ' It is running an older node, so nobody here can find anybody else.'
+        + ' Everything still works: gossip relays through the pillar itself.')
+      return
     }
-  } catch { /* pillar unreachable: the mesh we already have carries on */ }
+    if (!r.ok) sayOnce('annbad', '[mesh] the pillar would not take our announcement (' + r.status + ')')
+    else sayOnce('annok', '[mesh] announced our door on tcp/' + port
+      + (PORT_ARG ? '' : ' (random: use --port=N and open it inbound to be dialable)'))
+  } catch (e) {
+    sayOnce('annerr', '[mesh] could not reach the pillar to announce (' + (e.code ?? e.message) + ')')
+    return
+  }
+
+  // 2. dial every announced door we have not yet knocked on
+  let peers = []
+  try {
+    const res = await fetch(URL_ + '/api/peers')
+    if (res.status === 404) {
+      sayOnce('px404', '[mesh] this pillar publishes no peer list (no /api/peers)')
+      return
+    }
+    peers = (await res.json()).peers ?? []
+  } catch (e) {
+    sayOnce('pxerr', '[mesh] could not read the peer list (' + (e.code ?? e.message) + ')')
+    return
+  }
+
+  const fresh = peers.filter(a => {
+    const pid2 = /\/p2p\/(.+)$/.exec(a)?.[1]
+    return pid2 && !dialedPeers.has(pid2) && usableDoor(a)
+  })
+  if (!peers.length) sayOnce('alone', '[mesh] the pillar knows of no other doors yet. '
+    + 'You may be the first one here.')
+
+  for (const a of fresh) {
+    const pid2 = /\/p2p\/(.+)$/.exec(a)[1]
+    dialedPeers.add(pid2)
+    try {
+      await node.dial(multiaddr(a))
+      console.log('[mesh] peer connected: ' + a)
+      remember(a)
+    } catch (e) {
+      dialedPeers.delete(pid2) // try again next sweep
+      sayOnce('dial:' + pid2, '[mesh] could not reach ' + a + ' (' + (e.code ?? 'no answer')
+        + '). Their port must be open inbound; most nodes are behind a router.')
+    }
+  }
 }
 await meshUp()
 setInterval(meshUp, 60000)

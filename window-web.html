@@ -422,6 +422,36 @@ function callingOf(p) { // the trade you have the most experience in, as a word
   // mastery is the milestone the world announces, so the calling says it
   return (bestXp >= XP_TABLE[99] ? 'master ' : '') + CALLINGS[best]
 }
+// the mobs, character for character from engine.js MOB_STATS (spec 6c). A
+// window cannot ask the world how hard a troll hits: the state carries a mob's
+// type and its current hp and nothing else. These are the real numbers, and
+// test/identity.test.mjs holds them to the engine's.
+const MOB_STATS = {
+  goblin:            { maxHp: 5,  atk: 1, def: 1, maxHit: 1, respawn: 16 },
+  wolf:              { maxHp: 8,  atk: 2, def: 2, maxHit: 2, respawn: 150 },
+  troll:             { maxHp: 20, atk: 4, def: 4, maxHit: 3, respawn: 300 },
+  bear:              { maxHp: 14, atk: 3, def: 3, maxHit: 2, respawn: 220 },
+  'skeleton-knight': { maxHp: 18, atk: 5, def: 6, maxHit: 4, respawn: 120 },
+}
+const mobMaxHp = (type) => MOB_STATS[type]?.maxHp ?? 1
+// the keeper's ledger, character for character from engine.js PRICES (spec 6l).
+// The flat window carried thirteen of these twenty-three by hand, so ten items
+// simply could not be sold in it: star gear, the horn-bow, grain, and every
+// dagger, spear and maul. A window that copies a table copies it at a moment
+// in time; test/identity.test.mjs holds this one to the engine's.
+const PRICES = {
+  'bronze-dagger': 8, 'bronze-spear': 14, 'bronze-maul': 22,
+  'star-spear': 100, 'star-maul': 160, 'horn-bow': 90,
+  'logs': 2, 'ore': 5, 'raw-fish': 3, 'cooked-fish': 6, 'bones': 2, 'arrows': 1,
+  'magic-stone': 20, 'bronze-sword': 15, 'bronze-hatchet': 10, 'bronze-pickaxe': 10,
+  'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8, 'grain': 4,
+  'star-sword': 120, 'star-helm': 60, 'star-plate': 200,
+}
+// what the keeper offers, from engine.js STORE_SELLS (spec 6l). One line, and
+// it is the whole of the store's stock: the world sells seeds and nothing
+// else, because everything else is meant to be made or found. A window that
+// guesses at this offers a citizen things they cannot buy.
+const STORE_SELLS = { seeds: 15 }
 // <<< CONSTITUTIONAL IDENTITY BLOCK
 const SKILL_OF_NODE = { 'tree': 'woodcutting', 'rock': 'mining', 'fishing-spot': 'fishing' }
 
@@ -483,6 +513,14 @@ const BRIDGE_TO_INPUT = (a) =>
   : a.do === 'wield' ? { type: 'wield', slot: a.slot }
   : a.do === 'unwield' ? { type: 'unwield', gear: a.gear ?? 'weapon' }
   : a.do === 'smith' ? { type: 'smith', recipe: a.recipe }
+  // trade and recall: the flat window could do neither, so the window most
+  // people meet first was the one that could not buy from a person or walk
+  // home. giveSlots is a list since v0.69: a whole pack in one exchange.
+  : a.do === 'offer' ? { type: 'offer_trade', to: a.to, giveSlots: a.giveSlots,
+                         wantItem: a.wantItem ?? null, wantGold: a.wantGold ?? 0 }
+  : a.do === 'accept' ? { type: 'accept_trade', from: a.from }
+  : a.do === 'cancel' ? { type: 'cancel_trade' }
+  : a.do === 'recall' ? { type: 'recall', waystoneId: a.waystoneId }
   : a.do === 'name' ? { type: 'claim_name', name: a.name } // the engine's word since v0.4; a guessed translation cost weeks of nameless citizens
   : a.do === 'offer' ? { type: 'offer', to: a.to, slot: a.slot }
   : a.do === 'accept' ? { type: 'accept', from: a.from, slot: a.slot }
@@ -495,6 +533,7 @@ const BRIDGE_TO_INPUT = (a) =>
   : a.do === 'invoke' ? { type: 'invoke' }
   : a.do === 'attackp' ? { type: 'attackp', targetId: a.targetId }
   : a.do === 'sell' ? { type: 'sell', slot: a.slot }
+  : a.do === 'buy' ? { type: 'buy', item: a.item }
   : a.do === 'plant' ? { type: 'plant', slot: a.slot }
   : a.do === 'harvest' ? { type: 'harvest', nodeId: a.nodeId }
   : a.do === 'cast' ? { type: 'cast', spell: a.spell ?? 'anchor' }
@@ -793,7 +832,6 @@ let celebrate = null  // { text, at }: level-up banner + sparks
 let announceShow = null, announceQueue = [], _lastAnnounceTick = null // global milestone cries
 const bubbles = {}    // pid -> { text, at } speech bubbles
 const mobFacing = {}  // mobId -> -1 left / 1 right
-const MOB_LEVEL = { goblin: 2, wolf: 5, troll: 9, bear: 7, 'skeleton-knight': 10 } // derived from their stats rows (skeleton: highest atk/def/hit, above the troll)
 const splats = []     // { x, y, amount, at } damage made visible
 const effects = []    // { kind, x, y, at } rites and works made visible
 const layerArr = []   // reused render layer (perf)
@@ -2326,7 +2364,9 @@ function drawScene(now) {
       const X = px(mix), Y = py(miy)
       const engaged = meP?.action?.mobId === id
       cx.font = 'bold 7px Verdana'; cx.textAlign = 'center'
-      const plate = m.type + ' (lvl ' + (MOB_LEVEL[m.type] ?? '?') + ')'
+      const st = MOB_STATS[m.type]
+      const plate = st ? (m.type + '  ' + m.hp + '/' + st.maxHp + ' hp  hits ' + st.maxHit)
+                       : m.type
       cx.fillStyle = 'rgba(0,0,0,.45)'; cx.fillText(plate, X + 20.7, Y - 2.3)
       cx.fillStyle = '#ffe08a'; cx.fillText(plate, X + 20, Y - 3)
       const hop = engaged ? Math.abs(Math.sin(now / 160)) * 2 : Math.sin(now / 700 + m.x) * 0.7
@@ -2882,9 +2922,7 @@ function panel(s) {
     bd && ('Body: ' + bd.item.replace(/-/g, ' '))].filter(Boolean).join(' \u00b7 ')
   document.getElementById('equip').innerHTML = gearLine
     + '<br>Gold: <b style="color:#e2b63e">' + (me.gold ?? 0) + '</b> ' + ICONS['gold-coin']
-  const PRICES_C = { 'logs': 2, 'ore': 5, 'raw-fish': 3, 'cooked-fish': 6, 'bones': 2, 'arrows': 1,
-    'magic-stone': 20, 'bronze-sword': 15, 'bronze-hatchet': 10, 'bronze-pickaxe': 10,
-    'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8 }
+  const PRICES_C = PRICES // the constitutional ledger, not a copy of part of it
   const nearStore = Object.values(s.nodes).some(n => n.type === 'store' && Math.abs(me.x - n.x) + Math.abs(me.y - n.y) === 1)
   const sellBar = document.getElementById('sellbar') ?? (() => {
     const d = document.createElement('div'); d.id = 'sellbar'
@@ -2897,9 +2935,25 @@ function panel(s) {
       ? '<button data-sell="' + i + '" style="margin:1px;background:#3a3126;color:#e8d9a0;border:1px solid #6e5433;padding:3px 6px;font-family:inherit;font-size:10px;cursor:pointer">'
         + sl.item.replace(/-/g, ' ') + (sl.qty > 1 ? ' \u00d7' + sl.qty : '') + ' \u2192 ' + (PRICES_C[sl.item] * (sl.qty ?? 1)) + 'g</button>'
       : '').join('')
+  // and what the keeper SELLS. The flat window could take your goods but never
+  // hand anything back, so a citizen at a store could not buy here at all.
+  // The stock is the constitution's, not a guess: the world sells seeds and
+  // nothing else, because everything else is meant to be made or found.
+  if (nearStore) {
+    sellBar.innerHTML += '<div style="color:var(--gold);font-size:11px;margin:6px 0 2px">AND SELLS:</div>'
+      + Object.entries(STORE_SELLS).map(([it, pr]) => '<button data-buy="' + it + '" style="margin:1px;'
+        + 'background:#3a3126;color:#e8d9a0;border:1px solid #6e5433;padding:3px 6px;font-family:inherit;'
+        + 'font-size:10px;cursor:pointer' + ((me.gold ?? 0) < pr ? ';opacity:.4' : '') + '">'
+        + it.replace(/-/g, ' ') + ' \u2190 ' + pr + 'g</button>').join('')
+  }
   sellBar.onclick = (e) => {
     const i = e.target?.dataset?.sell
     if (i !== undefined) { send({ do: 'sell', slot: +i }); feed('The keeper counts out your coin.') }
+    const b = e.target?.dataset?.buy
+    if (b !== undefined) {
+      if ((me.gold ?? 0) < STORE_SELLS[b]) { feed('Not enough coin for that.'); return }
+      send({ do: 'buy', item: b }); feed('The keeper slides it across.')
+    }
   }
   document.getElementById('status').textContent =
     me.action ? 'busy: ' + me.action.type : 'idle: click the world'

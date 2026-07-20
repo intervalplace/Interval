@@ -469,6 +469,8 @@ const allocTick = () => {
 const BRIDGE = (a) =>
     a.do === 'move' ? { type: 'move', dx: a.dx, dy: a.dy }
   : a.do === 'spawn' ? { type: 'spawn' }
+  // stop: put down what you are doing. Every window should be able to say it.
+  : a.do === 'stop' ? { type: 'stop' }
   : a.do === 'attack' ? { type: 'attack', mobId: a.mobId }
   : a.do === 'gather' ? { type: 'gather', nodeId: a.nodeId }
   : a.do === 'eat' ? { type: 'eat', slot: a.slot }
@@ -509,9 +511,16 @@ const BRIDGE = (a) =>
 const DOMAIN_INPUT = 'INTERVAL_INPUT_V1|'
 let curWorldId = ''
 async function send(a) {
-  if (ws.readyState !== 1 || !ownKey || !curWorldId) return
-  const f = BRIDGE(a); if (!f) return
-  const tk = allocTick(); if (tk === null) return
+  // Five ways to do nothing, and every one of them used to do it in silence:
+  // press DROP, watch the log stay in your pack, and have no way to learn why.
+  // A window may fail to act. It may not fail to say so.
+  if (ws.readyState !== 1) { feed('not connected to the world yet'); return }
+  if (!ownKey) { feed('no key in this window yet'); return }
+  if (!curWorldId) { feed('still learning which world this is'); return }
+  const f = BRIDGE(a)
+  if (!f) { feed('this window has no wiring for "' + a.do + '" yet'); return }
+  const tk = allocTick()
+  if (tk === null) { feed('too many deeds this interval: try again in a moment'); return }
   const input = { worldId: curWorldId, tick: tk, playerId: ownKey.pub, ...f }
   const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode(DOMAIN_INPUT + canonicalJS(input))))
   ws.send(JSON.stringify({ type: 'raw', input: { ...input, sig } }))
@@ -2730,8 +2739,13 @@ const WEAPON_LOOK = {
 }
 const lookOf = (it) => WEAPON_LOOK[it] ?? { every: 2, ranged: false, style: 'swing' }
 
+// >>> CONSTITUTIONAL IDENTITY BLOCK (spec 4b, spec 10) — character for
+// character the same in every window and in engine.js. test/identity.test.mjs
+// extracts this block from each window and compares it against the engine, so
+// no window can quietly invent its own idea of what a citizen is again.
+// the constitutional thresholds themselves, copied not recomputed (spec 4b)
 const XP_TABLE = [0,0,83,174,276,388,512,650,801,969,1154,1358,1584,1833,2107,2411,2746,3115,3523,3973,4470,5018,5624,6291,7028,7842,8740,9730,10824,12031,13363,14833,16456,18247,20224,22406,24815,27473,30408,33648,37224,41171,45529,50339,55649,61512,67983,75127,83014,91721,101333,111945,123660,136594,150872,166636,184040,203254,224466,247886,273742,302288,333804,368599,407015,449428,496254,547953,605032,668051,737627,814445,899257,992895,1096278,1210421,1336443,1475581,1629200,1798808,1986068,2192818,2421087,2673114,2951373,3258594,3597792,3972294,4385776,4842295,5346332,5902831,6517253,7195629,7944614,8771558,9684577,10692629,11805606,13034431];
-const XP_LVL = (xp) => {
+const XP_TO_LVL = (xp) => {
   let l = 1
   while (l < 99 && xp >= XP_TABLE[l+1]) l++
   if (l < 99 || xp < XP_TABLE[99]) return l
@@ -2768,7 +2782,7 @@ const SKILL_ORDER = ['woodcutting', 'mining', 'fishing', 'cooking', 'smithing',
   'defence', 'hitpoints', 'exploration', 'brewing']
 function standingOf(p) { // the sum of true levels: mastery is a milestone, not a ceiling
   let n = 0
-  for (const sk of SKILL_ORDER) n += XP_LVL(p?.skills?.[sk] ?? 0)
+  for (const sk of SKILL_ORDER) n += XP_TO_LVL(p?.skills?.[sk] ?? 0)
   return n
 }
 function callingOf(p) { // the trade you have the most experience in, as a word
@@ -2778,13 +2792,45 @@ function callingOf(p) { // the trade you have the most experience in, as a word
     const xp = p?.skills?.[sk] ?? 0
     if (xp > bestXp) { bestXp = xp; best = sk }
   }
-  if (best === null || XP_LVL(bestXp) <= 1) return 'newcomer'
+  if (best === null || XP_TO_LVL(bestXp) <= 1) return 'newcomer'
   // all sixteen: what the world announces as Master of Interval
   if (SKILL_ORDER.every(sk => (p?.skills?.[sk] ?? 0) >= XP_TABLE[99])) return 'Master of Interval'
   // mastery is the milestone the world announces, so the calling says it
   return (bestXp >= XP_TABLE[99] ? 'master ' : '') + CALLINGS[best]
 }
+// the mobs, character for character from engine.js MOB_STATS (spec 6c). A
+// window cannot ask the world how hard a troll hits: the state carries a mob's
+// type and its current hp and nothing else. These are the real numbers, and
+// test/identity.test.mjs holds them to the engine's.
+const MOB_STATS = {
+  goblin:            { maxHp: 5,  atk: 1, def: 1, maxHit: 1, respawn: 16 },
+  wolf:              { maxHp: 8,  atk: 2, def: 2, maxHit: 2, respawn: 150 },
+  troll:             { maxHp: 20, atk: 4, def: 4, maxHit: 3, respawn: 300 },
+  bear:              { maxHp: 14, atk: 3, def: 3, maxHit: 2, respawn: 220 },
+  'skeleton-knight': { maxHp: 18, atk: 5, def: 6, maxHit: 4, respawn: 120 },
+}
+const mobMaxHp = (type) => MOB_STATS[type]?.maxHp ?? 1
+// the keeper's ledger, character for character from engine.js PRICES (spec 6l).
+// The flat window carried thirteen of these twenty-three by hand, so ten items
+// simply could not be sold in it: star gear, the horn-bow, grain, and every
+// dagger, spear and maul. A window that copies a table copies it at a moment
+// in time; test/identity.test.mjs holds this one to the engine's.
+const PRICES = {
+  'bronze-dagger': 8, 'bronze-spear': 14, 'bronze-maul': 22,
+  'star-spear': 100, 'star-maul': 160, 'horn-bow': 90,
+  'logs': 2, 'ore': 5, 'raw-fish': 3, 'cooked-fish': 6, 'bones': 2, 'arrows': 1,
+  'magic-stone': 20, 'bronze-sword': 15, 'bronze-hatchet': 10, 'bronze-pickaxe': 10,
+  'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8, 'grain': 4,
+  'star-sword': 120, 'star-helm': 60, 'star-plate': 200,
+}
+// what the keeper offers, from engine.js STORE_SELLS (spec 6l). One line, and
+// it is the whole of the store's stock: the world sells seeds and nothing
+// else, because everything else is meant to be made or found. A window that
+// guesses at this offers a citizen things they cannot buy.
+const STORE_SELLS = { seeds: 15 }
 // <<< CONSTITUTIONAL IDENTITY BLOCK
+
+const XP_LVL = XP_TO_LVL
 function XP_AT(l) { // xp at the foot of level l, past mastery included
   if (l <= 99) return XP_TABLE[Math.max(1, l)] ?? 0
   let points = XP_TABLE[99] * 4
@@ -2795,12 +2841,285 @@ function XP_AT(l) { // xp at the foot of level l, past mastery included
 // names its prices both ways, and the gear panel undresses. Every verb
 // already blessed by the engine; these are merely its counters. ----
 const ICON_URL = {}
+// The item icons, from the deep window. The photo window called this and
+// never carried it: every inventory icon threw. Windows are allowed to
+// look nothing alike, but a window that references a thing must have it.
+function itemSprite(item) {
+  if (ICON_CV[item]) return ICON_CV[item]
+  const c = document.createElement('canvas'); c.width = 32; c.height = 32
+  const g = c.getContext('2d')
+  g.lineJoin = 'round'; g.lineCap = 'round'
+  const OUT = 'rgba(22,13,4,.85)' // one dark outline unifies the set
+  const pl = (pts, fill, stroke, lw) => { g.beginPath(); g.moveTo(pts[0][0], pts[0][1])
+    for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1])
+    g.closePath(); if (fill) { g.fillStyle = fill; g.fill() }
+    if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw ?? 1.3; g.stroke() } }
+  const lin = (x0, y0, x1, y1, stops) => { const gr = g.createLinearGradient(x0, y0, x1, y1)
+    for (const [o, cc] of stops) gr.addColorStop(o, cc); return gr }
+  const shade = () => { g.fillStyle = 'rgba(0,0,0,.24)' // everything stands on the same floor
+    g.beginPath(); g.ellipse(16, 28, 9.5, 2.3, 0, 0, 7); g.fill() }
+  const aura = (col) => { const gr = g.createRadialGradient(16, 15, 2, 16, 15, 14)
+    gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)')
+    g.fillStyle = gr; g.fillRect(0, 0, 32, 32) }
+  const glint = (x, y) => { g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(x, y, 1.6, 1.6) }
+  const log1 = (x, y, ang) => {
+    g.save(); g.translate(x, y); g.rotate(ang)
+    g.fillStyle = lin(0, -3.4, 0, 3.4, [[0, '#a5763c'], [0.5, '#7d5427'], [1, '#4a2f14']])
+    g.fillRect(-10.5, -3.2, 21, 6.4)
+    g.strokeStyle = OUT; g.lineWidth = 1.2; g.strokeRect(-10.5, -3.2, 21, 6.4)
+    g.strokeStyle = 'rgba(40,22,8,.5)'; g.lineWidth = 0.8
+    for (const ly of [-1.4, 0.6, 2]) { g.beginPath(); g.moveTo(-9, ly); g.lineTo(9, ly); g.stroke() }
+    g.fillStyle = '#d9b87a'; g.beginPath(); g.ellipse(10.5, 0, 2.2, 3.2, 0, 0, 7); g.fill()
+    g.strokeStyle = '#9a6a34'; g.lineWidth = 1
+    g.beginPath(); g.ellipse(10.5, 0, 1.1, 1.7, 0, 0, 7); g.stroke()
+    g.strokeStyle = OUT; g.beginPath(); g.ellipse(10.5, 0, 2.2, 3.2, 0, 0, 7); g.stroke()
+    g.restore()
+  }
+  const fish = (belly, back, fin) => {
+    shade()
+    pl([[4,16],[9,10.5],[19,9],[25.5,13.5],[25.5,18.5],[19,23],[9,21.5]],
+      lin(0, 8, 0, 24, [[0, back], [0.45, belly], [1, back]]), OUT)
+    pl([[25.5,13.5],[30.5,8.5],[29,16],[30.5,23.5],[25.5,18.5]], back, OUT) // the tail forks
+    pl([[13,9.6],[17,6.5],[19,9.2]], fin, OUT)  // dorsal
+    pl([[12,17],[16,19.5],[12,21]], fin, OUT)   // pectoral
+    g.strokeStyle = 'rgba(22,13,4,.4)'; g.lineWidth = 1
+    g.beginPath(); g.arc(10.5, 16, 4.4, -0.9, 0.9); g.stroke() // the gill
+    g.fillStyle = '#f4f0e8'; g.beginPath(); g.arc(9.4, 14, 1.7, 0, 7); g.fill()
+    g.fillStyle = '#10100c'; g.beginPath(); g.arc(9.7, 14.2, 0.9, 0, 7); g.fill()
+    glint(8.8, 13)
+  }
+  const swordIcon = (edge, flat, glowCol) => {
+    if (glowCol) aura(glowCol)
+    shade()
+    g.save(); g.translate(14.5, 14.5); g.rotate(-Math.PI / 4)
+    g.fillStyle = lin(-2, 0, 2, 0, [[0, '#ffffff'], [0.35, edge], [1, flat]])
+    g.fillRect(-1.9, -13.5, 3.8, 17)
+    pl([[-1.9, -13.5], [0, -17], [1.9, -13.5]], edge) // the point
+    g.strokeStyle = OUT; g.lineWidth = 1.1
+    g.beginPath(); g.moveTo(-1.9, 3.5); g.lineTo(-1.9, -13.5); g.lineTo(0, -17)
+    g.lineTo(1.9, -13.5); g.lineTo(1.9, 3.5); g.stroke()
+    g.strokeStyle = 'rgba(22,13,4,.35)'
+    g.beginPath(); g.moveTo(0, -14.5); g.lineTo(0, 2); g.stroke() // the fuller
+    g.fillStyle = lin(0, 3.5, 0, 6, [[0, '#d8a050'], [1, '#7d5427']])
+    g.fillRect(-5, 3.5, 10, 2.4); g.strokeStyle = OUT; g.strokeRect(-5, 3.5, 10, 2.4)
+    g.fillStyle = '#3a2a16'; g.fillRect(-1.5, 5.9, 3, 6)
+    g.strokeStyle = 'rgba(0,0,0,.45)'; g.lineWidth = 0.8
+    for (const wy of [7.4, 9, 10.6]) { g.beginPath(); g.moveTo(-1.5, wy); g.lineTo(1.5, wy); g.stroke() }
+    g.fillStyle = '#d8a050'; g.beginPath(); g.arc(0, 13, 2, 0, 7); g.fill()
+    g.strokeStyle = OUT; g.lineWidth = 1; g.stroke()
+    g.restore()
+    glint(17.5, 6)
+  }
+  const helmIcon = (hi, lo) => {
+    shade()
+    g.fillStyle = lin(8, 6, 26, 22, [[0, hi], [1, lo]])
+    g.beginPath(); g.moveTo(7, 20); g.lineTo(7, 14); g.quadraticCurveTo(7, 6, 16, 6)
+    g.quadraticCurveTo(25, 6, 25, 14); g.lineTo(25, 20); g.closePath(); g.fill()
+    g.strokeStyle = OUT; g.lineWidth = 1.3; g.stroke()
+    g.fillStyle = lo; g.fillRect(6.4, 19.5, 19.2, 3)
+    g.strokeStyle = OUT; g.lineWidth = 1.1; g.strokeRect(6.4, 19.5, 19.2, 3)
+    g.fillStyle = lo; g.fillRect(14.6, 12, 2.8, 12) // the nasal
+    g.strokeStyle = OUT; g.strokeRect(14.6, 12, 2.8, 12)
+    g.fillStyle = 'rgba(255,255,255,.3)'
+    g.beginPath(); g.ellipse(12, 9.6, 4, 1.8, -0.5, 0, 7); g.fill()
+    g.fillStyle = 'rgba(22,13,4,.6)'
+    for (const rx of [9, 16, 23]) { g.beginPath(); g.arc(rx, 21, 0.8, 0, 7); g.fill() }
+  }
+  const plateIcon = (hi, lo) => {
+    shade()
+    pl([[9,7],[23,7],[26.5,12],[24,26],[8,26],[5.5,12]],
+      lin(8, 6, 26, 26, [[0, hi], [1, lo]]), OUT, 1.3)
+    g.strokeStyle = 'rgba(22,13,4,.4)'; g.lineWidth = 1
+    g.beginPath(); g.moveTo(16, 7); g.lineTo(16, 26); g.stroke() // the midline
+    g.beginPath(); g.moveTo(11, 7); g.quadraticCurveTo(16, 11, 21, 7); g.stroke() // the collar
+    g.fillStyle = 'rgba(255,255,255,.28)'
+    g.beginPath(); g.ellipse(11.5, 10.5, 3.4, 1.6, -0.4, 0, 7); g.fill()
+    g.fillStyle = 'rgba(22,13,4,.6)'
+    for (const [rx, ry] of [[8.6,13],[23.4,13],[9.4,23],[22.6,23]]) { g.beginPath(); g.arc(rx, ry, 0.8, 0, 7); g.fill() }
+  }
+  switch (item) {
+    case 'logs':
+      shade(); log1(16, 19, -0.14); log1(15.4, 12.6, 0.10); break
+    case 'ore': {
+      shade()
+      pl([[5,25],[8.5,13],[17,8.5],[26,13.5],[27,24],[14,27.5]],
+        lin(6, 9, 27, 27, [[0, '#aca89e'], [0.5, '#8a867c'], [1, '#57534a']]), OUT)
+      pl([[8.5,13],[17,8.5],[19,14],[12,16.5]], 'rgba(255,255,255,.22)')
+      pl([[19,14],[26,13.5],[27,24],[21,20]], 'rgba(0,0,0,.16)')
+      const nug = (x, y, s) => { g.fillStyle = lin(x - s, y - s, x + s, y + s, [[0, '#e8b053'], [1, '#8a5a1a']])
+        g.fillRect(x - s, y - s, s * 2, s * 2)
+        g.strokeStyle = OUT; g.lineWidth = 0.8; g.strokeRect(x - s, y - s, s * 2, s * 2) }
+      nug(13.5, 21.5, 2); nug(20.5, 16, 1.6); nug(17.5, 24, 1.2)
+      glint(12.6, 20.4); break }
+    case 'raw-fish': fish('#a8cce4', '#4a7ba3', '#6f9dc2'); break
+    case 'cooked-fish': fish('#f0c284', '#b0763a', '#d49a5e'); break
+    case 'burnt-fish': fish('#57504a', '#2e2926', '#453e3a'); break
+    case 'bones': {
+      shade()
+      const bone = (x0, y0, x1, y1) => {
+        const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy)
+        const nx = -dy / L * 2, ny = dx / L * 2
+        g.strokeStyle = OUT; g.lineWidth = 5.4
+        g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke()
+        g.fillStyle = '#efe9d2'
+        for (const [bx, by] of [[x0 + nx, y0 + ny], [x0 - nx, y0 - ny], [x1 + nx, y1 + ny], [x1 - nx, y1 - ny]]) {
+          g.beginPath(); g.arc(bx, by, 2.7, 0, 7); g.fill()
+          g.strokeStyle = OUT; g.lineWidth = 1; g.stroke()
+        }
+        g.strokeStyle = lin(x0, y0, x1, y1, [[0, '#f7f2e0'], [1, '#cfc7a8']]); g.lineWidth = 3.2
+        g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke()
+      }
+      bone(9.5, 21.5, 22.5, 8.5); bone(9.5, 9.5, 22.5, 20.5)
+      glint(14, 13.6); break }
+    case 'bronze-sword': swordIcon('#e4ddc9', '#9a927e', null); break
+    case 'star-sword': swordIcon('#c8f0ff', '#54a8cc', 'rgba(90,200,255,.5)'); break
+    case 'bronze-hatchet': {
+      shade()
+      g.save(); g.translate(16, 16); g.rotate(0.7)
+      g.fillStyle = lin(-2, 0, 2, 0, [[0, '#7d5427'], [1, '#452b12']])
+      g.fillRect(-1.7, -3, 3.4, 17)
+      g.strokeStyle = OUT; g.lineWidth = 1.1; g.strokeRect(-1.7, -3, 3.4, 17)
+      g.fillStyle = '#33220f'; g.fillRect(-2, 8, 4, 3.4) // the wrap
+      g.restore()
+      pl([[15,4.5],[25.5,7],[24.5,15.5],[13.5,12]],
+        lin(14, 4, 26, 15, [[0, '#e0a84e'], [0.6, '#b07a34'], [1, '#6b4515']]), OUT, 1.3)
+      g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1.4
+      g.beginPath(); g.moveTo(25.1, 8); g.lineTo(24.3, 14.8); g.stroke() // the honed bit
+      glint(16.4, 6); break }
+    case 'bronze-pickaxe': {
+      shade()
+      g.save(); g.translate(16, 17); g.rotate(0.6)
+      g.fillStyle = lin(-2, 0, 2, 0, [[0, '#7d5427'], [1, '#452b12']])
+      g.fillRect(-1.7, -4, 3.4, 17)
+      g.strokeStyle = OUT; g.lineWidth = 1.1; g.strokeRect(-1.7, -4, 3.4, 17)
+      g.fillStyle = '#33220f'; g.fillRect(-2, 9, 4, 3.4)
+      g.restore()
+      g.fillStyle = lin(6, 4, 26, 13, [[0, '#e0a84e'], [0.6, '#b07a34'], [1, '#6b4515']])
+      g.beginPath(); g.moveTo(5, 12); g.quadraticCurveTo(16, 1.5, 27, 12)
+      g.quadraticCurveTo(16, 6.5, 5, 12); g.closePath(); g.fill()
+      g.strokeStyle = OUT; g.lineWidth = 1.2; g.stroke()
+      glint(11, 6.4); break }
+    case 'wooden-bow': {
+      shade()
+      g.strokeStyle = '#d9d3c0'; g.lineWidth = 1
+      g.beginPath(); g.moveTo(12 + Math.cos(-1.35) * 11, 16 + Math.sin(-1.35) * 11)
+      g.lineTo(12 + Math.cos(1.35) * 11, 16 + Math.sin(1.35) * 11); g.stroke()
+      g.strokeStyle = OUT; g.lineWidth = 4.6
+      g.beginPath(); g.arc(12, 16, 11, -1.35, 1.35); g.stroke()
+      g.strokeStyle = lin(12, 4, 12, 28, [[0, '#9a6a34'], [0.5, '#6b4a2a'], [1, '#4a2f14']])
+      g.lineWidth = 3
+      g.beginPath(); g.arc(12, 16, 11, -1.35, 1.35); g.stroke()
+      g.strokeStyle = '#33220f'; g.lineWidth = 4.4
+      g.beginPath(); g.arc(12, 16, 11, -0.22, 0.22); g.stroke() // the grip wrap
+      glint(20.6, 8.4); break }
+    case 'arrows': {
+      shade()
+      for (const off of [0, 6.5]) {
+        g.strokeStyle = OUT; g.lineWidth = 3.2
+        g.beginPath(); g.moveTo(6 + off, 26 - off); g.lineTo(20 + off, 12 - off); g.stroke()
+        g.strokeStyle = lin(6 + off, 26 - off, 20 + off, 12 - off, [[0, '#9a6a34'], [1, '#6b4a2a']])
+        g.lineWidth = 1.7
+        g.beginPath(); g.moveTo(6 + off, 26 - off); g.lineTo(20 + off, 12 - off); g.stroke()
+        pl([[20 + off, 12 - off], [26 + off, 6 - off], [23.5 + off, 13.5 - off]],
+          lin(20 + off, 12 - off, 26 + off, 6 - off, [[0, '#e4ddc9'], [1, '#9a927e']]), OUT, 1)
+        pl([[5 + off, 25 - off], [3.4 + off, 29 - off], [8 + off, 26.6 - off]], '#c0392b', OUT, 1)
+        pl([[7 + off, 23 - off], [5.4 + off, 27 - off], [10 + off, 24.6 - off]], '#efe9d2', OUT, 1)
+      }
+      break }
+    case 'bronze-helm': helmIcon('#e0a84e', '#8a5a22'); break
+    case 'star-helm': aura('rgba(90,200,255,.4)'); helmIcon('#9ad8ef', '#2a7d9e'); break
+    case 'bronze-plate': plateIcon('#e0a84e', '#8a5a22'); break
+    case 'star-plate': aura('rgba(90,200,255,.4)'); plateIcon('#9ad8ef', '#2a7d9e'); break
+    case 'magic-stone': {
+      aura('rgba(120,215,255,.55)')
+      shade()
+      pl([[16,3.5],[25.5,16],[16,28.5],[6.5,16]],
+        lin(8, 6, 25, 27, [[0, '#e4f8ff'], [0.45, '#8ce0ff'], [1, '#2a7d9e']]), OUT, 1.3)
+      pl([[16,3.5],[16,28.5],[6.5,16]], 'rgba(255,255,255,.30)')
+      g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 0.9
+      g.beginPath(); g.moveTo(16, 3.5); g.lineTo(11, 16); g.lineTo(16, 28.5); g.stroke()
+      g.beginPath(); g.moveTo(6.5, 16); g.lineTo(25.5, 16); g.stroke()
+      glint(13.4, 10); break }
+    case 'seeds': {
+      shade()
+      g.fillStyle = lin(10, 10, 24, 26, [[0, '#a5763c'], [1, '#57381a']])
+      g.beginPath(); g.moveTo(11, 12); g.quadraticCurveTo(6, 24, 13, 26.5)
+      g.quadraticCurveTo(16, 27.5, 19, 26.5); g.quadraticCurveTo(26, 24, 21, 12); g.closePath(); g.fill()
+      g.strokeStyle = OUT; g.lineWidth = 1.3; g.stroke()
+      g.fillStyle = '#7d5427'; g.fillRect(10.5, 9.6, 11, 3.2)
+      g.strokeStyle = OUT; g.lineWidth = 1.1; g.strokeRect(10.5, 9.6, 11, 3.2)
+      g.strokeStyle = '#d9b87a'; g.lineWidth = 1.2 // the drawstring
+      g.beginPath(); g.moveTo(11, 11.2); g.lineTo(21.5, 11.2); g.stroke()
+      g.fillStyle = '#c9a86a'
+      for (const [sx3, sy3, r3] of [[8.5, 27, 0.5], [24, 27.5, 0.9], [26, 24.5, 0.2]]) {
+        g.save(); g.translate(sx3, sy3); g.rotate(r3)
+        g.beginPath(); g.ellipse(0, 0, 1.7, 2.6, 0, 0, 7); g.fill(); g.restore()
+      }
+      glint(13, 15); break }
+    case 'grain': {
+      shade()
+      for (const [gx3, off] of [[10.5, 0], [16.5, -2], [22.5, 0.5]]) {
+        g.strokeStyle = '#7d6a1f'; g.lineWidth = 1.5
+        g.beginPath(); g.moveTo(gx3, 27); g.quadraticCurveTo(gx3 + 0.5, 19 + off, gx3 + 2, 13 + off); g.stroke()
+        g.fillStyle = lin(gx3 - 2, 6 + off, gx3 + 5, 14 + off, [[0, '#f0d75e'], [1, '#c99a2a']])
+        g.beginPath(); g.ellipse(gx3 + 2, 9.5 + off, 2.8, 5.2, 0.14, 0, 7); g.fill()
+        g.strokeStyle = OUT; g.lineWidth = 1; g.stroke()
+        g.strokeStyle = 'rgba(120,90,20,.7)'; g.lineWidth = 0.7
+        for (const aw of [-1.2, 0, 1.2]) { g.beginPath(); g.moveTo(gx3 + 2 + aw, 5.4 + off); g.lineTo(gx3 + 2 + aw * 0.4, 9.5 + off); g.stroke() }
+      }
+      break }
+    case 'old-chain': {
+      shade()
+      for (let li = 0; li < 5; li++) {
+        const lx = 8 + li * 4.2, ly = 24 - li * 4.2
+        g.strokeStyle = OUT; g.lineWidth = 3.6
+        g.beginPath(); g.ellipse(lx, ly, 2.7, 3.5, -0.78, 0, 7); g.stroke()
+        g.strokeStyle = lin(lx - 3, ly - 3, lx + 3, ly + 3, [[0, '#b8b8ae'], [1, '#6b6b62']])
+        g.lineWidth = 1.9
+        g.beginPath(); g.ellipse(lx, ly, 2.7, 3.5, -0.78, 0, 7); g.stroke()
+      }
+      glint(9.4, 20.4); break }
+    case 'gold-coin': {
+      shade()
+      g.fillStyle = '#7d5414'; g.beginPath(); g.arc(16, 17.2, 10.2, 0, 7); g.fill()
+      g.fillStyle = lin(8, 7, 25, 25, [[0, '#f7d97a'], [0.55, '#e8b53a'], [1, '#b0801f']])
+      g.beginPath(); g.arc(16, 16, 10, 0, 7); g.fill()
+      g.strokeStyle = OUT; g.lineWidth = 1.2; g.stroke()
+      g.strokeStyle = 'rgba(125,84,20,.8)'; g.lineWidth = 1.4
+      g.beginPath(); g.arc(16, 16, 7.2, 0, 7); g.stroke()
+      g.fillStyle = 'rgba(255,255,255,.5)'
+      g.beginPath(); g.ellipse(12, 11, 4.2, 2, -0.6, 0, 7); g.fill()
+      g.fillStyle = '#8a5f14'; g.font = 'bold 10px Verdana'; g.textAlign = 'center'
+      g.fillText('i', 16.6, 20.4) // struck deep,
+      g.fillStyle = '#f7d97a'; g.fillText('i', 16, 19.8) // then raised in relief
+      break }
+    case 'sigil': {
+      aura('rgba(90,200,255,.35)')
+      g.fillStyle = lin(8, 8, 25, 26, [[0, '#242c44'], [1, '#10141f']])
+      g.beginPath(); g.arc(16, 16, 11, 0, 7); g.fill()
+      g.strokeStyle = OUT; g.lineWidth = 1.2; g.stroke()
+      g.strokeStyle = '#8ce0ff'; g.lineWidth = 1.7
+      g.shadowColor = 'rgba(140,224,255,.9)'; g.shadowBlur = 4 // the rune keeps its own light
+      g.beginPath(); g.arc(16, 16, 7, 0.6, 5.2); g.stroke()
+      g.fillStyle = '#8ce0ff'; g.fillRect(14.6, 7.6, 2.8, 2.8)
+      g.beginPath(); g.arc(16, 16, 1.6, 0, 7); g.fill()
+      g.shadowBlur = 0
+      break }
+    default:
+      shade()
+      pl([[8,10],[24,10],[24,25],[8,25]], lin(8, 10, 24, 25, [[0, '#8a6a3a'], [1, '#57381a']]), OUT, 1.3)
+      g.strokeStyle = 'rgba(22,13,4,.4)'; g.lineWidth = 1
+      for (const py of [15, 20]) { g.beginPath(); g.moveTo(8, py); g.lineTo(24, py); g.stroke() }
+  }
+  return ICON_CV[item] = c
+}
+
 const iconUrl = (item) => ICON_URL[item] ?? (ICON_URL[item] = itemSprite(item).toDataURL())
-const STORE_SELLS3 = { seeds: 15 } // what the store offers (engine STORE_SELLS)
+const STORE_SELLS3 = STORE_SELLS // one stock list, in the identity block above
 const RECIPES3 = { 'bronze-dagger': {"ore": 1}, 'bronze-spear': {"ore": 1, "logs": 1}, 'bronze-maul': {"ore": 2, "logs": 1}, 'star-spear': {"magic-stone": 2, "ore": 1, "logs": 1}, 'star-maul': {"magic-stone": 3, "ore": 2, "logs": 1}, 'bronze-sword': {"ore": 2, "logs": 1}, 'bronze-hatchet': {"ore": 1, "logs": 1}, 'bronze-pickaxe': {"ore": 1, "logs": 1}, 'bronze-helm': {"ore": 1, "logs": 1}, 'bronze-plate': {"ore": 3, "logs": 1}, 'star-sword': {"magic-stone": 3, "ore": 2}, 'star-helm': {"magic-stone": 2, "ore": 1}, 'star-plate': {"magic-stone": 4, "ore": 3}, 'star-dagger': {"magic-stone": 2, "ore": 1} }
 const SMITH_REQS3 = { 'star-sword': { smithing: 20, magic: 10 }, 'star-helm': { smithing: 15, magic: 5 },
   'star-plate': { smithing: 30, magic: 15 }, 'star-dagger': { smithing: 20, magic: 15 } }
-const PRICES3 = { 'bronze-dagger': 8, 'bronze-spear': 14, 'bronze-maul': 22, 'star-spear': 100, 'star-maul': 160, 'horn-bow': 90, 'logs': 2, 'ore': 5, 'raw-fish': 3, 'cooked-fish': 6, 'bones': 2, 'arrows': 1, 'magic-stone': 20, 'bronze-sword': 15, 'bronze-hatchet': 10, 'bronze-pickaxe': 10, 'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8, 'grain': 4, 'star-sword': 120, 'star-helm': 60, 'star-plate': 200 } // mirrors engine PRICES
+const PRICES3 = PRICES // one ledger per window, in the identity block above
 
 function initAn(g, id) {
   let hsd = 0

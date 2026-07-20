@@ -1,6 +1,6 @@
 # Interval 0.23.0 — Phase 1 Freeze
 
-*Release 0.24.0 · protocol spec v0.69 · consensus spec v1.9 · rules hash `875de79db259fcf5…`. These four move together; a change to any is a new release.*
+*Release 0.28.0 · protocol spec v0.73 · consensus spec v1.9 · rules hash `6236fc39d57dfa53…`. These four move together; a change to any is a new release.*
 
 A decentralized MMO protocol. The game is a deterministic state machine,
 the spec is the constitution, and the rules are the authority: not a
@@ -302,7 +302,9 @@ ever.
 
 - **Layer 1 (node):** constitution + consensus. Headless. Unchanged.
 - **Layer 2 (SDK):** `IntervalClient`: read the world, act in it
-  (`move`, `gather`, `claimName`), subscribe to ticks. Knows nothing
+  (`move`, `gather`, `survey`, `brew`, `kindle`, `claimName`: every
+  input the constitution defines has a helper, and a test reads that
+  list out of the engine so the two cannot drift), subscribe to ticks. Knows nothing
   about pixels. Humans and bots use this identical interface: in
   `session.mjs`, alice's scripted "hands" and bob's bot are
   indistinguishable to the protocol: bot indifference made concrete.

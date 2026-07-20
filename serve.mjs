@@ -416,6 +416,7 @@ const server = http.createServer((req, res) => {
     if (path === '/play/flat' || path === '/window-web') return sendFile('./window-web.html', 'text/html')
     if (path === '/play/deep' || path === '/deluxe') return sendFile('./window-3d.html', 'text/html')
     if (path === '/play/photo' || path === '/photo') return sendFile('./window-photo.html', 'text/html')
+    if (path === '/play/holo' || path === '/holo') return sendFile('./window-holo.html', 'text/html')
     // Music, if the world has any. Nothing here ships with a tune: a node with
     // an empty audio/ directory simply plays nothing, and the windows fall
     // silent without complaint. Drop files in and they are found.

@@ -30,7 +30,12 @@ export const LIMITS = {
   MAX_GOSSIP_BYTES: 16 * 1024,          // one signed input or hash is <1KB
   MAX_CHAT_BYTES: 2 * 1024,
   MAX_FUTURE_TICKS: 20,                 // ~12s lookahead; distant futures are noise or attack
-  MAX_INPUTS_PER_INTERVAL: 4096,        // per-tick buffer bucket cap
+  // A BUFFER bound, not a rule. Which inputs a tick applies is decided by the
+  // engine (SPEC §5.4), deterministically, from everything received. This is
+  // simply how much a node will hold in memory while waiting for the tick, and
+  // it is set well above the applied cap so that a node has the whole field to
+  // choose from rather than whichever arrived first.
+  MAX_INPUTS_PER_INTERVAL: 16384,       // per-tick buffer bucket cap
   MAX_BUFFERED_INTERVALS: 64,           // distinct future ticks held at once
   MAX_REPLAY_TICKS_PER_REQUEST: 256,
   MAX_REPLAY_RESPONSE_BYTES: 4 * 1024 * 1024,

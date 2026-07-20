@@ -355,8 +355,98 @@ const WEAPON_LOOK = {
   'wooden-bow': { every: 2, ranged: true }, 'horn-bow': { every: 2, ranged: true },
 }
 const lookOf = (it) => WEAPON_LOOK[it] ?? { every: 2, ranged: false }
-const XP_TABLE = [0,0,83,174,276,388,512,650,801,969,1154,1358,1584,1833,2107,2411,2746,3115,3523,3973,4470,5018,5624,6291,7028,7842,8740,9730,10824,12031,13363,14833,16456,18247,20224,22406,24815,27473,30408,33648,37224,41171,45529,50339,55649,61512,67983,75127,83014,91721,101333,111945,123660,136594,150872,166636,184040,203254,224466,247886,273742,302288,333804,368599,407015,449428,496254,547953,605032,668051,737627,814445,899257,992895,1096278,1210421,1336443,1475581,1629200,1798808,1986068,2192818,2421087,2673114,2951373,3258594,3597792,3972294,4385776,4842295,5346332,5902831,6517253,7195629,7944614,8771558,9684577,10692629,11805606,13034431]
-const XP_LVL = (xp) => { let l = 1; while (l < 99 && xp >= XP_TABLE[l + 1]) l++; return l }
+// >>> CONSTITUTIONAL IDENTITY BLOCK (spec 4b, spec 10) — character for
+// character the same in every window and in engine.js. test/identity.test.mjs
+// extracts this block from each window and compares it against the engine, so
+// no window can quietly invent its own idea of what a citizen is again.
+// the constitutional thresholds themselves, copied not recomputed (spec 4b)
+const XP_TABLE = [0,0,83,174,276,388,512,650,801,969,1154,1358,1584,1833,2107,2411,2746,3115,3523,3973,4470,5018,5624,6291,7028,7842,8740,9730,10824,12031,13363,14833,16456,18247,20224,22406,24815,27473,30408,33648,37224,41171,45529,50339,55649,61512,67983,75127,83014,91721,101333,111945,123660,136594,150872,166636,184040,203254,224466,247886,273742,302288,333804,368599,407015,449428,496254,547953,605032,668051,737627,814445,899257,992895,1096278,1210421,1336443,1475581,1629200,1798808,1986068,2192818,2421087,2673114,2951373,3258594,3597792,3972294,4385776,4842295,5346332,5902831,6517253,7195629,7944614,8771558,9684577,10692629,11805606,13034431];
+const XP_TO_LVL = (xp) => {
+  let l = 1
+  while (l < 99 && xp >= XP_TABLE[l+1]) l++
+  if (l < 99 || xp < XP_TABLE[99]) return l
+  let points = XP_TABLE[99] * 4
+  while (true) { // beyond mastery: honor without bound (spec 4b)
+    points += xpStepAt(l)
+    if (xp < Math.floor(points / 4)) return l
+    l++
+  }
+}
+// 2^(r/7) scaled by 2^96, as exact integers. ECMA-262 does not require
+// Math.pow to be correctly rounded, so the curve past mastery is computed from
+// these rather than from a float power: two engines that disagreed in the last
+// place would report different standings for the same citizen. (Verified: this
+// reproduces every one of the 98 constitutional thresholds exactly, and V8's
+// own Math.pow already differs from the true value at 15 levels past 267.)
+const POW2_SEVENTHS = [
+  79228162514264337593543950336n, 87474983419643881438334899625n,
+  96580211902419410754522887331n, 106633199189855989094361944303n,
+  117732597035010858756489598210n, 129987325803940059419872279709n,
+  143517643330631577550838571505n]
+function xpStepAt(lvl) { // floor(lvl + 300 * 2^(lvl/7)), exactly
+  const q = BigInt(Math.floor(lvl / 7)), r = lvl % 7
+  return lvl + Number((300n * (1n << q) * POW2_SEVENTHS[r]) >> 96n)
+}
+const CALLINGS = {
+  woodcutting: 'forester', mining: 'miner', fishing: 'fisher', cooking: 'cook',
+  smithing: 'smith', firemaking: 'firekeeper', prayer: 'mourner', ranged: 'archer',
+  magic: 'sigilist', farming: 'farmer', fletching: 'fletcher', attack: 'fighter',
+  defence: 'warden', exploration: 'cartographer', brewing: 'brewer',
+}
+const SKILL_ORDER = ['woodcutting', 'mining', 'fishing', 'cooking', 'smithing',
+  'firemaking', 'prayer', 'ranged', 'magic', 'farming', 'fletching', 'attack',
+  'defence', 'hitpoints', 'exploration', 'brewing']
+function standingOf(p) { // the sum of true levels: mastery is a milestone, not a ceiling
+  let n = 0
+  for (const sk of SKILL_ORDER) n += XP_TO_LVL(p?.skills?.[sk] ?? 0)
+  return n
+}
+function callingOf(p) { // the trade you have the most experience in, as a word
+  let best = null, bestXp = -1
+  for (const sk of SKILL_ORDER) {
+    if (sk === 'hitpoints') continue
+    const xp = p?.skills?.[sk] ?? 0
+    if (xp > bestXp) { bestXp = xp; best = sk }
+  }
+  if (best === null || XP_TO_LVL(bestXp) <= 1) return 'newcomer'
+  // all sixteen: what the world announces as Master of Interval
+  if (SKILL_ORDER.every(sk => (p?.skills?.[sk] ?? 0) >= XP_TABLE[99])) return 'Master of Interval'
+  // mastery is the milestone the world announces, so the calling says it
+  return (bestXp >= XP_TABLE[99] ? 'master ' : '') + CALLINGS[best]
+}
+// the mobs, character for character from engine.js MOB_STATS (spec 6c). A
+// window cannot ask the world how hard a troll hits: the state carries a mob's
+// type and its current hp and nothing else. These are the real numbers, and
+// test/identity.test.mjs holds them to the engine's.
+const MOB_STATS = {
+  goblin:            { maxHp: 5,  atk: 1, def: 1, maxHit: 1, respawn: 16 },
+  wolf:              { maxHp: 8,  atk: 2, def: 2, maxHit: 2, respawn: 150 },
+  troll:             { maxHp: 20, atk: 4, def: 4, maxHit: 3, respawn: 300 },
+  bear:              { maxHp: 14, atk: 3, def: 3, maxHit: 2, respawn: 220 },
+  'skeleton-knight': { maxHp: 18, atk: 5, def: 6, maxHit: 4, respawn: 120 },
+}
+const mobMaxHp = (type) => MOB_STATS[type]?.maxHp ?? 1
+// the keeper's ledger, character for character from engine.js PRICES (spec 6l).
+// The flat window carried thirteen of these twenty-three by hand, so ten items
+// simply could not be sold in it: star gear, the horn-bow, grain, and every
+// dagger, spear and maul. A window that copies a table copies it at a moment
+// in time; test/identity.test.mjs holds this one to the engine's.
+const PRICES = {
+  'bronze-dagger': 8, 'bronze-spear': 14, 'bronze-maul': 22,
+  'star-spear': 100, 'star-maul': 160, 'horn-bow': 90,
+  'logs': 2, 'ore': 5, 'raw-fish': 3, 'cooked-fish': 6, 'bones': 2, 'arrows': 1,
+  'magic-stone': 20, 'bronze-sword': 15, 'bronze-hatchet': 10, 'bronze-pickaxe': 10,
+  'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8, 'grain': 4,
+  'star-sword': 120, 'star-helm': 60, 'star-plate': 200,
+}
+// what the keeper offers, from engine.js STORE_SELLS (spec 6l). One line, and
+// it is the whole of the store's stock: the world sells seeds and nothing
+// else, because everything else is meant to be made or found. A window that
+// guesses at this offers a citizen things they cannot buy.
+const STORE_SELLS = { seeds: 15 }
+// <<< CONSTITUTIONAL IDENTITY BLOCK
+
+const XP_LVL = XP_TO_LVL
 const SKILL_COL = { woodcutting: '#5aa03a', mining: '#9a9aa4', fishing: '#54a0d8', cooking: '#e08a44',
   smithing: '#8a8a99', firemaking: '#ff8830', prayer: '#efe9d2', ranged: '#8ab04a', magic: '#8ce0ff',
   farming: '#7dbb45', fletching: '#c0a86a', attack: '#d94a3a', defence: '#5a7ec0', hitpoints: '#e06a8a', exploration: '#e8c05a' }

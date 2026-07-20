@@ -53,9 +53,19 @@ function ensureEdHash() {
 function initCrypto() { ensureEdHash(); _selectEdBackend(); }
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.69';
+const SPEC_VERSION = '0.73';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
+// v0.70: a name is claimed once and held forever (§5a), with no release and no
+// transfer, so an unclaimed name is a commons that can be taken permanently.
+// Free identities made that a land grab: mint keys, claim every short word, and
+// nobody can ever have them back. Standing is the toll, because standing is
+// time and time is the one thing an attacker cannot parallelize away.
+const NAME_STANDING = 50;
+// The most inputs one tick may apply. A protocol limit, not a node's memory
+// setting: it decides which deeds happen, so it decides state, so it belongs
+// to the constitution.
+const MAX_APPLIED_INPUTS = 4096;
 // Typed error codes for the CJS engine (mirrors errors.mjs; kept in sync by
 // test/version.test.mjs). Identity corruption is the one safety-critical
 // engine throw that operators classify.
@@ -104,6 +114,13 @@ const BRAND_TICKS = 1500; // strike first in the Wilds, wear it 15 minutes
 // chain-frozen. Landing it is a decision, not a rhythm.
 const ROOT_TICKS = 3, ROOT_IMMUNE = 10, ROOT_CD = 120;
 const XP_COOK = 30;
+// v0.73: the gullet has its own rhythm, as the arm does (§6b, lastSwing).
+// Without one, a citizen ate every interval while the fight held, and broth
+// heals 5 against a skeleton-knight's 2 hp per interval at absolute maximum:
+// nobody carrying brews could die, so death, the Wilds and the brand were all
+// decoration. Eating mid-fight stays legal, as §6m intends. It simply has a
+// rate now, and that rate is what makes a beast dangerous to the unready.
+const EAT_EVERY = 8;
 const HEAL_FISH = 3;
 const HEAL_BROTH = 5, HEAL_ALE = 4; // brewed restoration (v0.51)
 const HP_START_XP = 1154; // hitpoints level 10
@@ -1463,9 +1480,10 @@ function validInput(state, input, ctx) {
     }
     case 'claim_name': {
       // spec §5a: lowercase a-z0-9- (no leading/trailing -), 1-12 chars,
-      // name unclaimed, claimant nameless
+      // name unclaimed, claimant nameless, claimant has stood in the world
       const { name } = input;
       if (!isValidName(name)) return false; // ONE shared validator (rev5 §3)
+      if (standingOf(p) < NAME_STANDING) return false; // v0.70: a name costs time
       return !(name in state.names) && p.name === null;
     }
     case 'offer_trade': {
@@ -1646,6 +1664,7 @@ function validInput(state, input, ctx) {
     }
     case 'eat': {
       const slot = p.inventory[input.slot];
+      if (state.tick - (p.lastAte ?? -EAT_EVERY) < EAT_EVERY) return false; // §6m: the gullet has a rhythm
       return Number.isInteger(input.slot) && !!slot && ['cooked-fish', 'ale', 'broth'].includes(slot.item);
     }
     default:
@@ -2052,8 +2071,24 @@ function nextState(state, inputs, _legacyBeacon) {
     seen.set(inp.playerId, seen.has(inp.playerId) ? 'DUP' : inp);
   }
 
-  // apply inputs in canonical playerId order for determinism
-  const order = [...seen.keys()].sort();
+  // v0.70 (§5.4): a tick applies at most MAX_APPLIED_INPUTS inputs, and WHICH
+  // ones is decided here rather than by whichever arrived first. Arrival order
+  // differs between nodes, so a cap applied at the door meant two nodes could
+  // hold different inputs for the same tick, compute different states, and
+  // reach no quorum: a flood of worthless keys could stop the world outright.
+  //
+  // The rule is: citizens who already exist in this world are served before
+  // unknown keys, and within each group the order is the canonical playerId
+  // order used everywhere else. So an attacker minting identities can crowd
+  // out other NEW arrivals, but can never displace a citizen already standing
+  // in the world, and every node discards exactly the same inputs.
+  let order = [...seen.keys()].sort();
+  if (order.length > MAX_APPLIED_INPUTS) {
+    const known = [], strangers = [];
+    for (const pid of order) (s.players[pid] ? known : strangers).push(pid);
+    order = known.concat(strangers).slice(0, MAX_APPLIED_INPUTS);
+    order.sort(); // apply in canonical order, as always
+  }
   _p2mark('input_apply');
   for (const pid of order) {
     const inp = seen.get(pid);
@@ -2389,7 +2424,8 @@ function nextState(state, inputs, _legacyBeacon) {
     } else if (inp.type === 'eat') {
       const slot = p.inventory[inp.slot];
       const heal = !slot ? 0 : slot.item === 'cooked-fish' ? HEAL_FISH : slot.item === 'broth' ? HEAL_BROTH : slot.item === 'ale' ? HEAL_ALE : 0;
-      if (heal > 0) {
+      if (heal > 0 && s.tick - (p.lastAte ?? -EAT_EVERY) >= EAT_EVERY) {
+        p.lastAte = s.tick;
         removeItem(p.inventory, inp.slot, 1); // stackable brews draw from the stack; a fish clears its slot
         p.hp = Math.min(p.hp + heal, effLevel(p.skills.hitpoints));
         // v0.32 (spec 6m): eating does not lower your guard; the fight holds
@@ -2558,22 +2594,39 @@ function nextState(state, inputs, _legacyBeacon) {
         // retaliation (spec §6b.4)
         const defLvl = effLevel(p.skills.defence);
         const Tm = clamp(128 + 4 * (stats.atk - defLvl), 16, 240);
-        if (roll(beacon, pid, 'mobatk') < Tm && !bowDrawn && mobTurn) {
-          // armor soaks (spec 6i): each worn piece turns aside 1 damage
-          const soak = (p.equipment.head ? SOAK(p.equipment.head.item) : 0) + (p.equipment.body ? SOAK(p.equipment.body.item) : 0);
-          p.hp -= Math.max(0, 1 + (roll(beacon, pid, 'mobdmg') % stats.maxHit) - soak);
-          if (p.hp <= 0) {
-            p.hp = 0; // never below nought: nextState must not out-run validateState (v0.53)
-            // death (spec §6c, v0.41): the body lies where it fell for
-            // DEATH_TICKS: the world holds its breath, windows may grieve.
-            p.inventory = Array(INV_SLOTS).fill(null);
-            p.equipment = { weapon: null, head: null, body: null }; // the sink spares nothing (§5d)
-            p.action = null;
-            p.trade = null;
-            p.deadUntil = s.tick + DEATH_TICKS;
+        // v0.71: defence is paid for in RISK, and only in risk. The beast has
+        // to actually swing at you, and it has to be able to reach you. Both
+        // conditions used to sit inside the same test as the hit roll, so the
+        // else-branch caught three different things and paid for all of them:
+        // a genuine miss, a beast resting between swings, and a beast four
+        // tiles away that could never touch you. An archer therefore trained
+        // ranged, hitpoints and defence at once in perfect safety, at the same
+        // defence rate as someone standing in the beast's reach. Defence is
+        // the one skill whose whole meaning is being hit at and surviving it.
+        if (mobTurn && !bowDrawn) {
+          if (roll(beacon, pid, 'mobatk') < Tm) {
+            // armor soaks (spec 6i): each worn piece turns aside 1 damage
+            const soak = (p.equipment.head ? SOAK(p.equipment.head.item) : 0) + (p.equipment.body ? SOAK(p.equipment.body.item) : 0);
+            // v0.72: a blow that lands always costs something. Armour makes a
+            // citizen harder to hurt, never impossible to hurt. Under the old
+            // max(0, ...) a full suit of starmetal soaked 4, which is the
+            // hardest hit any beast in this world can throw: a star-clad
+            // citizen took zero from everything, skeleton-knights included,
+            // and the Wilds held no danger for the best-equipped person in it.
+            p.hp -= Math.max(1, 1 + (roll(beacon, pid, 'mobdmg') % stats.maxHit) - soak);
+            if (p.hp <= 0) {
+              p.hp = 0; // never below nought: nextState must not out-run validateState (v0.53)
+              // death (spec §6c, v0.41): the body lies where it fell for
+              // DEATH_TICKS: the world holds its breath, windows may grieve.
+              p.inventory = Array(INV_SLOTS).fill(null);
+              p.equipment = { weapon: null, head: null, body: null }; // the sink spares nothing (§5d)
+              p.action = null;
+              p.trade = null;
+              p.deadUntil = s.tick + DEATH_TICKS;
+            }
+          } else {
+            p.skills.defence += 4; // it swung, it could reach you, it missed
           }
-        } else {
-          p.skills.defence += 4;
         }
       }
       continue;
