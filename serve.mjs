@@ -21,7 +21,7 @@ const SEED = 'solo-' + (process.env.INTERVAL_SEED || 'world')
 // for the meandering trails, seven settlements, and the great river.
 // Only consulted at FOUNDING — a running world keeps the generator in
 // its genesis forever, because the genesis is the world.
-const WORLD_GEN = process.env.INTERVAL_GEN || 'interval-classic-v1'
+const WORLD_GEN = process.env.INTERVAL_GEN || 'interval-expanse-v1' // SPEC §2l: new foundings use the expanse
 const RULES_HASH = E.sha256(fs.readFileSync(new URL('./SPEC.md', import.meta.url))).toString('hex')
 const WORLD_W = 320, WORLD_H = 200 // epic geography (spec 2b): calibrated travel + Norwick
 const WORLD_FILE = 'checkpoints/world.json'   // the founding record
@@ -86,6 +86,7 @@ const gapOf = (g) => Math.floor((Date.now() - g.anchorMs) / E.TICK_MS) - cpTick
 const canResume = saved
   && saved.genesis.rulesHash === RULES_HASH
   && saved.genesis.genesisSeed === SEED
+  && (saved.genesis.worldGenerator ?? 'interval-classic-v1') === WORLD_GEN
   && Array.isArray(saved.genesis.witnesses)              // pre-witness worlds refound as witnessed ones
   && saved.genesis.witnesses.includes(WITNESS.playerId)  // our witness key must be a founding witness
   && (!savedCp || cpValidFor(saved.genesis))    // an alien/corrupt checkpoint is not this world
@@ -118,6 +119,9 @@ if (canResume) {
     if (saved.genesis.genesisSeed !== SEED)
       why.push('the seed changed (' + saved.genesis.genesisSeed + ' -> ' + SEED
         + '; set INTERVAL_SEED to keep the old one)')
+    if ((saved.genesis.worldGenerator ?? 'interval-classic-v1') !== WORLD_GEN)
+      why.push('the generator changed (' + (saved.genesis.worldGenerator ?? 'interval-classic-v1')
+        + ' -> ' + WORLD_GEN + '; set INTERVAL_GEN to keep the old one)')
     if (!Array.isArray(saved.genesis.witnesses))
       why.push('the saved world predates witnesses')
     else if (!saved.genesis.witnesses.includes(WITNESS.playerId))
