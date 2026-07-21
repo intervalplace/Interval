@@ -12,6 +12,17 @@ const GENERATORS = {
   [expanse.GENERATOR_ID]: expanse,
 }
 
+// the founding, dispatched: each generator founds at its own calibrated
+// scale unless the founder names one. The expanse's own founding also
+// seals its geography, watchfire, and survey retunes into the genesis.
+export function foundGenesis(genId, seed, rulesHash, anchorMs, W = 0, H = 0) {
+  if (genId === expanse.GENERATOR_ID)
+    return expanse.makeExpanseGenesis(seed, rulesHash, anchorMs, W || 640, H || 400)
+  return classicE().makeGenesis(seed, rulesHash, anchorMs, W || 320, H || 200, genId)
+}
+import E from './engine.js'
+const classicE = () => E
+
 export function generatorFor(genesis) {
   const g = GENERATORS[genesis.worldGenerator]
   if (!g) throw new Error(
