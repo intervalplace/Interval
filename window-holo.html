@@ -248,8 +248,22 @@ function inPoolE(x, y) {
   return Math.abs(x - px) + Math.abs(y - py) <= 2
 }
 function settlementsE() {
+  if (GEN === 'interval-expanse-v3') return settlementsE3()
   if (_ssE) return _ssE
   const cx = Math.floor(GW / 2), cy = Math.floor(GH / 2)
+  if (GEN === 'interval-expanse-v2') {
+    // v2: the water towns stand on their water. Mirror of worldgen-expanse2.mjs.
+    const mby = Math.round(GH * 0.24), fmy = Math.round(GH * 0.84)
+    return (_ssE = [
+      { x: cx, y: cy, w: 24, h: 14, name: 'Anchor' },
+      { x: Math.round(GW * 0.46), y: Math.round(GH * 0.14), w: 14, h: 10, name: 'Greenhollow' },
+      { x: riverXE(mby) + 6, y: mby, w: 14, h: 10, name: 'Millbrook' },
+      { x: Math.round(GW * 0.86), y: Math.round(GH * 0.50), w: 14, h: 10, name: 'Cragfoot' },
+      { x: Math.round(GW * 0.85), y: Math.round(GH * 0.80), w: 14, h: 10, name: 'Eastmere' },
+      { x: riverXE(fmy) + 6, y: fmy, w: 14, h: 10, name: 'Fenmarch' },
+      { x: Math.round(GW * 0.26), y: Math.round(GH * 0.46), w: 16, h: 12, name: 'Norwick' },
+    ])
+  }
   return (_ssE = [
     { x: cx, y: cy, w: 24, h: 14, name: 'Anchor' },
     { x: Math.round(GW * 0.46), y: Math.round(GH * 0.14), w: 14, h: 10, name: 'Greenhollow' },
@@ -291,11 +305,176 @@ function biomeAtE(x, y) {
   if (y >= GH * 0.70) return 'fens'
   return 'meadow'
 }
+function fordE(x, y) { // mirror of fordAt: the road crosses, and every main street crosses
+  if (roadTilesE().has(x + ',' + y)) return true
+  for (const s of settlementsE()) {
+    if (Math.abs(x - s.x) <= (s.w >> 1) && Math.abs(y - s.y) <= (s.h >> 1)
+      && (x === s.x || y === s.y)) return true
+  }
+  return false
+}
+// ---- the third expanse (interval-expanse-v3): the island, mirrored ----
+// An exact mirror of worldgen-expanse3.mjs: the coast by octant arithmetic
+// (no atan2 — ECMA-262 leaves it implementation-defined), the borders that
+// are features, the road graph, and the fords painted as bridges.
+function angleOf3(dx, dy) {
+  const ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy
+  if (ax === 0 && ay === 0) return 0
+  if (dx > 0 && dy >= 0) return ax >= ay ? (ay / ax) * 45 : 90 - (ax / ay) * 45
+  if (dx <= 0 && dy > 0) return ay > ax ? 90 + (ax / ay) * 45 : 180 - (ay / ax) * 45
+  if (dx < 0 && dy <= 0) return ax >= ay ? 180 + (ay / ax) * 45 : 270 - (ax / ay) * 45
+  return ay > ax ? 270 + (ax / ay) * 45 : 360 - (ay / ax) * 45
+}
+function coastR3(u0) {
+  const u = ((u0 % 360) + 360) % 360
+  let r = 0.80 + meanderE(301, u / 5, 10, 12) / 130 + meanderE(302, u / 5, 4, 6) / 160
+  const bump = (c, w2, amt) => {
+    const d1 = u - c < 0 ? c - u : u - c
+    const d = d1 < 360 - d1 ? d1 : 360 - d1
+    if (d < w2) r += amt * (1 - d / w2)
+  }
+  bump(180, 28, +0.18); bump(150, 12, -0.09); bump(210, 12, -0.09)
+  bump(38, 22, -0.12); bump(78, 16, -0.07); bump(0, 14, +0.07); bump(305, 18, +0.06)
+  return r
+}
+function inSeaBase3(x, y) {
+  const dx = (x - GW / 2) / (GW / 2), dy = (y - GH / 2) / (GH / 2)
+  const r = Math.sqrt(dx * dx + dy * dy)
+  if (r <= 0.52) return false
+  return r > coastR3(angleOf3(dx, dy))
+}
+const emY3 = () => Math.round(GH * 0.75)
+const _shore3 = new Map()
+function bayShoreX3(y) {
+  if (_shore3.has(y)) return _shore3.get(y)
+  let sx = null
+  for (let x = GW - 4; x >= Math.floor(GW / 2); x--) if (!inSeaBase3(x, y)) { sx = x; break }
+  _shore3.set(y, sx); return sx
+}
+function isles3() {
+  const ey = emY3(), sh = bayShoreX3(ey) ?? Math.round(GW * 0.7)
+  return [{ x: sh + 22, y: ey + 26, rx: 10, ry: 7 }, { x: Math.round(GW * 0.185), y: Math.round(GH * 0.10), rx: 8, ry: 5 }]
+}
+function onIsle3(x, y) {
+  for (const i of isles3()) { const dx = (x - i.x) / i.rx, dy = (y - i.y) / i.ry; if (dx * dx + dy * dy < 1) return true }
+  return false
+}
+const inSea3 = (x, y) => inSeaBase3(x, y) && !onIsle3(x, y)
+const brandX3 = (y) => Math.round(GW * 0.235 + meanderE(310, y, 34, 7))
+const ridgeX3 = (y) => Math.round(GW * 0.685 + meanderE(311, y, 30, 9))
+const treeY3 = (x) => Math.round(GH * 0.30 + meanderE(312, x, 44, 11))
+const fenY3 = (x) => Math.round(GH * 0.71 + meanderE(313, x, 44, 9))
+const passes3 = () => [Math.round(GH * 0.37), Math.round(GH * 0.655)]
+function onRidge3(x, y) {
+  const rx = ridgeX3(y); const d = x - rx < 0 ? rx - x : x - rx
+  if (d > 2) return false
+  for (const p of passes3()) { const pd = y - p < 0 ? p - y : y - p; if (pd < 4) return false }
+  if (y < treeY3(x) - 8) return false
+  if (inSeaBase3(x, y)) return false
+  return true
+}
+const riverX3 = (y) => Math.floor(GW / 2) + Math.round(meanderE(21, y, 52, 30) + meanderE(22, y, 16, 6))
+const confY3 = () => Math.round(GH * 0.63)
+function marchWY3(x) {
+  const cyy = confY3(); const reach = riverX3(cyy) - 8 - x
+  const t = reach < 0 ? 0 : reach > 70 ? 1 : reach / 70
+  return cyy + Math.round(meanderE(25, x, 36, 12) * t)
+}
+function inRiver3(x, y) {
+  const srcY = Math.round(GH * 0.115)
+  if (y >= srcY) {
+    const rx = riverX3(y); const d = x - rx < 0 ? rx - x : x - rx
+    if (d <= (y > GH * 0.82 ? 2 : 1)) return true
+    if (y > GH * 0.84) {
+      const dx2 = rx - 7 + Math.round(meanderE(27, y, 9, 3)); const d2 = x - dx2 < 0 ? dx2 - x : x - dx2
+      if (d2 <= 1) return true
+    }
+  }
+  if (x < riverX3(confY3()) - 1 && x > brandX3(y) - 16) {
+    const my = marchWY3(x); const d3 = y - my < 0 ? my - y : y - my
+    if (d3 <= 1) return true
+  }
+  return false
+}
+function inLake3(x, y) {
+  const lx = Math.round(GW * 0.73), ly = Math.round(GH * 0.22)
+  const dx = (x - lx) / 24, dy = (y - ly) / 13
+  return dx * dx + dy * dy < 1
+}
+const isWater3 = (x, y) => inSea3(x, y) || inRiver3(x, y) || inLake3(x, y)
+function biomeAtE3(x, y) {
+  if (inSeaBase3(x, y) && !onIsle3(x, y)) return 'sea'
+  if (x <= brandX3(y)) return 'wilds'
+  if (x >= ridgeX3(y) && y >= treeY3(x) - 8) return 'crags'
+  if (y <= treeY3(x)) return 'greenwood'
+  if (y >= fenY3(x)) return 'fens'
+  return 'meadow'
+}
+let _ss3 = null
+function settlementsE3() {
+  if (_ss3) return _ss3
+  const cx3 = Math.floor(GW / 2), cy3 = Math.floor(GH / 2)
+  const mby = Math.round(GH * 0.305), fmy = Math.round(GH * 0.825), ey = emY3()
+  const shore = bayShoreX3(ey) ?? Math.round(GW * 0.7)
+  return (_ss3 = [
+    { x: cx3, y: cy3, w: 24, h: 14, name: 'Anchor' },
+    { x: Math.round(GW * 0.40), y: Math.round(GH * 0.16), w: 14, h: 10, name: 'Greenhollow' },
+    { x: riverX3(mby) + 6, y: mby, w: 14, h: 10, name: 'Millbrook' },
+    { x: Math.round(GW * 0.87), y: Math.round(GH * 0.49), w: 14, h: 10, name: 'Cragfoot' },
+    { x: shore - 5, y: ey, w: 14, h: 10, name: 'Eastmere' },
+    { x: riverX3(fmy) + 6, y: fmy, w: 14, h: 10, name: 'Fenmarch' },
+    { x: Math.round(GW * 0.235) + 20, y: Math.round(GH * 0.49), w: 16, h: 12, name: 'Norwick' },
+  ])
+}
+function junctions3() {
+  const [p1, p2] = passes3(); const i = isles3()[0]
+  return { watersmeet: { x: riverX3(confY3()) + 3, y: confY3() + 3 }, npass: { x: ridgeX3(p1), y: p1 },
+    spass: { x: ridgeX3(p2), y: p2 }, shrine: { x: i.x, y: i.y } }
+}
+let _roads3 = null
+function roadTiles3() {
+  if (_roads3) return _roads3
+  const s = settlementsE3(), j = junctions3()
+  const segs = [[s[0], s[2], 91], [s[2], s[1], 92], [s[1], s[6], 93], [s[0], s[6], 94], [s[0], j.npass, 95], [j.npass, s[3], 96],
+    [s[0], j.watersmeet, 97], [j.watersmeet, j.spass, 98], [j.spass, s[4], 99], [j.watersmeet, s[5], 100], [s[4], s[5], 101], [s[3], s[4], 102], [s[4], j.shrine, 103]]
+  const set = new Set()
+  for (const [a, b, tag] of segs) {
+    const vx = b.x - a.x, vy = b.y - a.y, L = Math.sqrt(vx * vx + vy * vy), nx = -vy / L, ny = vx / L
+    const steps = Math.ceil(L * 2)
+    for (let stp = 0; stp <= steps; stp++) {
+      const t = stp / steps, taper = Math.min(1, Math.min(t, 1 - t) * 6)
+      const o = meanderE(tag, t * L, 26, 8) * taper
+      const px = Math.round(a.x + vx * t + nx * o), py = Math.round(a.y + vy * t + ny * o)
+      set.add(px + ',' + py); set.add((px + 1) + ',' + py)
+    }
+  }
+  return (_roads3 = set)
+}
+const onRoad3 = (x, y) => roadTiles3().has(x + ',' + y)
+function fordE3(x, y) {
+  if (onRoad3(x, y)) return true
+  for (const s of settlementsE3()) {
+    if (Math.abs(x - s.x) <= (s.w >> 1) && Math.abs(y - s.y) <= (s.h >> 1)
+      && (x === s.x || y === s.y)) return true
+  }
+  return false
+}
+function terrainOfE3(x, y) {
+  if (inSea3(x, y)) return fordE3(x, y) ? 'bridge' : 'sea'
+  if (inRiver3(x, y) || inLake3(x, y)) return fordE3(x, y) ? 'bridge' : 'river'
+  for (const t2 of settlementsE3()) {
+    if (Math.abs(x - t2.x) <= (t2.w >> 1) && Math.abs(y - t2.y) <= (t2.h >> 1)) return 'cobble'
+  }
+  if (onRidge3(x, y)) return onRoad3(x, y) ? 'trail' : 'mountain'
+  if (onRoad3(x, y)) return 'trail'
+  return biomeAtE3(x, y)
+}
 function terrainAt(x, y) {
   if (GW && (x < 0 || y < 0 || x >= GW || y >= GH)) return 'edge'
-  if (GEN !== 'interval-expanse-v1' || !GW) return 'meadow' // other worlds: the old green board
-  if (inSeaE(x, y)) return 'sea'
-  if (inPoolE(x, y) || Math.abs(x - riverXE(y)) <= 1) return 'river'
+  if (GEN === 'interval-expanse-v3') return terrainOfE3(x, y)
+  if (!GEN.startsWith('interval-expanse-') || !GW) return 'meadow' // other worlds: the old green board
+  if (inSeaE(x, y)) return fordE(x, y) ? 'bridge' : 'sea'
+  if (inPoolE(x, y) || Math.abs(x - riverXE(y)) <= 1) return fordE(x, y) ? 'bridge' : 'river'
   for (const t of settlementsE()) if (Math.abs(x - t.x) <= (t.w >> 1) && Math.abs(y - t.y) <= (t.h >> 1)) return 'cobble'
   if (roadTilesE().has(x + ',' + y)) return 'trail'
   return biomeAtE(x, y)
@@ -327,6 +506,8 @@ function tileColor(out, x, y, t) {
     case 'river':    out.setHSL(0.56, 0.42, 0.17 + j * 0.4); break
     case 'cobble':   out.setHSL(0.09, 0.10, 0.33 + chk * 2 + j); break
     case 'trail':    out.setHSL(0.10, 0.34, 0.37 + j); break
+    case 'bridge':   out.setHSL(0.09, 0.45, 0.33 + j); break                     // planks over the ford
+    case 'mountain': out.setHSL(0.58, 0.05, 0.58 + j); break                    // the high stone of the Ridge
     case 'meadow':   out.setHSL(0.285 + j * 0.3, 0.38, 0.30 + chk + j); break
     case 'greenwood':out.setHSL(0.32 + j * 0.3, 0.42, 0.21 + chk + j); break
     case 'fens':     out.setHSL(0.22 + j * 0.3, 0.30, 0.235 + chk + j); break
@@ -992,7 +1173,7 @@ let atlasMesh = null
 const dotPool = []
 function buildAtlas() {
   const key = GSEED + ':' + GW + 'x' + GH
-  if (atlasBuiltFor === key || !GW || GEN !== 'interval-expanse-v1') return
+  if (atlasBuiltFor === key || !GW || !GEN.startsWith('interval-expanse-')) return
   atlasBuiltFor = key
   for (const ch of [...atlas.children]) atlas.remove(ch)
   dotPool.length = 0
@@ -1066,7 +1247,7 @@ function layDots(s) { // the census as embers on the map
 
 // the towns say their names: pooled banner sprites over settlement centers
 function layBanners() {
-  if (GEN !== 'interval-expanse-v1') return
+  if (!GEN.startsWith('interval-expanse-')) return
   for (const st of settlementsE()) {
     if (!inView(st.x, st.y)) continue
     const e = take('banner', () => label('', '#ffd98a'))

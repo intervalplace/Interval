@@ -1,6 +1,6 @@
 {
   "name": "interval",
-  "version": "0.31.0",
+  "version": "0.33.0",
   "description": "A world that runs on rules, not servers. Decentralized deterministic MMO protocol.",
   "scripts": {
     "test": "npm run test:unit && npm run test:adversarial:ci",
@@ -45,9 +45,9 @@
   "type": "commonjs",
   "release": "phase-1-freeze",
   "protocol": {
-    "specVersion": "0.76",
+    "specVersion": "0.78",
     "consensusVersion": "1.9",
-    "rulesHash": "bea0c47dc84ba995"
+    "rulesHash": "7f5389d8bbb873ed"
   },
   "engines": {
     "node": ">=22.5.0"

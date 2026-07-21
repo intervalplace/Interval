@@ -53,7 +53,7 @@ function ensureEdHash() {
 function initCrypto() { ensureEdHash(); _selectEdBackend(); }
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.76';
+const SPEC_VERSION = '0.78';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 // v0.70: a name is claimed once and held forever (§5a), with no release and no
@@ -839,7 +839,7 @@ function roll(beacon, playerId, tag) {
 // The canonical generator registry (rev7 §8): a founding record names its
 // generator EXPLICITLY, so two deterministic generators can never be
 // confused about which world a genesis founds.
-const WORLD_GENERATORS = new Set(['interval-classic-v1', 'interval-expanse-v1']);
+const WORLD_GENERATORS = new Set(['interval-classic-v1', 'interval-expanse-v1', 'interval-expanse-v2', 'interval-expanse-v3']);
 
 function makeGenesis(genesisSeed, rulesHash, anchorMs = 0, worldW = 320, worldH = 200,
                      worldGenerator = 'interval-classic-v1') {

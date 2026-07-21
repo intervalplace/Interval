@@ -21,7 +21,7 @@ const SEED = 'solo-' + (process.env.INTERVAL_SEED || 'world')
 // for the meandering trails, seven settlements, and the great river.
 // Only consulted at FOUNDING — a running world keeps the generator in
 // its genesis forever, because the genesis is the world.
-const WORLD_GEN = process.env.INTERVAL_GEN || 'interval-expanse-v1' // SPEC §2l: new foundings use the expanse
+const WORLD_GEN = process.env.INTERVAL_GEN || 'interval-expanse-v3' // SPEC §2l/§9d: new foundings use the third expanse (the island)
 const RULES_HASH = E.sha256(fs.readFileSync(new URL('./SPEC.md', import.meta.url))).toString('hex')
 // founding dimensions: 0 means 'the generator's own calibrated scale'
 // (expanse 640x400 per SPEC §2l, classic 320x200 per §2j) — override
@@ -147,7 +147,7 @@ if (canResume) {
   }
   GENESIS = foundGenesis(WORLD_GEN, SEED, RULES_HASH, Date.now(), WORLD_W, WORLD_H)
   console.warn('FOUNDING with generator: ' + WORLD_GEN
-    + (WORLD_GEN === 'interval-classic-v1' ? '  (set INTERVAL_GEN=interval-expanse-v1 for the expanse)' : ''))
+    + (WORLD_GEN === 'interval-classic-v1' ? '  (set INTERVAL_GEN=interval-expanse-v3 for the expanse)' : ''))
   // the founding witness set (Milestone 4): immutable for this world; a
   // different witness configuration is a different world (Phase 9)
   GENESIS.witnesses = [WITNESS.playerId, ...EXTRA_WITNESSES.filter(w => w !== WITNESS.playerId)]

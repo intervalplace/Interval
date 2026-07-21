@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.76 ("The Constitution")
+# Interval: Protocol Specification v0.78 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -409,7 +409,8 @@ founding is 640 x 400 via `makeExpanseGenesis`, which also seals the
 geography rectangles into `genesis.geo` and retunes watchfires and
 survey for a wider, darker country. `interval-classic-v1` remains
 lawful: a world keeps the generator named in its genesis forever,
-because the genesis is the world. **New foundings use the expanse.**
+because the genesis is the world. **New foundings use the third
+expanse (§9d).**
 
 ## 2g. The Wilds (where the law thins)
 
@@ -542,8 +543,9 @@ The genesis object is
 `{specVersion, rulesHash, genesisSeed, anchorMs, worldW, worldH,
 worldGenerator}`. `worldGenerator` names the deterministic generator
 that founds this world — `"interval-classic-v1"` or
-`"interval-expanse-v1"` (§2l), the expanse being the canonical choice
-for new foundings — so a founding record can never be ambiguous about
+`"interval-expanse-v1"` (§2l), `"interval-expanse-v2"` (§9b), or
+`"interval-expanse-v3"` (§9d), the third expanse being the canonical
+choice for new foundings — so a founding record can never be ambiguous about
 which world it founds; a node that does not implement the named
 generator refuses to build the world rather than guessing. The genesis schema is EXACT: the seven
 fields above plus the optional fields `witnesses`/`quorum`/`imported`/
@@ -1588,6 +1590,108 @@ The generator is not part of the rules hash: `SPEC.md` is: but the
 world it founds is named in the genesis, and a node that does not
 implement that generator refuses to guess at its landscape rather than
 grow a different one.
+
+### 9b. The expanse, second founding (`interval-expanse-v2`)
+
+The land is the first expanse's land, unchanged: for the same seed, the
+same river, the same bay, the same pools, the same five countries, tile
+for tile. What the second founding changes is everything the first walk
+revealed, and per §9c it changes them under a **new name**, so no world
+that ever ran under `interval-expanse-v1` can quietly become a
+different country.
+
+**A water town stands on its water.** Millbrook and Fenmarch stand six
+tiles east of the river's centerline at their own latitude
+(`riverX(g, y) + 6`), so the river runs along their western streets
+inside the walls, entering through watergates; Eastmere stands at
+`(0.85W, 0.80H)`, its southeast corner opening on the bay. A mill with
+no millstream and two ports with no dock were promises the terrain
+didn't keep.
+
+**Where a road meets a wall, that is a gate.** The first expanse cut
+gates on a town's center axes and let a diagonally-arriving road run
+into the masonry beside them. Now a wall tile is never founded on a
+road tile: the trail pierces the wall wherever it arrives, and the
+axis gates remain besides.
+
+**Every ford is visible.** Crossings are unchanged in law (the road
+pays for its crossings; every main street crosses on pilings), but a
+window that mirrors this generator must paint a ford tile — road or
+main street over water — as a **bridge**, never as open water. A
+crossing the rules permit must be a crossing the eye can find.
+
+**The country is thicker.** Densities in the wild countries roughly
+double the first founding (the greenwood ~1,500 trees at the calibrated
+640 x 400, the crags ~860 rocks, the beasts in proportion), and each
+spoke carries a **wayside hearth** near its midpoint — a permanent
+campfire a step off the trail, so the long walk has light, warmth, and
+somewhere to cook halfway to anywhere. A town's essential buildings
+(bank, well, hearth, signpost, anvils, stores) seat themselves by a
+deterministic ring search inside the walls when their fixed offset
+lands in the water, so a river town never silently loses its bank.
+
+**Founding.** The generator floor is 256 x 160; the calibrated founding
+is 640 x 400 via `makeExpanse2Genesis`, sealing the same `genesis.geo`,
+watchfire, and survey retunes as the first expanse. The founding was
+measured before it was founded: at 1,000 citizens under the Phase 2
+ordinary workload, the calibrated world (~5,100 nodes, ~470 mobs) runs
+`nextState` cheaper than the already-measured 3,772-node benchmark
+fixture, because terrain nodes are lighter than the fixture's brewpots
+and ground litter. The envelope is pinned in `test/expanse2.test.mjs`.
+
+### 9d. The expanse, third founding (`interval-expanse-v3`)
+
+The structural lesson the third founding acts on: **geography must pose
+routing problems, and a border must be a thing you can stand beside.**
+Every border is now a physical feature, and the world's own edge is the
+first of them: **the world is an island, and the island is named
+Tallyholm.** A tally is the split stick whose two halves prove each
+other — which is how this world stays real — and a holm is what the old
+tongue called an island. The name is written on the land itself, on the
+capital's signpost. The calibrated founding is
+896 x 512 via `makeExpanse3Genesis` (generator floor 448 x 256); the
+canvas grew so the island's land matches the second founding's rectangle
+within a few percent — tiles are functions, not state, so a silhouette
+costs nothing.
+
+**The coast.** The island's radius is a meander of its angle, and the
+angle is built from octant arithmetic (`+ - * /` and comparisons only) —
+never `atan2`, which ECMA-262 leaves implementation-defined. The west
+reaches out in the Wilds cape past a pinched neck; the southeast is
+bitten by the bay; the fens meet the sea in an estuary.
+
+**The borders that are features.** The wilds end at the **Brandline**, a
+scorched march marked by standing stones and freely crossable — a line
+stepped over deliberately, never a gate. The legal wilds rectangle
+(`genesis.geo.wilds`) sits strictly *inside* the visual march: the land
+warns before the law binds. The crags begin at the **Ridge**, high stone
+that blocks like water and is crossed at the **North Pass** and the
+**South Pass** — or skirted the long way through the deep wood, where
+the ridge sinks beneath the trees. The treeline and fenline meander.
+
+**The waters.** The Great River rises in the northern wood, passes
+Millbrook, gathers the western **Marchwater** at the **Watersmeet**, and
+reaches the bay as a widening delta with a distributary at Fenmarch.
+**Stillwater** lies in the eastern wood. Two islands stand off the
+coast: **Shrine Isle**, reached by a long causeway and carrying a
+waystone — the pilgrimage is walked once (§2k) and the recall is yours
+forever — and the **Farshore**, which is reached by nothing at all, and
+shall remain so: the mystery is constitutional.
+
+**The roads.** A graph of routes through named junctions with three
+independent loops, so a walk can be a circuit. Settlements self-seat
+from the geography (the port from the bay's shoreline, the river towns
+from the river) rather than sitting at fractions the terrain could
+drown. All of the second founding's law carries: walls yield to water
+and to roads, essentials seat by ring search, every ford is painted as
+a bridge, wayside hearths rest the long walks, and the second
+founding's proven densities are carried whole onto the island's land.
+
+**Singular places.** The Old Oak, the Ring, the Ruined Tower, and the
+Shrine are founded exactly once each; a named place that failed to be
+founded would be a lie on every map, and `test/expanse3.test.mjs`
+refuses the founding if any is missing, if the Farshore becomes
+reachable, or if the Ridge fails to hold between its passes.
 
 ### 8f. Constitutional consequences
 
