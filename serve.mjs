@@ -299,9 +299,15 @@ function hiscores() {
 
 const PAGES = { '/': 'index.html', '/quickstart': 'quickstart.html',
                 '/manual': 'manual.html', '/hiscores': 'hiscores.html',
-                '/board': 'board.html',
+                '/board': 'board.html', '/map': 'map.html',
                 '/play': 'windows.html', '/windows': 'windows.html' }
-const MIME = { html: 'text/html', css: 'text/css', js: 'text/javascript' }
+// A MIME table that only knows text has a sharp edge: any other asset falls
+// through as text/plain, and a browser offered image bytes as plain text
+// DOWNLOADS them — the chart of Tallyholm arrived on a phone as "map.txt".
+// An image is an image.
+const MIME = { html: 'text/html', css: 'text/css', js: 'text/javascript',
+               png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+               svg: 'image/svg+xml', webp: 'image/webp', ico: 'image/x-icon' }
 
 const server = http.createServer((req, res) => {
   const path = req.url.split('?')[0]
@@ -507,6 +513,13 @@ const server = http.createServer((req, res) => {
       return sendFile('./site/' + f, MIME[ext] ?? 'text/plain')
     }
     if (PAGES[path]) return sendFile('./site/' + PAGES[path], 'text/html')
+    // Root-level site assets: /site.css, /nav.js, /tallyholm.png and kin.
+    // The pattern is the allowlist — one plain name, one known extension —
+    // so this stays a door for assets, never a door for the filesystem.
+    {
+      const m = path.match(/^\/([a-z0-9-]+)\.(css|js|png|jpg|jpeg|svg|webp|ico)$/)
+      if (m) return sendFile('./site/' + m[1] + '.' + m[2], MIME[m[2]])
+    }
     res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('nothing here')
   } catch (e) {
     // A handler that has already begun its response cannot be given a 500, and
