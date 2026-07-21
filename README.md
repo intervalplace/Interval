@@ -1,6 +1,6 @@
 # Interval 0.23.0 — Phase 1 Freeze
 
-*Release 0.28.0 · protocol spec v0.73 · consensus spec v1.9 · rules hash `6236fc39d57dfa53…`. These four move together; a change to any is a new release.*
+*Release 0.31.0 · protocol spec v0.76 · consensus spec v1.9 · rules hash `2ae7aa648474ad02…`. These four move together; a change to any is a new release.*
 
 A decentralized MMO protocol. The game is a deterministic state machine,
 the spec is the constitution, and the rules are the authority: not a

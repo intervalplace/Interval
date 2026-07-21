@@ -644,6 +644,64 @@ function roadTilesE() {
   return (_roadSet = set)
 }
 const onRoadE = (x, y) => roadTilesE().has(x + ',' + y)
+// ---- the bridges: the truth marks where the trail crosses the water
+// ('bridge' tiles in the classic world); the window owes those tiles a
+// STRUCTURE, not a brown smear. Contiguous bridge patches are flooded,
+// oriented by their long axis, and given a plank deck, rails, and
+// posts standing in the current — synthesized wood like everything. ----
+let bridgeGroup = null
+function buildBridges() {
+  if (bridgeGroup) scene.remove(bridgeGroup)
+  bridgeGroup = new THREE.Group()
+  const seen = new Set()
+  for (let by2 = 0; by2 < H; by2++) for (let bx2 = 0; bx2 < W; bx2++) {
+    if (seen.has(bx2 + ',' + by2) || terrainOf(bx2, by2) !== 'bridge') continue
+    const patch = []
+    const stack = [[bx2, by2]]
+    while (stack.length) {
+      const [px, py] = stack.pop(), k2 = px + ',' + py
+      if (seen.has(k2) || px < 0 || py < 0 || px >= W || py >= H) continue
+      seen.add(k2)
+      if (terrainOf(px, py) !== 'bridge') continue
+      patch.push([px, py])
+      stack.push([px + 1, py], [px - 1, py], [px, py + 1], [px, py - 1])
+    }
+    if (patch.length < 2) continue
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9
+    for (const [px, py] of patch) {
+      x0 = Math.min(x0, px); x1 = Math.max(x1, px)
+      y0 = Math.min(y0, py); y1 = Math.max(y1, py)
+    }
+    const cx3 = (x0 + x1) / 2, cy3 = (y0 + y1) / 2
+    const sw = x1 - x0 + 1, sh = y1 - y0 + 1
+    const alongX = sw >= sh
+    const span = (alongX ? sw : sh) + 0.7, wide = Math.min(3, (alongX ? sh : sw)) + 0.2
+    const gB = new THREE.Group()
+    const deckY = 0.14 // a hand above the water, flat bank to bank
+    gB.position.set(wx(cx3), deckY, wz(cy3))
+    if (!alongX) gB.rotation.y = Math.PI / 2
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(span, 0.07, wide), mats.wood)
+    deck.castShadow = true; deck.receiveShadow = true; gB.add(deck)
+    for (let pk = -Math.floor(span / 0.5) / 2; pk <= Math.floor(span / 0.5) / 2; pk++) {
+      const groove = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.075, wide), mats.darkwood)
+      groove.position.x = pk * 0.5
+      gB.add(groove) // the planks announce themselves
+    }
+    for (const sgn of [-1, 1]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(span, 0.05, 0.06), mats.darkwood)
+      rail.position.set(0, 0.34, sgn * wide / 2)
+      rail.castShadow = true; gB.add(rail)
+      const np = Math.max(2, Math.round(span / 1.4))
+      for (let pi3 = 0; pi3 <= np; pi3++) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.66, 6), mats.wood)
+        post.position.set(-span / 2 + (span * pi3) / np, 0.06, sgn * wide / 2)
+        post.castShadow = true; gB.add(post)
+      }
+    }
+    bridgeGroup.add(gB)
+  }
+  scene.add(bridgeGroup)
+}
 function biomeAtE(x, y) {
   if (x <= Math.round(W * 0.19)) return 'wilds'
   const cx = Math.floor(W / 2), cy = Math.floor(H / 2)
@@ -5334,6 +5392,7 @@ ws.onmessage = (ev) => {
       GSEED = m.state.genesis.genesisSeed ?? ''
       _seedNumC = null; _ssE = null; _roadSet = null
       buildGround(m.state)
+      buildBridges() // the crossings stand up with the ground
       document.getElementById('wid').textContent = 'world ' + (m.worldId ?? '').slice(0, 12) + '…'
     }
     syncAll(m.state)

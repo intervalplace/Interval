@@ -53,7 +53,7 @@ function ensureEdHash() {
 function initCrypto() { ensureEdHash(); _selectEdBackend(); }
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
-const SPEC_VERSION = '0.73';
+const SPEC_VERSION = '0.76';
 const TICK_MS = 600;
 const INV_SLOTS = 28;
 // v0.70: a name is claimed once and held forever (§5a), with no release and no
@@ -66,6 +66,15 @@ const NAME_STANDING = 50;
 // setting: it decides which deeds happen, so it decides state, so it belongs
 // to the constitution.
 const MAX_APPLIED_INPUTS = 4096;
+// v0.76: and a part of that is always kept for people this world has never
+// seen. Serving known citizens first (v0.70) stopped a flood of fresh keys
+// from pushing established citizens out of the tick, but it handed whoever
+// arrived first a permanent claim: spawning is free, so an attacker present on
+// day one can mint citizens by the thousand and thereafter occupy the whole
+// applied cap as KNOWN, with every honest newcomer behind them forever. A
+// world that cannot be entered is a world that ends with the people already
+// in it. This share is not a courtesy; it is the door.
+const STRANGER_SHARE = 256;
 // Typed error codes for the CJS engine (mirrors errors.mjs; kept in sync by
 // test/version.test.mjs). Identity corruption is the one safety-critical
 // engine throw that operators classify.
@@ -105,7 +114,21 @@ const WIELD_REQS = {
   'star-spear': { attack: 20 }, 'star-maul': { attack: 25 }, 'horn-bow': { ranged: 20 },
   'star-helm': { defence: 15 }, 'star-plate': { defence: 30 },
 };
-const STORE_SELLS = { seeds: 15 }; // farming no longer waits on goblin luck
+const STORE_SELLS = { seeds: 15 }; // the keeper's OWN goods, made from nothing
+// v0.74: the keeper's shelf. What a citizen sells is no longer annihilated: it
+// sits in that store until somebody buys it. Two stores keep two shelves, so
+// Anchor and Milbrook develop separate strengths and carrying goods between
+// them is a trade in itself.
+//
+// The keeper takes a cut. A citizen sells at PRICES and the next buyer pays
+// PRICES + max(1, PRICES/10), and the difference is destroyed. That spread is
+// the world's only gold sink: before it, selling minted coin from nothing and
+// nothing ever unmade it. A flat tenth would have rounded to zero on the nine
+// cheapest goods, which are the ones that actually move, so the cut is never
+// less than a single coin.
+const SHELF_CAP = 1000;        // per item, per store: consensus state is forever
+const SHELF_DECAY_EVERY = 1500; // 15 minutes
+const SHELF_DECAY_SHIFT = 4;    // a sixteenth rots away: goods nobody wanted // farming no longer waits on goblin luck
 const MAGIC_ROCK_MINING = 10; // the vein refuses an unpracticed pick
 const DEATH_TICKS = 5; // the world holds its breath; windows may grieve
 const BRAND_TICKS = 1500; // strike first in the Wilds, wear it 15 minutes
@@ -159,9 +182,14 @@ const MOB_STATS = {
             drops: [{ item: 'bones' }, { item: 'ore', chance: 16384 }, { item: 'seeds', chance: 16384 }] },
   wolf:   { maxHp: 8, atk: 2, def: 2, maxHit: 2, respawn: 150,
             drops: [{ item: 'bones' }, { item: 'bones', chance: 24576 }] },
+  // v0.75: the old-chain falls at 2/65536, one troll in 32,768, which is some
+  // nine days of an executor farming trolls without pause. It is the only item
+  // in the world with no price at any store, so it can never be sold to a
+  // keeper and only ever passes between citizens. The best weapon here is the
+  // one thing gold cannot be turned into except by asking someone who has one.
   troll:  { maxHp: 20, atk: 4, def: 4, maxHit: 3, respawn: 300,
             drops: [{ item: 'bones' }, { item: 'ore' }, { item: 'bronze-plate', chance: 6144 },
-                    { item: 'old-chain', chance: 44 }] },
+                    { item: 'old-chain', chance: 2 }] },
   bear:   { maxHp: 14, atk: 3, def: 3, maxHit: 2, respawn: 220,
             drops: [{ item: 'bones' }, { item: 'bones', chance: 32768 }, { item: 'bronze-hatchet', chance: 4096 },
                     { item: 'horn-bow', chance: 66 }] },
@@ -184,6 +212,7 @@ const PRICES = {
   'bronze-helm': 12, 'bronze-plate': 30, 'wooden-bow': 8, 'grain': 4,
   'star-sword': 120, 'star-helm': 60, 'star-plate': 200,
 };
+const storeAsk = (item) => PRICES[item] + Math.max(1, Math.floor(PRICES[item] / 10));
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 // the Wilds (spec 2g): where citizens may hunt citizens
 // ---- a world's own geography lives in its founding record (v0.54) ----
@@ -797,13 +826,20 @@ function roll(beacon, playerId, tag) {
 // confused about which world a genesis founds.
 const WORLD_GENERATORS = new Set(['interval-classic-v1', 'interval-expanse-v1']);
 
-function makeGenesis(genesisSeed, rulesHash, anchorMs = 0, worldW = 320, worldH = 200) {
+function makeGenesis(genesisSeed, rulesHash, anchorMs = 0, worldW = 320, worldH = 200,
+                     worldGenerator = 'interval-classic-v1') {
+  // the generator is a FOUNDING choice, not a fate: pass
+  // 'interval-expanse-v1' here and the new world gets meandering
+  // trails, seven settlements, and the great river. An existing world
+  // cannot change — the genesis IS its identity — but the next one can.
+  if (!WORLD_GENERATORS.has(worldGenerator))
+    throw new Error('unknown worldGenerator: ' + worldGenerator)
   // rev7 §7: defaults are the CANONICAL world dimensions — the old 14x8
   // default predated the classic generator and misled (it is below the
   // generator's floor). Every field defaulted: a genesis with an
   // undefined member is not canonically encodable (see canonical()).
   return { specVersion: SPEC_VERSION, rulesHash, genesisSeed, anchorMs, worldW, worldH,
-           worldGenerator: 'interval-classic-v1',
+           worldGenerator,
            // exploration (v0.50): calibrated for THIS world's geometry by its own
            // survey-sim — NOT a universal curve. A larger world founds its own.
            survey: { k: 8, base: 40, perTile: 10, max: 1800 },
@@ -1102,7 +1138,7 @@ function validateState(state) {
   const SKILL_SET = SKILLS;                 // shared constitutional tables
   const NODE_TYPE_SET = new Set(NODE_TYPES); // (rev4 §11): defined ONCE, above
   const PLAYER_REQUIRED = ['x', 'y', 'skills', 'hp', 'equipment', 'bank', 'lastInput', 'gold', 'inventory', 'action', 'name', 'trade'];
-  const PLAYER_OPTIONAL = new Set(['attuned', 'brandedUntil', 'cooksTried', 'deadUntil', 'lightsTried', 'rootedUntil', 'rootImmuneUntil', 'rootCdUntil', 'slain', 'lastSwing']);
+  const PLAYER_OPTIONAL = new Set(['attuned', 'brandedUntil', 'cooksTried', 'deadUntil', 'lightsTried', 'rootedUntil', 'rootImmuneUntil', 'rootCdUntil', 'slain', 'lastSwing', 'lastAte']);
   const isId = (v) => typeof v === 'string' && /^[a-z0-9_-]{1,64}$/i.test(v);
 
   // Relational rule (rev5 §5), decided explicitly: NO stale references are
@@ -1197,7 +1233,7 @@ function validateState(state) {
         if (state.nodes[w]?.type !== 'waystone') return 'attunement references a missing waystone';
       }
     }
-    for (const tk of ['brandedUntil', 'deadUntil', 'rootedUntil', 'rootImmuneUntil', 'rootCdUntil', 'lastSwing']) if (p[tk] !== undefined && !isInt(p[tk], 0, MAX_TIME)) return `${tk} out of bounds`;
+    for (const tk of ['brandedUntil', 'deadUntil', 'rootedUntil', 'rootImmuneUntil', 'rootCdUntil', 'lastSwing', 'lastAte']) if (p[tk] !== undefined && !isInt(p[tk], 0, MAX_TIME)) return `${tk} out of bounds`;
     for (const ck of ['cooksTried', 'lightsTried']) if (p[ck] !== undefined && !isInt(p[ck], 0, MAX_TIME)) return `${ck} out of bounds`;
     if (p.slain !== undefined) { // the loot tally: bounded by the roster, not by time
       if (typeof p.slain !== 'object' || p.slain === null || Array.isArray(p.slain)) return 'malformed slain tally';
@@ -1237,12 +1273,20 @@ function validateState(state) {
   }
 
   // nodes: constitutional type table, closed field set
-  const NODE_FIELDS = new Set(['type', 'x', 'y', 'depletedUntil', 'expiresAt', 'plantedAt', 'by', 'text', 'readyAt', 'brewKind', 'lastUsed', 'fuelUntil']);
+  const NODE_FIELDS = new Set(['type', 'x', 'y', 'depletedUntil', 'expiresAt', 'plantedAt', 'by', 'text', 'readyAt', 'brewKind', 'lastUsed', 'fuelUntil', 'shelf']);
   for (const [nid, n] of Object.entries(state.nodes)) {
     if (!/^[a-z0-9_-]{1,64}$/i.test(nid)) return 'malformed node id';
     if (!n || typeof n !== 'object') return 'malformed node';
     if (typeof n.type !== 'string' || !NODE_TYPE_SET.has(n.type)) return 'unknown node type';
     for (const k of Object.keys(n)) if (!NODE_FIELDS.has(k)) return `unknown node field ${k}`;
+    if (n.shelf !== undefined) {
+      if (n.type !== 'store') return 'only a store keeps a shelf';
+      if (typeof n.shelf !== 'object' || n.shelf === null || Array.isArray(n.shelf)) return 'shelf malformed';
+      for (const [it, q] of Object.entries(n.shelf)) {
+        if (!ITEMS.has(it)) return `shelf holds a thing that is not an item: ${it}`;
+        if (!isInt(q, 1, SHELF_CAP)) return `shelf count out of bounds for ${it}`;
+      }
+    }
     if (!isInt(n.x, 0, W - 1) || !isInt(n.y, 0, H - 1)) return 'node out of bounds';
     if (!isInt(n.depletedUntil ?? 0, 0, MAX_TIME)) return 'node depletion out of bounds';
     // type-specific rules (rev6 §6): each field belongs to exactly the
@@ -1511,9 +1555,20 @@ function validInput(state, input, ctx) {
     case 'cancel_trade':
       return p.trade !== null;
     case 'buy': {
-      if (!(input.item in STORE_SELLS)) return false;
-      if ((p.gold ?? 0) < STORE_SELLS[input.item] || firstFreeSlot(p.inventory) === -1) return false;
-      return hasAdjacentNode(state, ctx, p, 'store');
+      // v0.74: two things are for sale at a store. The keeper's own goods,
+      // conjured from nothing (STORE_SELLS), and whatever citizens have sold
+      // to THIS store and nobody has yet carried off.
+      const st = findAdjacentNode(state, ctx, p, 'store');
+      if (!st) return false;
+      const onShelf = (st.shelf?.[input.item] ?? 0) > 0;
+      if (!(input.item in STORE_SELLS) && !onShelf) return false;
+      const price = onShelf && !(input.item in STORE_SELLS) ? storeAsk(input.item)
+        : (input.item in STORE_SELLS) ? STORE_SELLS[input.item] : storeAsk(input.item);
+      if ((p.gold ?? 0) < price) return false;
+      if (!STACKABLE.has(input.item) && firstFreeSlot(p.inventory) === -1) return false;
+      if (STACKABLE.has(input.item) && countItem(p.inventory, input.item) === 0
+          && firstFreeSlot(p.inventory) === -1) return false;
+      return true;
     }
     case 'attack': {
       const m = state.mobs[input.mobId];
@@ -2055,6 +2110,25 @@ function nextState(state, inputs, _legacyBeacon) {
     if (nodeExistsAt(s, _ctx, nx, ny)) continue;
     m.x = nx; m.y = ny;
   }
+  // v0.74: the shelves rot. Every SHELF_DECAY_EVERY intervals a sixteenth of
+  // each stock is lost, rounded up so nothing lingers forever at a count of
+  // one. Goods still on a shelf are goods nobody wanted at that price, and a
+  // world where every log ever cut waits in a shop is a world whose economy
+  // only ever grows. This is the item sink that selling used to be.
+  if (s.tick % SHELF_DECAY_EVERY === 0) {
+    for (const nid of Object.keys(s.nodes).sort()) {
+      const n2 = s.nodes[nid];
+      if (n2.type !== 'store' || !n2.shelf) continue;
+      for (const item of Object.keys(n2.shelf).sort()) {
+        const q = n2.shelf[item];
+        const gone = Math.max(1, q >> SHELF_DECAY_SHIFT);
+        if (q - gone <= 0) delete n2.shelf[item];
+        else n2.shelf[item] = q - gone;
+      }
+      if (Object.keys(n2.shelf).length === 0) delete n2.shelf;
+    }
+  }
+
   // player-made fires burn out (spec §6f)
   for (const [nid, n2] of Object.entries(s.nodes)) {
     if (n2.expiresAt && n2.expiresAt <= s.tick) deleteIndexedNode(s, _ctx, nid);
@@ -2086,7 +2160,13 @@ function nextState(state, inputs, _legacyBeacon) {
   if (order.length > MAX_APPLIED_INPUTS) {
     const known = [], strangers = [];
     for (const pid of order) (s.players[pid] ? known : strangers).push(pid);
-    order = known.concat(strangers).slice(0, MAX_APPLIED_INPUTS);
+    // Strangers are guaranteed a share of the tick; known citizens take the
+    // rest. Whichever group is short leaves its remainder to the other, so
+    // nothing is wasted when nobody is knocking.
+    const forStrangers = Math.min(strangers.length, STRANGER_SHARE);
+    const forKnown = Math.min(known.length, MAX_APPLIED_INPUTS - forStrangers);
+    order = known.slice(0, forKnown)
+      .concat(strangers.slice(0, Math.min(strangers.length, MAX_APPLIED_INPUTS - forKnown)));
     order.sort(); // apply in canonical order, as always
   }
   _p2mark('input_apply');
@@ -2184,12 +2264,24 @@ function nextState(state, inputs, _legacyBeacon) {
         p.inventory[inp.slot] = cur;
       }
     } else if (inp.type === 'buy') {
-      const price = STORE_SELLS[inp.item];
-      const nearStore = hasAdjacentNode(s, _ctx, p, 'store');
-      const fs2 = firstFreeSlot(p.inventory);
-      if (price && nearStore && (p.gold ?? 0) >= price && fs2 !== -1) {
-        p.gold -= price;
-        p.inventory[fs2] = { item: inp.item, qty: 1 };
+      // v0.74: the keeper's own goods are made from nothing and priced by the
+      // constitution. Everything else on the shelf was put there by a citizen,
+      // and costs the ask: what its seller was paid, plus the keeper's cut.
+      const st = findAdjacentNode(s, _ctx, p, 'store');
+      const own = inp.item in STORE_SELLS;
+      const onShelf = (st?.shelf?.[inp.item] ?? 0) > 0;
+      const price = own ? STORE_SELLS[inp.item] : onShelf ? storeAsk(inp.item) : 0;
+      if (st && price && (own || onShelf) && (p.gold ?? 0) >= price) {
+        if (addItem(p.inventory, inp.item, 1)) {
+          p.gold -= price;
+          // goods from the shelf LEAVE the shelf. The keeper's own do not:
+          // seeds are made, not stocked.
+          if (!own && st.shelf) {
+            st.shelf[inp.item] -= 1;
+            if (st.shelf[inp.item] <= 0) delete st.shelf[inp.item];
+            if (Object.keys(st.shelf).length === 0) delete st.shelf;
+          }
+        }
       }
     } else if (inp.type === 'attackp') {
       const q = s.players[inp.targetId];
@@ -2233,6 +2325,15 @@ function nextState(state, inputs, _legacyBeacon) {
       const nearStore = hasAdjacentNode(s, _ctx, p, 'store');
       if (sl && PRICES[sl.item] && nearStore) {
         p.gold = (p.gold ?? 0) + PRICES[sl.item] * (sl.qty ?? 1);
+        // v0.74: onto THIS store's shelf, not into nothing. Beyond the cap the
+        // keeper still pays but the goods are lost: a shelf is finite, and
+        // consensus state is held by every node forever.
+        const st = findAdjacentNode(s, _ctx, p, 'store');
+        if (st) {
+          if (!st.shelf) st.shelf = {};
+          const have = st.shelf[sl.item] ?? 0;
+          st.shelf[sl.item] = Math.min(SHELF_CAP, have + (sl.qty ?? 1));
+        }
         p.inventory[inp.slot] = null;
       }
     } else if (inp.type === 'invoke') {

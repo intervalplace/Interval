@@ -561,10 +561,17 @@ async function signChat(text) {
   ws.send(JSON.stringify({ type: 'rawsay', msg: { ...msg, sig } }))
 }
 async function signAndSend(a) {
+  // Three ways to do nothing, and all three used to do it in silence. A
+  // citizen clicked a tree and the tree was simply not chopped, with nothing
+  // said and nothing logged, while the SAME citizen in another window chopped
+  // it fine. The allocator is the usual culprit: it holds two ticks of
+  // lookahead shared between walking and working, so a standing walk can fill
+  // the line and every deed clicked during it disappears.
   const f = BRIDGE_TO_INPUT(a)
-  if (!f || !curWorldId) return
+  if (!f) { feed('this window has no wiring for "' + a.do + '" yet'); return }
+  if (!curWorldId) { feed('still learning which world this is') ; return }
   const tk = a._tick ?? allocTick()
-  if (tk === null) return // saturated: the earlier click carries the intent
+  if (tk === null) { feed('the tick line is full: try that again in a moment'); return }
   const input = { worldId: curWorldId, tick: tk, playerId: ownKey.pub, ...f }
   const sig = toHex(await crypto.subtle.sign('Ed25519', ownKey.priv, new TextEncoder().encode(DOMAIN_INPUT + canonicalJS(input))))
   ws.send(JSON.stringify({ type: 'raw', input: { ...input, sig } }))

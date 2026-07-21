@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.73 ("The Constitution")
+# Interval: Protocol Specification v0.76 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -128,6 +128,14 @@ property no other weapon has. Combat breathes (6m), **but the chain
 does not**: its wielder swings every tick. The defender's rhythm is
 unchanged; the chain simply refuses to wait. There is exactly one
 fast weapon in this world, and it must be taken from a troll.
+
+It falls at **2 in 65536**, one troll in some thirty-two thousand,
+which is upward of a week of unbroken hunting. It also has no price at
+any store: it is the only thing in this world a keeper will not buy and
+cannot sell. A chain therefore only ever passes from the citizen who
+took it to the citizen who asked, and no amount of gold can conjure one
+where none has fallen. The best weapon here is the one thing wealth
+cannot reach directly.
 
 ## 6p. Fletching (v0.35): the fourteenth skill
 
@@ -298,6 +306,111 @@ re-walking of ground you have already earned.
 New node type: `waystone`. New player field: `attuned` (array of waystone
 ids, defaults empty). New action: `recall`.
 
+## 2l. The Expanse (v0.76): every direction means something
+
+The classic world says "a safe town, then danger" — a radial gradient,
+the same whichever way you walk, which is why it can be large without
+ever becoming a place you *know*. The second generator,
+**`interval-expanse-v1`**, says something else: **every direction means
+something.** North is wood, east is stone, south is water, west is
+danger, and the middle is home. A citizen holds that in their head
+after one walk and still has it years later, which is the point of a
+world you return to rather than a level you finish.
+
+**Determinism is stricter here than anywhere.** Expanse terrain uses
+only operations IEEE-754 requires to be exactly rounded (`+ - * /`,
+`Math.sqrt`) over an integer avalanche hash — never `Math.sin`, whose
+last bit ECMA-262 leaves implementation-defined, and never SHA-256 in
+the hot path, so a window can paint the country tile-for-tile without a
+crypto library and without going async mid-frame. The classic world's
+windows could only *approximate* their river; here the map a window
+draws is the map the engine placed nodes on, to the tile. Bends are
+built from hashed control points joined by smoothstep
+(`meander(g, tag, u, seg, amp)`), which is also closer to how water and
+footpaths behave than a sine wave is.
+
+**The five countries.** With `W x H` the founding dimensions and
+`cx = floor(W/2), cy = floor(H/2)`:
+
+- **the Wilds** — `x <= round(W * 0.19)`, the whole western march
+  (sealed into `genesis.geo.wilds`, because recall and the Brand read
+  it as law);
+- **the Greenwood** — `y <= H * 0.32`, the north wood;
+- **the Crags** — `x >= W * 0.70`, the eastern stone;
+- **the Fens** — `y >= H * 0.70`, the southern water;
+- **the Heartlands** — everything between, plus the settled disc
+  around Anchor where `((x-cx)/W)^2 + ((y-cy)/H)^2 < 0.019`.
+
+**The water.** The great river falls out of the Greenwood, past
+Anchor, into the fens:
+`riverX(y) = cx + meander(21, y, 46, 26) + meander(22, y, 14, 5)`,
+water where `|x - riverX(y)| <= 1`. The southeast is open sea — the
+bay, where `x > W*0.80` and `y > H*0.74` and the normalized reach
+`dx + dy > 0.55`. Fen pools scatter by hash through the wetland south
+of `y = H * 0.66`. `isWater` is the union of the three.
+
+**The seven settlements**, at the compass points a citizen learns
+first (position by founding dimensions, `w x h` the walled extent):
+
+| name | kind | at | size |
+|---|---|---|---|
+| Anchor | capital | `(cx, cy)` | 24 x 14 |
+| Greenhollow | timber | `(0.46W, 0.14H)` | 14 x 10 |
+| Millbrook | mill | `(0.72W, 0.24H)` | 14 x 10 |
+| Cragfoot | forge | `(0.86W, 0.50H)` | 14 x 10 |
+| Eastmere | port | `(0.74W, 0.70H)` | 14 x 10 |
+| Fenmarch | port | `(0.44W, 0.84H)` | 14 x 10 |
+| Norwick | garrison | `(0.26W, 0.46H)` | 16 x 12 |
+
+Every town is walled with a gate at the middle of each face, so no
+town is sealed; a wall stops at the water's edge, and where the river
+enters a town there is a **watergate** rather than masonry. Every town
+keeps a bank, a well, a hearth, and a signpost bearing its name; the
+capital adds smiths, anvils, two stores, six houses, and a guard line;
+forges, garrisons, and mills keep an anvil and a smith; ports, timber
+towns, and mills keep a store; garrisons muster guards. The settled
+country farms: four plots stand outside every wall.
+
+**The roads.** Every road leads to Anchor — spokes, not a maze — a
+world you can navigate by memory. Each spoke is two tiles wide,
+carries no nodes (it costs the tick nothing), and wanders by
+`meander(g, 90 + i, u, 26, 9)` scaled by the taper
+`min(1, min(t, 1-t) * 6)`, so a trail meanders where the country is
+open and straightens as it comes in to a gate, meeting its town square
+on.
+
+**A bend is a landmark.** A path that wanders for no reason is noise;
+a path that wanders around a boulder is a place, and "left at the
+split rock" is how people actually navigate. So the bends are computed
+first (`roadBendsOf`: every offset of at least 4 tiles, away from the
+gates), and the thing being avoided — an old boulder in stone country,
+an old tree in green — is placed **on the straight line the trail
+declined to take**, which is the physically true position for it.
+
+**Node law.** Ground a node may occupy: in bounds, dry, unclaimed, off
+the road, out of every town's walled extent plus one tile. Fishing
+waters are *sampled* along the true shore, never paved onto it.
+
+**The beasts, each where it belongs.** Goblins (118) hold the fens and
+the south-and-west heartlands; wolves (68) the Greenwood and the fens;
+bears (44) the deep Greenwood north of `H * 0.22`; trolls (50) the
+Crags and the far Wilds west of `W * 0.09`. Skeleton-knight warbands
+muster on the frontier **in companies, never alone**.
+
+**Waystones.** One stands outside every town gate, and frontier
+anchors hold the far country: `greendeep (0.60W, 0.08H)`,
+`greenwest (0.30W, 0.10H)`, `fensdeep (0.60W, 0.92H)`,
+`fenswest (0.28W, 0.88H)`, `baywatch (0.70W, 0.90H)`, and
+`crossroads (0.50W, 0.66H)`. Attunement law is unchanged (§2k): the
+first journey to any place is always made on foot.
+
+**Founding.** The generator floor is 256 x 160; the calibrated
+founding is 640 x 400 via `makeExpanseGenesis`, which also seals the
+geography rectangles into `genesis.geo` and retunes watchfires and
+survey for a wider, darker country. `interval-classic-v1` remains
+lawful: a world keeps the generator named in its genesis forever,
+because the genesis is the world. **New foundings use the expanse.**
+
 ## 2g. The Wilds (where the law thins)
 
 The northwest quarter's far corner is the **Wilds**: the rectangle
@@ -428,10 +541,11 @@ The **state hash** is SHA-256 of the canonical JSON encoding.
 The genesis object is
 `{specVersion, rulesHash, genesisSeed, anchorMs, worldW, worldH,
 worldGenerator}`. `worldGenerator` names the deterministic generator
-that founds this world (currently `"interval-classic-v1"`), so a
-founding record can never be ambiguous about which world it founds; a
-node that does not implement the named generator refuses to build the
-world rather than guessing. The genesis schema is EXACT: the seven
+that founds this world — `"interval-classic-v1"` or
+`"interval-expanse-v1"` (§2l), the expanse being the canonical choice
+for new foundings — so a founding record can never be ambiguous about
+which world it founds; a node that does not implement the named
+generator refuses to build the world rather than guessing. The genesis schema is EXACT: the seven
 fields above plus the optional trio `witnesses`/`quorum`/`imported`  
 any other key is refused (a key execution ignores still changes the
 worldId, minting a distinct founding identity with identical behavior),
@@ -680,9 +794,21 @@ decided by this rule and not by which arrived first:
 1. Players that already exist in `state.players` are taken before
    players that do not.
 2. Within each group, canonical ascending `playerId` order.
-3. The first 4096 of that ordering apply. The rest are discarded as
+3. At most **256** of the 4096 are given to players the world does not
+   yet know. If fewer than 256 strangers are present the remainder goes
+   to existing citizens, and if fewer than 3840 citizens are present the
+   remainder goes to strangers: no seat is left empty.
+4. The first 4096 of that ordering apply. The rest are discarded as
    though they had never been sent, and their senders may retry on a
    later tick.
+
+The reserved share exists because serving citizens first, on its own,
+hands the world to whoever arrives earliest. Spawning costs nothing, so
+a single machine present on the first day can mint citizens by the
+thousand and thereafter fill the whole tick as KNOWN, with every honest
+arrival behind them for as long as the world lasts. A world that cannot
+be entered is a world that ends with the people already in it, and it
+would end quietly, with every rule obeyed.
 
 Arrival order differs between nodes and always will. A cap applied at
 the door therefore let two correct nodes hold different inputs for the
@@ -699,6 +825,45 @@ recoverable, rather than impossible to PLAY, which is not.
 Nodes SHOULD buffer more than 4096 inputs per tick so that this
 selection is made over the whole field rather than over an arbitrary
 subset of it.
+
+## 5b-ii. The keeper's shelf
+
+A `store` node may hold a **shelf**: a map of item name to count, at most
+**1000** of any one item. It is the only node that may hold one.
+
+- `sell` pays the seller `PRICES[item]` per unit, as before, and places
+  the goods on the shelf of the store they are standing beside. Above
+  the cap the keeper still pays and the goods are lost.
+- `buy` may take either the keeper's own goods (`STORE_SELLS`, made from
+  nothing and priced by this document) or anything on that store's
+  shelf. Shelf goods cost `PRICES[item] + max(1, PRICES[item] / 10)`,
+  integer division: what the seller was paid, plus the keeper's cut.
+  Bought shelf goods leave the shelf.
+- Every **1500 ticks**, each store loses a sixteenth of every stock it
+  holds, rounded up, and a stock that reaches nought is forgotten.
+
+Three things follow from this, and all three are the point.
+
+**Trade no longer needs both citizens awake.** `offer_trade` requires
+two people in the same interval, which in a world of a few dozen souls
+across many hours means most exchanges never happen. A shelf holds what
+somebody sold six hours ago.
+
+**Each store is its own market.** The shelves are not shared, so the
+settlements develop separate strengths, and carrying goods from a town
+that has them to a town that wants them is a trade in itself. Nothing
+enforces this: it is what happens when stock has a location.
+
+**Selling stops minting coin from nothing.** Before this, `sell` was the
+world's only source of gold and it was unbounded, while the only sinks
+were the keeper's seeds and death. Now every purchase from a shelf
+destroys the spread. A flat tenth would round to zero on the nine
+cheapest goods, which are the ones that actually move, so the cut is
+never less than a single coin.
+
+Decay is the item sink that selling used to be. Goods still on a shelf
+are goods nobody wanted at that price, and a world where every log ever
+cut waits in a shop is a world whose economy only grows.
 
 ## 5c. Trade
 
