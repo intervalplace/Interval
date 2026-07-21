@@ -831,7 +831,7 @@ function biomeAtE3(x, y) {
   if (x >= ridgeX3(y) && y >= treeY3(x) - 8) return 'crags'
   if (y <= treeY3(x)) return 'greenwood'
   if (y >= fenY3(x)) return 'fens'
-  return 'meadow'
+  return 'heartlands' // the truth's own word for it (v3 vocabulary)
 }
 let _ss3 = null
 function settlementsE3() {
@@ -890,7 +890,8 @@ function terrainOfE3(x, y) {
   }
   if (onRidge3(x, y)) return onRoad3(x, y) ? 'trail' : 'mountain'
   if (onRoad3(x, y)) return 'trail'
-  return biomeAtE3(x, y)
+  const b3 = biomeAtE3(x, y)
+  return b3 === 'heartlands' ? 'meadow' : b3 // tile palette keeps its old key
 }
 function terrainOfE(x, y) {
   if (GEN === 'interval-expanse-v3') return terrainOfE3(x, y)
@@ -2212,7 +2213,8 @@ function groundYAt(tx, ty) {
 }
 const noise2 = (x, y) => ((tileHash(Math.floor(x * 2), Math.floor(y * 2), 21) % 100) / 100
   + (tileHash(Math.floor(x * 5), Math.floor(y * 5), 22) % 100) / 200) / 1.5
-let groundMesh = null, groundMat = null, groundChunks = [], water = null, waterSet = null
+let groundMesh = null, groundMat = null, groundChunks = []
+let nodeWinKeys = [], nodeWinCursor = 0, water = null, waterSet = null
 const WATERY = new Set(['sea', 'river'])
 function buildGround(s0) {
   waterSet = new Set()
@@ -4956,8 +4958,17 @@ function syncAll(s) {
       g.userData.kind = 'node'; g.userData.id = id
       g.traverse((o) => { o.userData.kind = 'node'; o.userData.id = id })
       vis.node.set(id, g); scene.add(g)
+      g.position.set(wx(n.x), groundYAt(n.x, n.y), wz(n.y))
+      g.updateMatrixWorld(true)
+      g.traverse((o) => { // sculpture freezes; fire and smoke stay alive
+        if (!o.isSprite && o.userData.flame === undefined && o.userData.bob === undefined)
+          o.matrixAutoUpdate = false
+      })
     }
-    g.position.set(wx(n.x), groundYAt(n.x, n.y), wz(n.y))
+    if (g.position.x !== wx(n.x) || g.position.z !== wz(n.y)) { // nodes rarely move
+      g.position.set(wx(n.x), groundYAt(n.x, n.y), wz(n.y))
+      g.updateMatrixWorld(true)
+    }
     const depleted = (n.depletedUntil ?? 0) > t
     if (depleted !== !!g.userData.depleted) {
       g.userData.depleted = depleted
@@ -6151,7 +6162,7 @@ function frame() {
     lastTreeAt = now
     treeCache = []
     for (const g of vis.node.values())
-      if (g.userData.type === 'tree' && !g.userData.depleted && g.position.distanceTo(focus) < 30) treeCache.push(g)
+      if (g.visible && g.userData.type === 'tree' && !g.userData.depleted && g.position.distanceTo(focus) < 30) treeCache.push(g)
   }
   if (treeCache.length) {
     for (let i = 0; i < LEAF_N; i++) {
@@ -6177,6 +6188,21 @@ function frame() {
 
   // the grass is told where the boots are
   uPlayer.value.copy(focus)
+  // the node window: only the near country exists as meshes, for all
+  // three render passes. An eighth re-judged per frame.
+  {
+    const VIEW_R = Math.min(scene.fog.far + 30, 190)
+    if (nodeWinKeys.length !== vis.node.size) nodeWinKeys = [...vis.node.keys()]
+    const nWK = Math.max(1, nodeWinKeys.length)
+    const q5 = Math.max(1, Math.ceil(nWK / 8))
+    for (let k5 = 0; k5 < q5; k5++) {
+      const g = vis.node.get(nodeWinKeys[(nodeWinCursor + k5) % nWK])
+      if (!g) continue
+      const dxn = g.position.x - camera.position.x, dzn = g.position.z - camera.position.z
+      g.visible = (dxn * dxn + dzn * dzn) < VIEW_R * VIEW_R
+    }
+    nodeWinCursor = (nodeWinCursor + q5) % nWK
+  }
   if (me) grassFollow(me.x, me.y) // the meadow keeps pace with the walker
   // the country beyond the fog rests: chunks outside sight skip the GPU
   for (const ck of groundChunks) {
@@ -6528,6 +6554,8 @@ function frame() {
     if (!g.__shakeAt) continue
     const sp2 = (now - g.__shakeAt) / 300
     g.rotation.z = sp2 < 1 ? Math.sin(sp2 * 28) * 0.045 * (1 - sp2) : 0
+    g.updateMatrix(); g.updateMatrixWorld(true) // frozen sculpture, shaken by hand
+    if (sp2 >= 1) g.__shakeAt = 0
   }
   for (let i = fx.length - 1; i >= 0; i--) {
     const f = fx[i]
@@ -6549,6 +6577,7 @@ function frame() {
 
   // fires breathe; rings ripple; windows warm after dark
   for (const g of vis.node.values()) {
+    if (!g.visible) continue // the far country rests
     if (g.userData.fireLight) {
       const s = t + g.position.x
       g.userData.fireLight.intensity = 12 + Math.sin(s * 9) * 2 + Math.sin(s * 23) * 1.4
