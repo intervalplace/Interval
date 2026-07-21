@@ -3813,57 +3813,25 @@ const SEWN_SKIN = true
 // in light; everything that hunts you is rendered in dark. ----
 const uRimC = { value: new THREE.Color(1, 0.8, 0.6) }
 const uRimA = { value: 1 }
+const uRimL = { value: new THREE.Vector3(0, 1, 0) } // the light, in the eye's own space
 const EYE_LAMPS = { wolf: 0xffb347, bear: 0xd8862e, goblin: 0x8aff4d,
   troll: 0xff5030, 'skeleton-knight': 0x7fd4ff }
 function shadowMat() { // one per mob, so the hurt flash stays its own
   const m = new THREE.MeshStandardMaterial({ color: 0x07080c, roughness: 1, metalness: 0 })
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uRimC = uRimC; sh.uniforms.uRimA = uRimA
+    sh.uniforms.uRimC = uRimC; sh.uniforms.uRimA = uRimA; sh.uniforms.uRimL = uRimL
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uRimC; uniform float uRimA;')
+      .replace('#include <common>', '#include <common>\nuniform vec3 uRimC; uniform float uRimA; uniform vec3 uRimL;')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
       { float ndv = abs(dot(normalize(vNormal), normalize(vViewPosition)));
-        float rim = pow(1. - ndv, 3.2);
-        totalEmissiveRadiance += uRimC * rim * uRimA; }`)
+        float rim = pow(1. - ndv, 3.0);
+        float back = pow(clamp(dot(normalize(vNormal), uRimL), 0., 1.), 1.4);
+        totalEmissiveRadiance += uRimC * rim * back * uRimA; }`)
   }
   return m
 }
-function warpShade(g, type) {
-  // the silhouette is the species. The biped mobs ride a human skinned
-  // rig — which is why they read as small dark PEOPLE — so the shadow
-  // pass now re-proportions the bones: a goblin gets a head too big
-  // for its body, knuckles toward the ground, bandy stump legs, a deep
-  // hunch, and EARS the wind could catch; a troll sinks its head into
-  // the mass. The skeleton-knight keeps the man-shape on purpose: the
-  // one humanoid in the dark being a dead man is the point.
-  const head = g.userData.headGrp?.parent
-  const arms = g.userData.arms ?? []
-  const legs = g.userData.legs ?? []
-  if (type === 'goblin') {
-    g.scale.multiplyScalar(0.8)
-    if (head) head.scale.setScalar(1.45)
-    for (const a of arms) a.scale.y = 1.35
-    for (const l of legs) l.scale.y = 0.74
-    if (g.__spineBone) { g.__spineBone.rotation.x += 0.34; g.__spineRest = g.__spineBone.rotation.x }
-    if (head) {
-      const dark = new THREE.MeshStandardMaterial({ color: 0x07080c, roughness: 1 })
-      for (const sx of [-1, 1]) {
-        const ear = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.34, 5), dark)
-        ear.position.set(sx * 0.12, 0.12, -0.03)
-        ear.rotation.z = sx * -1.85; ear.rotation.x = -0.55
-        ear.castShadow = true; head.add(ear)
-      }
-      const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.05, 0.1), dark)
-      jaw.position.set(0, -0.06, 0.08); jaw.castShadow = true; head.add(jaw)
-    }
-  } else if (type === 'troll') {
-    if (head) head.scale.setScalar(0.8)
-    for (const a of arms) a.scale.y = 1.25
-    if (g.__spineBone) { g.__spineBone.rotation.x += 0.2; g.__spineRest = g.__spineBone.rotation.x }
-  }
-}
+// (shade proportions live in the beast builder now, on the bones)
 function shadowize(g, type) {
-  warpShade(g, type)
   const sm = shadowMat()
   const lampC = EYE_LAMPS[type] ?? 0xffc46a
   const lamp = new THREE.MeshStandardMaterial({ color: 0x0a0a0a,
@@ -3881,10 +3849,10 @@ function shadowize(g, type) {
   // the wisp half of the design: the form condenses out of a low dark
   // haze at its feet and never quite ends there
   const haze = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, transparent: true,
-    depthWrite: false, opacity: 0.2, color: 0x141a26 }))
-  haze.position.y = 0.12
-  const hs = type === 'troll' ? 1.6 : type === 'bear' ? 1.3 : 0.9
-  haze.scale.set(hs, hs * 0.42, 1)
+    depthWrite: false, opacity: 0.4, color: 0x04060a }))
+  haze.position.y = 0.07
+  const hs = type === 'troll' ? 1.3 : type === 'bear' ? 1.1 : 0.7
+  haze.scale.set(hs, hs * 0.34, 1)
   haze.userData.noAO = true
   g.add(haze)
   return g
@@ -4195,9 +4163,11 @@ function makeSewnBeast(id, type) {
     skull.position.y = 0.1; skull.scale.set(1, troll ? 0.95 : 0.9, 0.95); skull.castShadow = true
     core.head.add(skull)
     for (const ex of [-1, 1]) {
-      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.035, troll ? 0.1 : 0.13, 5), hideM)
-      ear.position.set(ex * (troll ? 0.16 : 0.14), 0.13, -0.01)
-      ear.rotation.z = -ex * 1.35; ear.castShadow = true; core.head.add(ear)
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(troll ? 0.035 : 0.045, troll ? 0.1 : 0.3, 5), hideM)
+      ear.position.set(ex * (troll ? 0.16 : 0.15), troll ? 0.13 : 0.16, -0.02)
+      ear.rotation.z = -ex * (troll ? 1.35 : 1.75)
+      ear.rotation.x = troll ? 0 : -0.5 // swept back, catching the wind
+      ear.castShadow = true; core.head.add(ear)
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 5),
         new THREE.MeshStandardMaterial({ color: 0xd8c23a, roughness: 0.3, emissive: 0x4a3a00, emissiveIntensity: 0.5 }))
       eye.position.set(ex * 0.06, 0.1, 0.12); core.head.add(eye)
@@ -4208,9 +4178,17 @@ function makeSewnBeast(id, type) {
       tooth.position.set(tx, 0.03, 0.13); core.head.add(tooth)
     }
     // the hunch is a REST POSE, not a costume: the spine leans and the
-    // animator's lean rides on top of it
-    core.spine.rotation.x = troll ? 0.34 : 0.18
-    core.head.rotation.x = troll ? -0.22 : -0.1
+    // animator's lean rides on top of it — and the SHADE PROPORTIONS
+    // live here too, on the bones themselves: a silhouette is nothing
+    // but proportion, so a goblin gets a skull too big for its body,
+    // ears the wind could catch, knuckles toward the ground, bandy
+    // stump legs, and a hunch twice as deep; a troll sinks its small
+    // head into the mass. Same skeleton, different animal.
+    core.spine.rotation.x = troll ? 0.42 : 0.44
+    core.head.rotation.x = troll ? -0.22 : -0.16
+    core.head.scale.setScalar(troll ? 0.82 : 1.55)
+    core.shL.scale.y = core.shR.scale.y = troll ? 1.25 : 1.4
+    core.thL.scale.y = core.thR.scale.y = troll ? 1 : 0.7
     core.shL.userData.joint = core.fkL
     core.shR.userData.joint = core.fkR
     core.thL.userData.joint = core.snL
@@ -5850,7 +5828,10 @@ function frame() {
   // them: gold at the hours, silver under the moon, white in the bolt
   uRimC.value.setHSL(nightAmt > 0.5 ? 0.6 : 0.085 - warm * 0.03,
     nightAmt > 0.5 ? 0.25 : 0.5 + warm * 0.3, 0.55 + warm * 0.15)
-  uRimA.value = (0.5 + warm * 1.7 + nightAmt * 0.16 + flash * 2.5) * (1 - overcast * 0.3)
+  uRimA.value = (0.9 + warm * 2.4 + nightAmt * 0.45 + flash * 3.2) * (1 - overcast * 0.3)
+  uRimL.value.copy(sunDir)
+  if (nightAmt > 0.5) uRimL.value.negate() // the moon holds the rim after dark
+  uRimL.value.transformDirection(camera.matrixWorldInverse)
   // the three nearest hunters press the grass like the boots do
   { let pi2 = 1
     for (const gm of vis.mob.values()) {
