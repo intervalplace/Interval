@@ -1294,7 +1294,7 @@ function validateState(state) {
     for (const m of state.markers) {
       if (!m || typeof m !== 'object') return 'malformed marker';
       if (!isInt(m.x, 0, W - 1) || !isInt(m.y, 0, H - 1)) return 'marker out of bounds';
-      if (m.kind !== 'ord' && m.kind !== 'ws') return 'bad marker kind';
+      if (!MARKER_KINDS.has(m.kind)) return 'bad marker kind';
       if (m.bornAt !== undefined && !isInt(m.bornAt, 0, MAX_TIME)) return 'marker bornAt out of bounds';
       if (m.kind === 'ws' && (typeof m.ws !== 'string' || state.nodes[m.ws]?.type !== 'waystone')) return 'marker names no waystone';
       const allowed = m.kind === 'ws' ? 'bornAt,kind,ws,x,y' : 'bornAt,kind,x,y';
@@ -2022,6 +2022,28 @@ function brewpotsOwnedBy(state, ctx, pid) {
 
 // ---- exploration (v0.50): survey markers, placed by the beacon ----
 const MARKER_LIFE = 3000; // an unclaimed marker relocates after this many ticks
+// survey findings (v0.77): a minority of markers are the TRACES of
+// those who came before — classed at birth from the same digest that
+// placed them, weighted by the country they lie in (the generator
+// registered what its countries are; an unregistered one keeps flat,
+// modest odds). The class never changes and the finding is the class:
+// no randomness survives to the claim.
+const MARKER_FINDS = { burial: 'bones', working: 'ore', camp: 'logs', cache: 'seeds' };
+const MARKER_KINDS = new Set(['ord', 'ws', 'burial', 'working', 'camp', 'cache']);
+function classifyMarker(g, x, y, h) {
+  const r = h.readUInt32BE(12) / 0xffffffff;
+  const country = TERRAINS[g.worldGenerator]?.country?.(g, x, y) ?? null;
+  const wts = country === 'wilds' ? [0.30, 0.08, 0.06, 0.06]        // the dead outnumber the living out west
+    : country === 'crags' ? [0.06, 0.30, 0.04, 0.05]                 // old workings in the stone
+    : country === 'greenwood' ? [0.06, 0.05, 0.30, 0.05]             // cold camps under the trees
+    : country === 'fens' ? [0.18, 0.05, 0.10, 0.06]                  // the marsh keeps what it takes
+    : country === 'heartlands' ? [0.05, 0.04, 0.05, 0.04]            // the settled middle is mostly just ground
+    : [0.10, 0.08, 0.08, 0.05];
+  let acc = 0;
+  const kinds = ['burial', 'working', 'camp', 'cache'];
+  for (let i = 0; i < 4; i++) { acc += wts[i]; if (r < acc) return kinds[i]; }
+  return 'ord';
+}
 function surveyMarker(s, ctx, index, salt) {
   const g = s.genesis, anchor = spawnOf(g);
   const maxD = Math.max(anchor.x, g.worldW - anchor.x, anchor.y, g.worldH - anchor.y) || 1;
@@ -2043,7 +2065,7 @@ function surveyMarker(s, ctx, index, salt) {
     if (inCity(g, x, y) || occupied(x, y)) continue;
     const d = Math.max(Math.abs(x - anchor.x), Math.abs(y - anchor.y));
     if ((h.readUInt32BE(8) / 0xffffffff) > 1 - 0.6 * (d / maxD)) continue;
-    return { x, y, kind: 'ord', bornAt: s.tick };
+    return { x, y, kind: classifyMarker(g, x, y, h), bornAt: s.tick };
   }
   return { x: Math.min(anchor.x + 5, g.worldW - 2), y: anchor.y, kind: 'ord', bornAt: s.tick };
 }
@@ -2404,6 +2426,11 @@ function nextState(state, inputs, _legacyBeacon) {
           const chart = CHART_PREFIX + m.ws, free = p.inventory.findIndex(x => x === null);
           if (free !== -1 && !(p.attuned ?? []).includes(m.ws) && !p.inventory.some(x => x?.item === chart))
             p.inventory[free] = { item: chart, qty: 1 };
+        }
+        const find = MARKER_FINDS[m.kind]; // the traces of those who came before
+        if (find) {
+          const free2 = p.inventory.findIndex(x => x === null);
+          if (free2 !== -1) p.inventory[free2] = { item: find, qty: 1 }; // a full pack forfeits; the claim stands
         }
         if (claimFirst(s, 'surveyor', pid)) announce(s, (p.name ?? pid.slice(0, 6)) + ' is the FIRST to survey the frontier.');
         s.markers[mi] = surveyMarker(s, _ctx, mi, 'claim:' + pid); // the point relocates
