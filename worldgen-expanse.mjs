@@ -364,26 +364,33 @@ export function buildWorld(genesis) {
   const mrock = (id, x, y) => E.addNode(w, id, 'magic-rock', x, y)
 
   const counts = { waymarks: _waymarks }
-  counts.greenwoodTrees = scatter('gwtree', 620, (x, y) => B(x, y) === 'greenwood', tree)
-  counts.heartTrees     = scatter('httree', 210, (x, y) => B(x, y) === 'heartlands', tree)
-  counts.fenTrees       = scatter('fntree', 130, (x, y) => B(x, y) === 'fens', tree)
-  counts.wildTrees      = scatter('wdtree', 140, (x, y) => B(x, y) === 'wilds', tree)
-  counts.cragRocks      = scatter('cgrock', 430, (x, y) => B(x, y) === 'crags', rock)
-  counts.wildRocks      = scatter('wdrock', 150, (x, y) => B(x, y) === 'wilds', rock)
-  counts.heartRocks     = scatter('htrock', 120, (x, y) => B(x, y) === 'heartlands', rock)
-  counts.magicWilds     = scatter('wdmagic', 44, (x, y) => B(x, y) === 'wilds', mrock)
-  counts.magicCrags     = scatter('cgmagic', 26, (x, y) => B(x, y) === 'crags' && x > W * 0.82, mrock)
+  // DENSITY is the constant, not the count: every census below was
+  // authored for the calibrated 640x400 founding, so each scales by
+  // area against that anchor. A half-size world carries a quarter the
+  // wildlife and a quarter the timber; the LAND feels the same to walk
+  // whatever the founding's dimensions. (Pure in W and H, so every
+  // node still grows the identical country.)
+  const A = (n) => Math.max(1, Math.round(n * (W * H) / (640 * 400)))
+  counts.greenwoodTrees = scatter('gwtree', A(620), (x, y) => B(x, y) === 'greenwood', tree)
+  counts.heartTrees     = scatter('httree', A(210), (x, y) => B(x, y) === 'heartlands', tree)
+  counts.fenTrees       = scatter('fntree', A(130), (x, y) => B(x, y) === 'fens', tree)
+  counts.wildTrees      = scatter('wdtree', A(140), (x, y) => B(x, y) === 'wilds', tree)
+  counts.cragRocks      = scatter('cgrock', A(430), (x, y) => B(x, y) === 'crags', rock)
+  counts.wildRocks      = scatter('wdrock', A(150), (x, y) => B(x, y) === 'wilds', rock)
+  counts.heartRocks     = scatter('htrock', A(120), (x, y) => B(x, y) === 'heartlands', rock)
+  counts.magicWilds     = scatter('wdmagic', A(44), (x, y) => B(x, y) === 'wilds', mrock)
+  counts.magicCrags     = scatter('cgmagic', A(26), (x, y) => B(x, y) === 'crags' && x > W * 0.82, mrock)
 
   // ---- the beasts, each where it belongs ----
   const mob = (kind) => (id, x, y) => E.addMob(w, id, kind, x, y)
-  counts.goblins = scatter('gob', 118, (x, y) => { const b = B(x, y); return b === 'fens' || (b === 'heartlands' && (x < W * 0.4 || y > H * 0.55)) }, mob('goblin'))
-  counts.wolves  = scatter('wolf', 68, (x, y) => { const b = B(x, y); return b === 'greenwood' || b === 'fens' }, mob('wolf'))
-  counts.bears   = scatter('bear', 44, (x, y) => B(x, y) === 'greenwood' && y < H * 0.22, mob('bear'))
-  counts.trolls  = scatter('troll', 50, (x, y) => { const b = B(x, y); return b === 'crags' || (b === 'wilds' && x < W * 0.09) }, mob('troll'))
+  counts.goblins = scatter('gob', A(118), (x, y) => { const b = B(x, y); return b === 'fens' || (b === 'heartlands' && (x < W * 0.4 || y > H * 0.55)) }, mob('goblin'))
+  counts.wolves  = scatter('wolf', A(68), (x, y) => { const b = B(x, y); return b === 'greenwood' || b === 'fens' }, mob('wolf'))
+  counts.bears   = scatter('bear', A(44), (x, y) => B(x, y) === 'greenwood' && y < H * 0.22, mob('bear'))
+  counts.trolls  = scatter('troll', A(50), (x, y) => { const b = B(x, y); return b === 'crags' || (b === 'wilds' && x < W * 0.09) }, mob('troll'))
 
   // skeleton-knight warbands: the frontier musters in companies, never alone
   let sk = 0
-  for (let band = 0; band < 10; band++) {
+  for (let band = 0; band < A(10); band++) { // companies scale; five blades each does not
     const hb = H32('warband', band)
     const bx = 2 + (hb.readUInt16BE(0) % Math.max(1, wildsX1(g) - 4))
     const by = 2 + (hb.readUInt16BE(2) % (H - 4))
