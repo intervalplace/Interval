@@ -407,7 +407,22 @@ function isAwake(p, tick) {
   return p.action !== null || tick - (p.lastInput ?? 0) <= SLEEP_AFTER;
 }
 
-const spawnOf = (g) => ({ x: Math.floor(g.worldW / 2), y: Math.floor(g.worldH / 2) });
+// ---- the terrain registry (v0.77): a generator TEACHES the engine to
+// walk its country. The engine stays generator-agnostic (worldgen
+// imports engine, never the reverse); loading a generator's module IS
+// implementing its country, and registering its walkability is part of
+// implementing it. Unregistered generators keep the old law (nothing
+// but the hedge and the nodes bars the way) — which is what every
+// world founded before this shipped replays under.
+const TERRAINS = Object.create(null);
+function registerTerrain(id, t) { TERRAINS[id] = t; }
+function terrainBlocked(g, x, y) {
+  const t = TERRAINS[g.worldGenerator];
+  return t && t.blocked ? !!t.blocked(g, x, y) : false;
+}
+const spawnOf = (g) => (TERRAINS[g.worldGenerator] && TERRAINS[g.worldGenerator].spawn
+  ? TERRAINS[g.worldGenerator].spawn(g)
+  : { x: Math.floor(g.worldW / 2), y: Math.floor(g.worldH / 2) });
 
 // ---------- XP table: spec constants (Appendix A). Index = level. ----------
 const XP_TABLE = [0,0,83,174,276,388,512,650,801,969,1154,1358,1584,1833,2107,2411,2746,3115,3523,3973,4470,5018,5624,6291,7028,7842,8740,9730,10824,12031,13363,14833,16456,18247,20224,22406,24815,27473,30408,33648,37224,41171,45529,50339,55649,61512,67983,75127,83014,91721,101333,111945,123660,136594,150872,166636,184040,203254,224466,247886,273742,302288,333804,368599,407015,449428,496254,547953,605032,668051,737627,814445,899257,992895,1096278,1210421,1336443,1475581,1629200,1798808,1986068,2192818,2421087,2673114,2951373,3258594,3597792,3972294,4385776,4842295,5346332,5902831,6517253,7195629,7944614,8771558,9684577,10692629,11805606,13034431];
@@ -964,7 +979,7 @@ function boundedValue(v, depth = 0) {
 
 // Genesis validated independently (brief §9): it is consensus identity.
 const GENESIS_REQUIRED = ['specVersion', 'rulesHash', 'genesisSeed', 'anchorMs', 'worldGenerator', 'worldW', 'worldH'];
-const GENESIS_OPTIONAL = new Set(['witnesses', 'quorum', 'byzantineTolerance', 'imported', 'survey', 'brew', 'watch', 'geo']);
+const GENESIS_OPTIONAL = new Set(['witnesses', 'quorum', 'byzantineTolerance', 'imported', 'importedFrom', 'survey', 'brew', 'watch', 'geo']);
 
 // Does THIS implementation support the named generator? (pre-freeze §9:
 // a separate question from structural validity — the seam matters once
@@ -1062,6 +1077,21 @@ function validateGenesis(g) {
     if (n < 3 * f + 1) return `Byzantine-unsafe: need n >= 3f+1 (n=${n}, f=${f} requires n >= ${3 * f + 1})`;
     if (q < 2 * f + 1) return `Byzantine-unsafe: need q >= 2f+1 (q=${q}, f=${f} requires q >= ${2 * f + 1})`;
     if (2 * q - n <= f) return `Byzantine-unsafe: need 2q-n > f (2q-n=${2 * q - n}, f=${f})`;
+  }
+  if (g.importedFrom !== undefined) {
+    // provenance for the import list: WHICH world, at WHICH attested
+    // state, these citizens were carried from. The worldId commits to
+    // it, so a founder cannot later claim a different source; anyone
+    // holding the named world's certified state can recompute the
+    // lived-citizen list and check it matches. An import WITHOUT this
+    // field is unattested by construction — the founder's bare word —
+    // and wears that openly.
+    const f = g.importedFrom;
+    if (!f || typeof f !== 'object' || Object.keys(f).sort().join(',') !== 'stateHash,tick,worldId')
+      return 'non-constitutional genesis.importedFrom';
+    if (!/^[0-9a-f]{64}$/.test(f.worldId) || !/^[0-9a-f]{64}$/.test(f.stateHash)) return 'malformed importedFrom hashes';
+    if (!isInt(f.tick, 0, MAX_TIME)) return 'importedFrom tick out of bounds';
+    if (g.imported === undefined) return 'importedFrom without imported';
   }
   if (g.imported !== undefined) {
     const e = validateImports(g.imported);
@@ -1498,6 +1528,9 @@ function validInput(state, input, ctx) {
       const nx = p.x + dx, ny = p.y + dy;
       // the hedge is law (spec 2c): the outer ring is impassable
       if (nx < 1 || nx >= state.genesis.worldW - 1 || ny < 1 || ny >= state.genesis.worldH - 1) return false;
+      // the water is law where the generator says so (terrain registry):
+      // rivers and the sea bar the way, and their fords are law too
+      if (terrainBlocked(state.genesis, nx, ny)) return false;
       // nodes are impassable (§5): you fish beside the water, not in it
       return !blockingNodeAt(state, ctx, nx, ny); // brewpots are walkable — no wall-ins (v0.52)
     }
@@ -2793,6 +2826,7 @@ function nextState(state, inputs, _legacyBeacon) {
 }
 
 module.exports = {
+  registerTerrain, terrainBlocked,
   SPEC_VERSION, TICK_MS, INV_SLOTS,
   XP_TABLE, levelForXp,
   canonical, stateHash, sha256, beaconValue, roll,
