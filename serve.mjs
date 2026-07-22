@@ -299,15 +299,9 @@ function hiscores() {
 
 const PAGES = { '/': 'index.html', '/quickstart': 'quickstart.html',
                 '/manual': 'manual.html', '/hiscores': 'hiscores.html',
-                '/board': 'board.html', '/map': 'map.html',
+                '/board': 'board.html',
                 '/play': 'windows.html', '/windows': 'windows.html' }
-// A MIME table that only knows text has a sharp edge: any other asset falls
-// through as text/plain, and a browser offered image bytes as plain text
-// DOWNLOADS them — the chart of Tallyholm arrived on a phone as "map.txt".
-// An image is an image.
-const MIME = { html: 'text/html', css: 'text/css', js: 'text/javascript',
-               png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
-               svg: 'image/svg+xml', webp: 'image/webp', ico: 'image/x-icon' }
+const MIME = { html: 'text/html', css: 'text/css', js: 'text/javascript' }
 
 const server = http.createServer((req, res) => {
   const path = req.url.split('?')[0]
@@ -483,8 +477,26 @@ const server = http.createServer((req, res) => {
       let buf
       try { buf = fs.readFileSync(new URL('./audio/' + f, import.meta.url)) }
       catch { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('no such piece') }
-      // music is large and never changes: let it cache, unlike the windows
-      res.writeHead(200, { 'Content-Type': AUDIO_MIME[ext], 'Cache-Control': 'public, max-age=86400' })
+      // music is large and never changes: let it cache, unlike the windows.
+      // And it must speak RANGE: iOS Safari's media stack probes with
+      // byte-ranges and refuses players that answer a whole file to a
+      // partial question — which is a door with music behind it and
+      // silence in front.
+      const range = req.headers.range
+      const base = { 'Content-Type': AUDIO_MIME[ext], 'Cache-Control': 'public, max-age=86400',
+        'Accept-Ranges': 'bytes' }
+      if (range) {
+        const m2 = /bytes=(\d*)-(\d*)/.exec(range)
+        let a2 = m2 && m2[1] !== '' ? parseInt(m2[1], 10) : 0
+        let b2 = m2 && m2[2] !== '' ? Math.min(parseInt(m2[2], 10), buf.length - 1) : buf.length - 1
+        if (a2 > b2 || a2 >= buf.length) {
+          res.writeHead(416, { 'Content-Range': 'bytes */' + buf.length }); return res.end()
+        }
+        res.writeHead(206, { ...base, 'Content-Range': 'bytes ' + a2 + '-' + b2 + '/' + buf.length,
+          'Content-Length': b2 - a2 + 1 })
+        return res.end(buf.subarray(a2, b2 + 1))
+      }
+      res.writeHead(200, { ...base, 'Content-Length': buf.length })
       return res.end(buf)
     }
     // what music this node actually has, so a window need not guess at names
@@ -513,13 +525,6 @@ const server = http.createServer((req, res) => {
       return sendFile('./site/' + f, MIME[ext] ?? 'text/plain')
     }
     if (PAGES[path]) return sendFile('./site/' + PAGES[path], 'text/html')
-    // Root-level site assets: /site.css, /nav.js, /tallyholm.png and kin.
-    // The pattern is the allowlist — one plain name, one known extension —
-    // so this stays a door for assets, never a door for the filesystem.
-    {
-      const m = path.match(/^\/([a-z0-9-]+)\.(css|js|png|jpg|jpeg|svg|webp|ico)$/)
-      if (m) return sendFile('./site/' + m[1] + '.' + m[2], MIME[m[2]])
-    }
     res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('nothing here')
   } catch (e) {
     // A handler that has already begun its response cannot be given a 500, and
