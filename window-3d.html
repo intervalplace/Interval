@@ -3195,7 +3195,10 @@ function syncNodes(s) {
       const isWall = (dx, dy) => s._wallTiles.has((wxN + dx) + ',' + (wyN + dy))
       const horiz = isWall(-1, 0) || isWall(1, 0)
       const vert = isWall(0, -1) || isWall(0, 1)
-      if (vert && !horiz) m.rotation.y = Math.PI / 2 // it runs north-south: turn to match
+      if (vert && !horiz) {
+        m.rotation.y = Math.PI / 2 // it runs north-south: turn to match
+        m.updateMatrix(); m.updateMatrixWorld(true) // frozen sculpture, turned by hand
+      }
       m.userData.wallAlign = null // the lattice does not move; resolve once
     }
     // ---- a worked seam LOOKS worked now. The mined boulder collapses
@@ -5242,20 +5245,6 @@ function nearestTapTarget(cxp, cyp) {
     const d = Math.hypot(v3.x - ndc.x, v3.y - ndc.y)
     if (d < bd) { bd = d; best = { kind: 'mob', id: m.userData.beingId } }
   }
-  // the node window: only the near country exists as meshes (an eighth
-  // re-judged per frame; .visible feeds every pass: main, shadow, picker)
-  {
-    if (nodeWinKeys3.length !== nodeMeshes.size) nodeWinKeys3 = [...nodeMeshes.keys()]
-    const nWK = Math.max(1, nodeWinKeys3.length)
-    const q5 = Math.max(1, Math.ceil(nWK / 8))
-    for (let k5 = 0; k5 < q5; k5++) {
-      const m = nodeMeshes.get(nodeWinKeys3[(nodeWinCursor3 + k5) % nWK])
-      if (!m) continue
-      const dxn = m.position.x - camera.position.x, dzn = m.position.z - camera.position.z
-      m.visible = !m.userData.gone && (dxn * dxn + dzn * dzn) < 190 * 190
-    }
-    nodeWinCursor3 = (nodeWinCursor3 + q5) % nWK
-  }
   for (const m of nodeMeshes.values()) {
     if (!(GATHERABLE.has(m.userData.nodeType) || USABLE.has(m.userData.nodeType)) || !m.visible) continue
     v3.copy(m.position); v3.y += 0.5; v3.project(camera)
@@ -5523,8 +5512,25 @@ let snowCover = 0  // and the ground remembers its snow: it settles, then thaws
 let leafAt = 0     // the last leaf shed
 const camDesired = new THREE.Vector3(), camRay = new THREE.Raycaster()
 const sunNDC = new THREE.Vector3(), antiSun = new THREE.Vector3()
+const _camW3 = new THREE.Vector3()
 function animate(now) {
   requestAnimationFrame(animate)
+  // the node window: only the near country exists as meshes — an eighth
+  // re-judged per frame, measured from the camera's WORLD position
+  // (its local one belongs to the rig, and the rig lives near origin)
+  {
+    camera.getWorldPosition(_camW3)
+    if (nodeWinKeys3.length !== nodeMeshes.size) nodeWinKeys3 = [...nodeMeshes.keys()]
+    const nWK = Math.max(1, nodeWinKeys3.length)
+    const q5 = Math.max(1, Math.ceil(nWK / 8))
+    for (let k5 = 0; k5 < q5; k5++) {
+      const m = nodeMeshes.get(nodeWinKeys3[(nodeWinCursor3 + k5) % nWK])
+      if (!m) continue
+      const dxn = m.position.x - _camW3.x, dzn = m.position.z - _camW3.z
+      m.visible = !m.userData.gone && (dxn * dxn + dzn * dzn) < 190 * 190
+    }
+    nodeWinCursor3 = (nodeWinCursor3 + q5) % nWK
+  }
   const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now
   uT.value = now / 1000
   for (const mx of mixers.values()) mx.update(dt)

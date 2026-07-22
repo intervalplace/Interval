@@ -2604,6 +2604,10 @@ const mats = { // shared PBR skins
   leaf1: new THREE.MeshStandardMaterial({ color: 0x27511a, roughness: 0.9 }),
   leaf2: new THREE.MeshStandardMaterial({ color: 0x315c22, roughness: 0.9 }),
   stone: new THREE.MeshStandardMaterial({ color: 0x6f6b64, roughness: 0.85 }),
+  // the carved library's skins: vertex colors do the lobing and the
+  // moss; the material color stays a tint the seasons can turn
+  leafBlob: new THREE.MeshStandardMaterial({ color: 0x2c5a1a, roughness: 0.88, vertexColors: true }),
+  stoneBlob: new THREE.MeshStandardMaterial({ color: 0x8a857c, roughness: 0.92, vertexColors: true }),
   magic: new THREE.MeshStandardMaterial({ color: 0x584f9a, roughness: 0.6, emissive: 0x2a2266, emissiveIntensity: 0.8 }),
   wood: new THREE.MeshStandardMaterial({ color: 0x5c4426, roughness: 0.9 }),
   roof: new THREE.MeshStandardMaterial({ color: 0x4d2413, roughness: 0.85 }),
@@ -2634,7 +2638,7 @@ const clothDetail = makeDetail(17, { bump: 1.6, roughBase: 220 })
 const furDetail = makeDetail(19, { bump: 3, roughBase: 225 })
 // canopies breathe: each crown sways on a phase drawn from where it
 // stands, and the whole forest stiffens together when a storm leans in
-for (const lm of [mats.leaf0, mats.leaf1, mats.leaf2]) {
+for (const lm of [mats.leaf0, mats.leaf1, mats.leaf2, mats.leafBlob]) {
   lm.onBeforeCompile = (sh) => {
     sh.uniforms.uWindT = uWindT; sh.uniforms.uWindA = uWindA
     sh.vertexShader = sh.vertexShader
@@ -2688,6 +2692,54 @@ const roofGeo = (rad, depth) => {
   return g2
 }
 
+// ---- the organic library: the shard era ends. Eight canopies and
+// eight boulders, carved ONCE from displaced icosahedra — coherent
+// hash-lobes push vertices in and out so a crown reads as billowing
+// leaf-mass and a rock as weathered stone, with the color doing half
+// the work: lobes shade against each other, canopies darken toward
+// their undersides, boulders wear moss on their crowns and soil at
+// their buried feet. Every tree and rock in the country shares these
+// sixteen geometries at its own scale and turn, so a thousand nodes
+// cost sixteen carvings. ----
+let _canopyLib = null, _rockLib = null
+function carveBlob(seed, kind) {
+  const geo = new THREE.IcosahedronGeometry(1, 2)
+  const pos = geo.attributes.position
+  const colors = new Float32Array(pos.count * 3)
+  const v = new THREE.Vector3()
+  const cell = (x2, y2, z2, salt) =>
+    (tileHash(Math.round(x2 * 2.6) + 31, Math.round(y2 * 2.6) + 17, seed * 7 + salt + Math.round(z2 * 2.6) * 13) % 1000) / 1000
+  for (let i = 0; i < pos.count; i++) {
+    v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize()
+    const h1 = cell(v.x, v.y, v.z, 1), h2 = cell(v.x * 2.2, v.y * 2.2, v.z * 2.2, 2)
+    const d = kind === 'canopy' ? 0.74 + 0.2 * h1 + 0.1 * h2
+      : 0.7 + 0.24 * h1 + 0.09 * h2
+    pos.setXYZ(i, v.x * d, v.y * d * (kind === 'canopy' ? 0.92 : 0.78), v.z * d)
+    let r2, g2, b2
+    if (kind === 'canopy') {
+      const lobe = 0.8 + h1 * 0.4                       // lobes shade against each other
+      const vert = 0.62 + 0.38 * (v.y * 0.5 + 0.5)      // undersides go dark
+      r2 = lobe * vert; g2 = lobe * vert; b2 = lobe * vert
+    } else {
+      const tone = 0.75 + h1 * 0.3
+      const buried = v.y < -0.25 ? 0.55 : 1              // soil at the buried feet
+      r2 = tone * buried; g2 = tone * buried; b2 = tone * buried
+      if (v.y > 0.45 && h2 < 0.4) { r2 *= 0.62; g2 *= 0.95; b2 *= 0.5 } // moss on the crown
+    }
+    colors[i * 3] = r2; colors[i * 3 + 1] = g2; colors[i * 3 + 2] = b2
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  geo.computeVertexNormals() // smooth between lobes: mass, not origami
+  return geo
+}
+function canopyGeo(k2) {
+  if (!_canopyLib) { _canopyLib = []; for (let i = 0; i < 8; i++) _canopyLib.push(carveBlob(40 + i, 'canopy')) }
+  return _canopyLib[k2 % 8]
+}
+function rockGeo(k2) {
+  if (!_rockLib) { _rockLib = []; for (let i = 0; i < 8; i++) _rockLib.push(carveBlob(80 + i, 'rock')) }
+  return _rockLib[k2 % 8]
+}
 function nodeBody(n) {
   const g = new THREE.Group()
   const hsh = [...n.id].reduce((a, ch) => (a * 33 + ch.charCodeAt(0)) >>> 0, 5381)
@@ -2710,17 +2762,22 @@ function nodeBody(n) {
       b1.rotation.z = -0.7
       const b2 = add(new THREE.Mesh(new THREE.CylinderGeometry(0.03 * grow, 0.05 * grow, 0.6 * grow, 5), mats.bark), -0.2 * grow, 1.22 * grow, -0.12 * grow)
       b2.rotation.z = 0.8; b2.rotation.x = 0.3
-      const crown = (m, x, y, z, s) => { const k = add(new THREE.Mesh(craggy(0.6 * s * grow, hsh % 97), m), x * grow, y * grow, z * grow); k.userData.canopy = true; return k }
-      crown(mats.leaf1, 0, 1.85, 0, 1.2)
-      crown(mats.leaf0, 0.48, 1.5, 0.28, 0.85)
-      crown(mats.leaf2, -0.4, 1.6, -0.24, 0.9)
-      crown(mats.leaf2, 0.08, 2.3, -0.06, 0.68)
+      const crown = add(new THREE.Mesh(canopyGeo(hsh), mats.leafBlob), 0, 1.85 * grow, 0)
+      crown.scale.setScalar((0.95 + (hsh % 23) / 60) * grow)
+      crown.scale.x *= 1.12 // crowns are wider than tall
+      crown.rotation.y = (hsh % 313) / 50
+      crown.userData.canopy = true
+      const under = add(new THREE.Mesh(canopyGeo(hsh + 3), mats.leafBlob),
+        0.34 * grow, 1.42 * grow, 0.18 * grow)
+      under.scale.setScalar(0.52 * grow); under.userData.canopy = true
     }
     g.rotation.y = (hsh % 628) / 100
   } else if (n.type === 'rock' || n.type === 'magic-rock') {
-    add(new THREE.Mesh(craggy(0.5 * grow, hsh % 89), mats.stone), 0, 0.2)
-    add(new THREE.Mesh(craggy(0.28 * grow, hsh % 83), mats.stone), 0.36, 0.1, -0.18)
-    add(new THREE.Mesh(craggy(0.12 * grow, hsh % 79), mats.stone), -0.3, 0.05, 0.24)
+    const boulder = add(new THREE.Mesh(rockGeo(hsh), mats.stoneBlob), 0, 0.26 * grow)
+    boulder.scale.setScalar(0.62 * grow)
+    boulder.rotation.y = (hsh % 251) / 40
+    const sat = add(new THREE.Mesh(rockGeo(hsh + 5), mats.stoneBlob), 0.4 * grow, 0.08, -0.2 * grow)
+    sat.scale.setScalar(0.3 * grow); sat.rotation.y = (hsh % 97) / 15
     if (n.type === 'magic-rock') {
       // the ore declares itself: shards of light grown out of the stone
       for (let i = 0; i < 3; i++) {
@@ -5896,9 +5953,9 @@ function frame() {
       : sprAmt > 0.5 ? 'spring' : 'high summer'
     showTitle(seasonWord, 'day ' + dayIdx)
   }
-  if (!seasonBase.leaf) seasonBase.leaf = [mats.leaf0, mats.leaf1, mats.leaf2].map((m2) => m2.color.clone())
-  for (let si = 0; si < 3; si++) {
-    const m2 = [mats.leaf0, mats.leaf1, mats.leaf2][si], b2 = seasonBase.leaf[si]
+  if (!seasonBase.leaf) seasonBase.leaf = [mats.leaf0, mats.leaf1, mats.leaf2, mats.leafBlob].map((m2) => m2.color.clone())
+  for (let si = 0; si < 4; si++) {
+    const m2 = [mats.leaf0, mats.leaf1, mats.leaf2, mats.leafBlob][si], b2 = seasonBase.leaf[si]
     m2.color.copy(b2)
       .lerp(tmpC.setHSL(0.055 + si * 0.025, 0.72, 0.32), autAmt * 0.85)
       .lerp(tmpC.setRGB(b2.r * 0.55 + 0.3, b2.g * 0.55 + 0.32, b2.b * 0.55 + 0.36), winAmt * 0.8)
