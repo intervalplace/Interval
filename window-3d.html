@@ -6259,10 +6259,21 @@ async function exportOwnKey() {
   catch { prompt('copy your key (it IS your citizen):', str) }
 }
 async function importOwnKey() {
-  const str = (prompt('paste a key (interval-key-v1.\u2026):') ?? '').trim()
+  const str = (prompt('paste a key (interval-key-v1.\u2026 or an executor identity JSON):') ?? '').trim()
   if (!str) return
-  const m9 = /^interval-key-v1\.([0-9a-f]+)\.([0-9a-f]+)$/.exec(str)
-  if (!m9) { alert('that is not an interval key'); return }
+  let m9 = /^interval-key-v1\.([0-9a-f]+)\.([0-9a-f]+)$/.exec(str)
+  if (!m9 && str.startsWith('{')) {
+    // the executor's own tongue (v0.78): identities/*.json speaks
+    // {playerId, privateKey} where privateKey is the raw 32-byte seed.
+    // PKCS8 for Ed25519 is that same seed behind a fixed 16-byte
+    // prefix, so the two formats are one key in two coats.
+    try {
+      const j9 = JSON.parse(str)
+      if (/^[0-9a-f]{64}$/.test(j9.privateKey ?? '') && /^[0-9a-f]{64}$/.test(j9.playerId ?? ''))
+        m9 = [null, '302e020100300506032b657004220420' + j9.privateKey, j9.playerId]
+    } catch {}
+  }
+  if (!m9) { alert('that is not an interval key (paste interval-key-v1.\u2026 or the executor JSON)'); return }
   if (!(await IK_verify(m9[1], m9[2]))) { alert('this key does not prove itself: the pair does not match'); return }
   const cur = localStorage.getItem('interval-ownkey')
   if (cur) {
