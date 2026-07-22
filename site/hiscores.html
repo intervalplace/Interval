@@ -48,7 +48,7 @@ async function readJson(url) {
   try { return await r.json() }
   catch { throw new Error('The node answered ' + url + ' with something that was not JSON.') }
 }
-let SKILLS = [], VIEW = 'Standing', LAST = null, FILTER = '', MINE = null
+let SKILLS = [], VIEW = 'standing', LAST = null, FILTER = '', MINE = null
 let PAGE = 0, PROFILE = null
 const PER_PAGE = 20
 
@@ -67,11 +67,11 @@ try {
 // own, copied from its skills table so the site cannot quietly disagree with
 // its own documentation about what kind of thing a skill is.
 const FAMILIES = [
-  ['Gathering',  ['Woodcutting', 'Mining', 'Fishing', 'Farming']],
-  ['Processing', ['Cooking', 'Firemaking', 'Smithing', 'Fletching', 'Magic']],
-  ['Combat',     ['Attack', 'Defence', 'Hitpoints', 'Ranged']],
-  ['Profession', ['Brewing', 'Exploration']],
-  ['Mourning',   ['Prayer']],
+  ['gathering',  ['woodcutting', 'mining', 'fishing', 'farming']],
+  ['processing', ['cooking', 'firemaking', 'smithing', 'fletching', 'magic']],
+  ['combat',     ['attack', 'defence', 'hitpoints', 'ranged']],
+  ['profession', ['brewing', 'exploration']],
+  ['mourning',   ['prayer']],
 ]
 
 // Two controls for one choice. A wall of seventeen buttons pushed the actual
@@ -89,7 +89,7 @@ function drawPicker() {
   // --- the compact one, for phones: one line, native picker ---
   let sel = '<div class="pcompact"><label for="pickskill">showing</label>'
     + '<select id="pickskill"><option value="standing"'
-    + (VIEW === 'standing' ? ' selected' : '') + '>Standing (every trade)</option>'
+    + (VIEW === 'standing' ? ' selected' : '') + '>standing (every trade)</option>'
   for (const [label, group] of FAMILIES) {
     const present = group.filter(x => known.has(x))
     if (!present.length) continue
@@ -196,7 +196,7 @@ function drawCitizen(j) {
   const me = j.players.find(p => p.playerId === PROFILE)
   if (!me) {
     el.innerHTML = '<p style="color:var(--dim)">That citizen is no longer on the board.</p>'
-      + '<div class="pager"><button class="pgb" data-pg="back">back to the board</button></div>'
+      + '<div class="pager"><button class="pgb" data-pg="back">Back to the board</button></div>'
     wireBoard(); return
   }
   const standingRank = j.players.findIndex(p => p.playerId === PROFILE) + 1
@@ -222,7 +222,7 @@ function drawCitizen(j) {
       + '<td style="color:var(--dim)">' + xp.toLocaleString() + '</td></tr>'
   }
   el.innerHTML = html + '</table>'
-    + '<div class="pager"><button class="pgb" data-pg="back">back to the board</button></div>'
+    + '<div class="pager"><button class="pgb" data-pg="back">Back to the board</button></div>'
   wireBoard()
 }
 
@@ -355,7 +355,7 @@ async function loadRaces() {
   try {
     const j = await readJson('/api/races')
     const rs = j.races ?? []
-    if (!rs.length) { el.textContent = 'no skills reported'; return }
+    if (!rs.length) { el.textContent = 'No skills reported'; return }
 
     // Ordered by how close the race is to being won, not by the order the
     // skills happen to be listed in. A race board is a story about who is
@@ -376,8 +376,8 @@ async function loadRaces() {
           + '<td><b style="color:var(--gold)">' + x.name + '</b> was first</td></tr>'
       } else if (!x.name) {
         html += '<tr><td>' + x.skill + '</td>'
-          + '<td style="color:var(--dim)">unclaimed</td>'
-          + '<td style="color:var(--dim)">nobody has begun</td></tr>'
+          + '<td style="color:var(--dim)">Unclaimed</td>'
+          + '<td style="color:var(--dim)">Nobody has begun</td></tr>'
       } else {
         const bar = '<span style="display:inline-block;width:70px;height:6px;background:#2a2114;'
           + 'border:1px solid #55462d;vertical-align:1px;margin-right:7px">'
