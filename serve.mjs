@@ -529,7 +529,7 @@ const server = http.createServer((req, res) => {
     }
     if (PAGES[path]) return sendFile('./site/' + PAGES[path], 'text/html')
     { // root assets: the chart of Tallyholm and its kin live in ./site
-      const am = /^\/([a-z0-9_-]+)\.(png|jpg|webp|svg|ico)$/.exec(path)
+      const am = /^\/([a-z0-9_-]+)\.(png|jpg|webp|svg|ico|css|js)$/.exec(path)
       if (am) return sendFile('./site/' + am[1] + '.' + am[2], MIME[am[2]])
     }
     res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('nothing here')
