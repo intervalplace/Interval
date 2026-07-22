@@ -5128,7 +5128,7 @@ document.getElementById('gate3dbtn').addEventListener('click', () => {
   pendingName3 = (document.getElementById('gate3dname')?.value ?? '').trim().slice(0, 12)
   fadeMusicOut3(2000)
   entered = true
-  startMusic('theme-deep') // usually already playing from the door; a no-op if so
+  // (door music is the DOOR's: entering fades it out, and nothing here restarts it)
   try { AC3 = new (window.AudioContext ?? window.webkitAudioContext)(); initAmbient() } catch {}
   if (!ownKey) ownIdentityOnce().then((k) => { // one more knock, on the SAME door
     if (!k) { signBanner(); return }

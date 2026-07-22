@@ -3207,7 +3207,7 @@ function enterWorld() {
   if (nm && world?.names?.[nm] && world.names[nm] !== myId) return // taken: the button already says so
   if (/^[a-z0-9-]{1,12}$/.test(nm) && !nm.startsWith('-') && !nm.endsWith('-')) loginName = nm
   entered = true
-  startMusic('theme-flat') // usually already playing from the door; a no-op if so
+  // (door music is the DOOR's: entering fades it out, and nothing here restarts it)
   document.getElementById('gate').style.display = 'none'
   feed('The interval begins.')
 }
