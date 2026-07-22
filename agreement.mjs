@@ -224,7 +224,19 @@ export class IntervalAgreement {
           throwCoded(ERR.WORLD_MISMATCH, `stored frontier belongs to a different world (${f.worldId.slice(0, 12)}… ≠ ${this.worldId.slice(0, 12)}…) — refusing startup; move or remove the record explicitly`)
       }
       if (f) {
-        if (this.getState().tick <= f.tick)
+        // v0.78: resuming EXACTLY AT the frontier is legitimate — if and
+        // only if the state IS the finalized state, byte for byte. A
+        // clean shutdown can land the checkpoint and the frontier on the
+        // same tick (the flush race), and refusing that boot punished
+        // honest operators for good timing. Height alone is not identity
+        // (brief §2), so the hash decides: match = resume and propose
+        // f.tick+1 next, re-signing nothing; mismatch = the same-height
+        // impostor the guard was always for.
+        if (this.getState().tick === f.tick) {
+          const h0 = E.stateHash(this.getState())
+          if (h0 !== f.resultingStateHash)
+            throwCoded(ERR.FRONTIER_ROLLBACK, `same-height impostor refused: state at tick ${f.tick} hashes ${h0.slice(0, 8)}… but the finalized frontier recorded ${f.resultingStateHash.slice(0, 8)}…. Two histories share this height; sync the checkpoint that matches the frontier.`)
+        } else if (this.getState().tick < f.tick)
           throwCoded(ERR.FRONTIER_ROLLBACK, `checkpoint rollback refused: state is at tick ${this.getState().tick} but tick ${f.tick} was already finalized (${f.resultingStateHash.slice(0, 8)}…). Re-signing finalized history forks worlds. Sync a current checkpoint or restore the newer state.`)
         // brief §2: height alone is not identity. A state resuming AT the
         // frontier height must BE the finalized state, byte for byte — a
