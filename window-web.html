@@ -992,7 +992,23 @@ function capeOf(p) { // mastery is a fact; the cape is what it looks like
   }
 }
 const isAwake = (p, tick) => p.action !== null || tick - (p.lastInput ?? 0) <= SLEEP_AFTER
+// errors confess (v0.78): an uncaught throw prints its address to the
+// feed instead of silently killing whatever feature it died inside
+const __errSeen = new Set()
+addEventListener('error', (e) => {
+  const key = (e.message ?? '') + '@' + (e.lineno ?? 0)
+  if (__errSeen.has(key) || __errSeen.size > 3) return
+  __errSeen.add(key)
+  try { feed('[err] ' + (e.message ?? 'unknown') + ' @' + (e.filename ?? '').split('/').pop() + ':' + e.lineno + ':' + e.colno) } catch {}
+})
+addEventListener('unhandledrejection', (e) => {
+  const key = 'rej:' + (e.reason?.message ?? e.reason ?? '')
+  if (__errSeen.has(key) || __errSeen.size > 3) return
+  __errSeen.add(key)
+  try { feed('[err] ' + (e.reason?.message ?? e.reason ?? 'rejection')) } catch {}
+})
 let xpDrops = []      // { amt, x, y, at }: floating +xp for gathering/cooking
+let arrowShots = []   // { x0, y0, x1, y1, at }: tracers for arrows in flight
 function updateGate(s, worldId) {
   const me = s.players[myId]
   const souls = Object.keys(s.players).length
@@ -1206,8 +1222,13 @@ function onState(s, worldId) {
       const l1 = XP_TO_LVL(old.skills[k]), l2 = XP_TO_LVL(me.skills[k])
       if (k === 'smithing' && me.skills[k] > old.skills[k]) SFX.smith()
       if (k === 'firemaking' && me.skills[k] > old.skills[k]) SFX.fire()
+      if (k === 'ranged' && me.skills[k] > old.skills[k]) {
+        const foe = me.action?.type === 'attack' ? world.mobs?.[me.action.mobId] : null
+        if (foe) { arrowShots.push({ x0: me.x, y0: me.y, x1: foe.x, y1: foe.y, at: performance.now() }); if (arrowShots.length > 6) arrowShots.shift() }
+        tone(880, 0.06, { type: 'triangle', vol: 0.05 }); tone(240, 0.1, { type: 'square', vol: 0.03, at: 0.05 }) // the string, then the thud
+      }
       if (k === 'prayer' && me.skills[k] > old.skills[k]) { tone(520, 0.3, { type: 'sine', vol: 0.05 }); tone(390, 0.4, { type: 'sine', vol: 0.04, at: 0.05 }) }
-      if (!['attack', 'defence', 'hitpoints'].includes(k)) {
+      if (!['attack', 'defence', 'hitpoints', 'ranged'].includes(k)) { // combat trains QUIETLY, ranged included: the arrow is the feedback now
         xpDrops.push({ amt: me.skills[k] - old.skills[k], x: me.x, y: me.y, at: performance.now() })
         if (xpDrops.length > 12) xpDrops.shift()
       }
@@ -1217,6 +1238,13 @@ function onState(s, worldId) {
         SFX.levelup()
       }
     }
+    { const oldArr = old.inventory.reduce((a2, sl) => a2 + (sl?.item === 'arrows' ? sl.qty : 0), 0)
+      const newArr = me.inventory.reduce((a2, sl) => a2 + (sl?.item === 'arrows' ? sl.qty : 0), 0)
+      if (newArr < oldArr && me.skills.ranged === old.skills.ranged) { // loosed and MISSED: seen and heard, softer
+        const foe = me.action?.type === 'attack' ? world.mobs?.[me.action.mobId] : null
+        if (foe) { arrowShots.push({ x0: me.x, y0: me.y, x1: foe.x + 0.6, y1: foe.y - 0.4, at: performance.now() }); if (arrowShots.length > 6) arrowShots.shift() }
+        tone(880, 0.05, { type: 'triangle', vol: 0.04 })
+      } }
     if (me.hp < old.hp) { feed('You take ' + (old.hp - me.hp) + ' damage.'); SFX.hit() }
     if (me.hp > old.hp && !died) { // name what actually left the pack
       const gone = (it) => old.inventory.filter(sl => sl?.item === it).length
@@ -2888,6 +2916,16 @@ function drawScene(now) {
     cx.globalAlpha = 1
   }
 
+  // arrows in flight: a bright line that fades as it flies (280ms)
+  arrowShots = arrowShots.filter(a2 => now - a2.at < 280)
+  for (const a2 of arrowShots) {
+    const f2 = (now - a2.at) / 280, f3 = Math.max(0, f2 - 0.22)
+    const ax = px(lerp(a2.x0, a2.x1, f2)) + 8, ay = py(lerp(a2.y0, a2.y1, f2)) + 8
+    const bx = px(lerp(a2.x0, a2.x1, f3)) + 8, by = py(lerp(a2.y0, a2.y1, f3)) + 8
+    cx.strokeStyle = 'rgba(232,228,208,' + (1 - f2 * 0.6) + ')'
+    cx.lineWidth = 1.4
+    cx.beginPath(); cx.moveTo(bx, by); cx.lineTo(ax, ay); cx.stroke()
+  }
   // floating xp drops (world coords, so drawn before restore)
   xpDrops = xpDrops.filter(d => now - d.at < 1100)
   for (const d of xpDrops) {
@@ -3153,18 +3191,29 @@ function panel(s) {
   // The stock is the constitution's, not a guess: the world sells seeds and
   // nothing else, because everything else is meant to be made or found.
   if (nearStore) {
+    // the keeper's SHELF (v0.74) finally reaches this window: what
+    // citizens sold and nobody carried off is for sale beside the
+    // keeper's own seeds, priced by the constitution's ask
+    const storeN = Object.values(world.nodes).find(n => n.type === 'store'
+      && Math.abs(me.x - n.x) + Math.abs(me.y - n.y) === 1)
+    const ask = (it2) => (PRICES[it2] ?? 1) + Math.max(1, Math.floor((PRICES[it2] ?? 1) / 10))
+    const wares = { ...STORE_SELLS }
+    for (const [it2, q2] of Object.entries(storeN?.shelf ?? {}))
+      if (q2 > 0 && !(it2 in wares)) wares[it2] = ask(it2)
     sellBar.innerHTML += '<div style="color:var(--gold);font-size:11px;margin:6px 0 2px">AND SELLS:</div>'
-      + Object.entries(STORE_SELLS).map(([it, pr]) => '<button data-buy="' + it + '" style="margin:1px;'
+      + Object.entries(wares).map(([it, pr]) => '<button data-buy="' + it + '" style="margin:1px;'
         + 'background:#3a3126;color:#e8d9a0;border:1px solid #6e5433;padding:3px 6px;font-family:inherit;'
         + 'font-size:10px;cursor:pointer' + ((me.gold ?? 0) < pr ? ';opacity:.4' : '') + '">'
-        + it.replace(/-/g, ' ') + ' \u2190 ' + pr + 'g</button>').join('')
+        + it.replace(/-/g, ' ') + ' \u2190 ' + pr + 'g'
+        + (storeN?.shelf?.[it] ? ' (\u00d7' + storeN.shelf[it] + ')' : '') + '</button>').join('')
   }
   sellBar.onclick = (e) => {
     const i = e.target?.dataset?.sell
     if (i !== undefined) { send({ do: 'sell', slot: +i }); feed('The keeper counts out your coin.') }
     const b = e.target?.dataset?.buy
     if (b !== undefined) {
-      if ((me.gold ?? 0) < STORE_SELLS[b]) { feed('Not enough coin for that.'); return }
+      const askB = STORE_SELLS[b] ?? ((PRICES[b] ?? 1) + Math.max(1, Math.floor((PRICES[b] ?? 1) / 10)))
+      if ((me.gold ?? 0) < askB) { feed('Not enough coin for that.'); return }
       send({ do: 'buy', item: b }); feed('The keeper slides it across.')
     }
   }
@@ -3515,7 +3564,15 @@ function invClick(i) {
   if (!it) return
   const nearBank = Object.values(world.nodes).some(n => n.type === 'bank'
     && Math.abs(meNow.x - n.x) + Math.abs(meNow.y - n.y) === 1)
-  if (nearBank) { send({ do: 'deposit', slot: +i }); feed('You deposit the ' + it.item.replace('-', ' ') + '.'); return }
+  // items with MENUS keep their menus even beside the bank (Anchor's
+  // bank stands by the store: the old blanket deposit-on-click made
+  // every log click a silent deposit and the menu seemed to die).
+  // Their menus gain a deposit option instead; plain goods still
+  // deposit in one click, the banker's old convenience.
+  const MENU_ITEMS = new Set(['logs', 'bones', 'sigil', 'magic-stone', 'arrows', 'ale'])
+  const hasMenu = MENU_ITEMS.has(it.item) || it.item.startsWith(CHART_PREFIX ?? 'ws-chart:')
+  if (nearBank && !hasMenu) { send({ do: 'deposit', slot: +i }); feed('You deposit the ' + it.item.replace('-', ' ') + '.'); return }
+  const bankOpt = nearBank ? [{ label: 'deposit in bank', act: () => { send({ do: 'deposit', slot: +i }); feed('You deposit the ' + it.item.replace('-', ' ') + '.') } }] : []
   if (it.item === 'magic-stone') {
     const count = me.inventory.filter(sl => sl?.item === 'magic-stone').length
     chooseAction([
@@ -3556,6 +3613,7 @@ function invClick(i) {
   if (it.item === 'arrows') {
     chooseAction([
       { label: 'no wielding needed (' + it.qty + ' in the pack)', act: () => feed('Arrows fly on their own: wield a bow and attack anything within four tiles.') },
+      ...bankOpt,
       { label: 'drop', act: () => { send({ do: 'drop', slot: +i }); feed('You drop the arrows.') } },
     ]); return
   }
@@ -3567,8 +3625,14 @@ function invClick(i) {
   }
   if (it.item === 'logs' && !window.__logsChoice) {
     chooseAction([
-      { label: 'light fire', act: () => { window.__logsChoice = true; invClick(i); window.__logsChoice = false; pendingLight = { slot: +i, tick: world?.tick ?? 0 } } },
+      { label: 'light fire', act: () => {
+        intent = null // stop walking: the retry loop yields to intents, and a lingering walk was eating the flint
+        window.__logsChoice = true
+        try { invClick(i) } catch (e) { feed('[err] lighting: ' + e.message) } // a throw here once ate the menu FOREVER
+        finally { window.__logsChoice = false }
+        pendingLight = { slot: +i, tick: world?.tick ?? 0 } } },
       { label: 'fletch bow', act: () => send({ do: 'fletch', slot: +i, make: 'bow' }) },
+      ...bankOpt,
     ]); return
   }
   if (it.item === 'logs') {
