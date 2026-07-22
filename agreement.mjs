@@ -236,8 +236,40 @@ export class IntervalAgreement {
           const h0 = E.stateHash(this.getState())
           if (h0 !== f.resultingStateHash)
             throwCoded(ERR.FRONTIER_ROLLBACK, `same-height impostor refused: state at tick ${f.tick} hashes ${h0.slice(0, 8)}… but the finalized frontier recorded ${f.resultingStateHash.slice(0, 8)}…. Two histories share this height; sync the checkpoint that matches the frontier.`)
-        } else if (this.getState().tick < f.tick)
-          throwCoded(ERR.FRONTIER_ROLLBACK, `checkpoint rollback refused: state is at tick ${this.getState().tick} but tick ${f.tick} was already finalized (${f.resultingStateHash.slice(0, 8)}…). Re-signing finalized history forks worlds. Sync a current checkpoint or restore the newer state.`)
+        } else if (this.getState().tick < f.tick) {
+          // v0.78: CERTIFIED RECOVERY, behind edition. A stale checkpoint
+          // beneath the frontier is not a fork — it is an old photograph
+          // of the same lineage, and the accountability store holds a
+          // finality certificate for every tick between here and the
+          // frontier. Replay those certified bundles (each one quorum-
+          // signed, each replay checked against its attested result) and
+          // the state climbs back to the exact finalized present without
+          // re-signing anything. Only a MISSING or non-reproducing
+          // certificate refuses the boot — that is a genuinely different
+          // history, and the old refusal stands for it.
+          let cur = this.getState()
+          let ph = E.stateHash(cur)
+          const from = cur.tick
+          for (let t = cur.tick + 1; t <= f.tick; t++) {
+            const entry = this.finalityIndex.get(t)
+            if (!entry?.cert)
+              throwCoded(ERR.FRONTIER_ROLLBACK, `checkpoint rollback refused: state is at tick ${cur.tick} but tick ${f.tick} was already finalized (${f.resultingStateHash.slice(0, 8)}…), and no finality certificate for tick ${t} is stored to recover through. Sync a current checkpoint or restore the newer state.`)
+            const rec = entry.cert
+            const perr = P.verifyFinalityProof(this.genesis, this.worldId, rec)
+            if (perr)
+              throwCoded(ERR.FRONTIER_ROLLBACK, `certified recovery halted at tick ${t}: stored certificate is invalid (${perr})`)
+            if (rec.previousStateHash !== ph)
+              throwCoded(ERR.FRONTIER_ROLLBACK, `certified recovery halted at tick ${t}: certificate expects lineage ${String(rec.previousStateHash).slice(0, 8)}… but the replayed state hashes ${ph.slice(0, 8)}… — this checkpoint is not an ancestor of the finalized history`)
+            const next = E.nextState(cur, rec.bundle.inputs)
+            const rsh = E.stateHash(next)
+            if (rsh !== rec.resultingStateHash)
+              throwCoded(ERR.FRONTIER_ROLLBACK, `certified recovery halted at tick ${t}: local replay hashes ${rsh.slice(0, 8)}… but the quorum certified ${String(rec.resultingStateHash).slice(0, 8)}…`)
+            cur = next; ph = rsh
+          }
+          this.setState(cur)
+          this.prevHash = ph
+          this.log(`certified recovery: replayed ${f.tick - from} finalized tick(s) (${from} -> ${f.tick}) from the accountability store; the world resumes at the exact finalized present`)
+        }
         // brief §2: height alone is not identity. A state resuming AT the
         // frontier height must BE the finalized state, byte for byte — a
         // same-height impostor (restored from elsewhere, hand-edited) is
