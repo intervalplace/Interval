@@ -369,11 +369,16 @@ export function buildWorld(genesis) {
     }
     const at = (dx, dy) => ({ x: s.x + dx, y: s.y + dy })
     const place = (id, type, dx, dy, extra) => { const p = at(dx, dy); if (inB(p.x, p.y) && !taken.has(key(p.x, p.y)) && !isWater(g, p.x, p.y)) put(id, type, p.x, p.y, extra) }
+    const sp0 = spawnDry(g) // the spawn tile is hallowed ground (v0.78):
+    // citizens wake at the world's center, and were waking INSIDE the
+    // well that placeNear seated on that same tile. No furniture may
+    // stand where souls arrive; the well slides one ring out.
     const placeNear = (id, type, dx, dy, extra) => {
       for (let rad = 0; rad <= 4; rad++) for (let ody = -rad; ody <= rad; ody++) for (let odx = -rad; odx <= rad; odx++) {
         if (Math.max(Math.abs(odx), Math.abs(ody)) !== rad) continue
         const p = at(dx + odx, dy + ody)
         if (p.x <= r.x0 || p.x >= r.x1 || p.y <= r.y0 || p.y >= r.y1) continue
+        if (p.x === sp0.x && p.y === sp0.y) continue
         if (!inB(p.x, p.y) || taken.has(key(p.x, p.y)) || isWater(g, p.x, p.y)) continue
         put(id, type, p.x, p.y, extra); return
       }
