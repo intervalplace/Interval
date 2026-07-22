@@ -380,7 +380,8 @@
     <input id="gate3dname" maxlength="12" placeholder="choose a name (optional)" autocomplete="off"
       style="display:block;width:100%;margin:0 0 10px;box-sizing:border-box;background:#17120b;border:1px solid #55483a;color:#e2b63e;border-radius:4px;font:500 14px ui-monospace,monospace;text-align:center;padding:10px">
     <button id="gate3dbtn">Enter the world</button>
-    <div><button id="musicbtn" type="button">music: on</button></div>
+    <div><button id="musicbtn" type="button">music: on</button>
+    <button id="daybtn" type="button">day: cycle</button></div>
     <div class="k" id="gate3dkey"></div>
     <div class="keyrow">
       <button type="button" class="keybtn" data-ik="export">export key</button>
@@ -3491,6 +3492,8 @@ const lookOf = (it) => WEAPON_LOOK[it] ?? { every: 2, ranged: false, style: 'swi
 let soundOn = localStorage.getItem('interval-sound') !== 'off'
 let musicOn = localStorage.getItem('interval-music') !== 'off'
 let MUSIC = null, musicTried = false
+let DAYLOCK = localStorage.getItem('interval-daylock') === 'on' // shared with /play: one preference, both windows
+const dayCyc = (c) => DAYLOCK ? 0.25 : c
 async function startMusic(preferred) {
   if (MUSIC || musicTried || !musicOn || !soundOn) return
   musicTried = true
@@ -3538,6 +3541,12 @@ function setMusic(on, preferred) {
 
 for (const ev of ['pointerdown', 'keydown']) {
   window.addEventListener(ev, () => startMusic('theme-deep'), { once: true, passive: true })
+{ const db = document.getElementById('daybtn')
+  if (db) { db.textContent = DAYLOCK ? 'day: bright' : 'day: cycle'
+    db.addEventListener('click', (e) => { e.stopPropagation()
+      DAYLOCK = !DAYLOCK
+      localStorage.setItem('interval-daylock', DAYLOCK ? 'on' : 'off')
+      db.textContent = DAYLOCK ? 'day: bright' : 'day: cycle' }) } }
 // ...and TRY IMMEDIATELY, gesture or no: returning citizens' browsers
 // permit it, and the door has music the moment it opens. A refusal
 // costs nothing — the first touch carries it instead.
@@ -5616,7 +5625,7 @@ function animate(now) {
       if (stale && !widEl.textContent.includes('breath')) widEl.textContent += ' · the world holds its breath'
     } }
   const t2 = Math.min(1, Math.max(0, (now - clock.at) / TICK_MS))
-  const cyc = (((s.tick + t2) % DAY) / DAY)
+  const cyc = dayCyc((((s.tick + t2) % DAY) / DAY))
   const bright = (Math.sin(cyc * Math.PI * 2) + 1) / 2
   // the sun crosses the sky because the tick says so
   const sunA = cyc * Math.PI * 2
