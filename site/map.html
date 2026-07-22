@@ -345,6 +345,7 @@ function blit() {
   ctx.imageSmoothingEnabled = false
   ctx.drawImage(buf, 0, 0)
   drawLabels()
+  drawMark() // the reader's own mark rides the same view
 }
 // the island grows row by row, so the seed is seen doing its work
 let row = 0
@@ -382,6 +383,23 @@ function labelPoints() {
       { n: 'South Pass', x: j.spass.x, y: j.spass.y },
     ],
   }
+}
+function drawMark() {
+  if (typeof ME_MARK === 'undefined' || !ME_MARK) return
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  const sx = (ME_MARK.x + 0.5 - view.x) * view.z, sy = (ME_MARK.y + 0.5 - view.y) * view.z
+  if (sx < -30 || sy < -30 || sx > cv.width + 30 || sy > cv.height + 30) return
+  const ph = (performance.now() % 900) / 900
+  const r = Math.max(2.5, view.z * 0.9) + Math.sin(ph * Math.PI * 2) * 1.1
+  ctx.beginPath(); ctx.arc(sx, sy, r + 3, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(255,232,58,0.18)'; ctx.fill()
+  ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2)
+  ctx.fillStyle = '#ffe83a'; ctx.fill()
+  ctx.strokeStyle = '#2c2216'; ctx.lineWidth = 1; ctx.stroke()
+  const label = (ME_NAME ?? 'you') + ((ME_MARK.hp ?? 1) <= 0 ? ' (fallen)' : '')
+  ctx.font = 'bold 11px Verdana'; ctx.textAlign = 'center'
+  ctx.fillStyle = 'rgba(5,3,1,.85)'; ctx.fillText(label, sx + 1, sy - r - 5 + 1)
+  ctx.fillStyle = '#ffe83a'; ctx.fillText(label, sx, sy - r - 5)
 }
 function drawLabels() {
   const lp = labelPoints()
@@ -435,47 +453,32 @@ requestAnimationFrame(growRows)
 
 // ---- the living mark (v0.78): this chart knows who is reading it.
 // The key in this browser IS a citizen; if that citizen stands in the
-// world right now, their mark breathes on the map, moving tick by
-// tick. Most games cannot do this — a map page and a game session are
-// strangers. Here they share one key and one truth.
+// world, their mark breathes on the island — inside the map's own
+// view, so it pans and zooms with the land it stands on.
+let ME_MARK = null, ME_NAME = null
 ;(() => {
   let pub = null
   try { pub = JSON.parse(localStorage.getItem('interval-ownkey') ?? 'null')?.pub ?? null } catch {}
-  if (!pub) return // no key yet: enter any window once and your mark appears
-  let meP = null, meName = null
+  if (!pub) return
   try {
-    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host)
-    ws.onmessage = (ev) => {
+    const ws2 = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host)
+    ws2.onmessage = (ev) => {
       try {
-        const m = JSON.parse(ev.data)
-        if (m.type !== 'state') return
-        const p = m.state.players?.[pub]
-        meP = p ? { x: p.x, y: p.y, hp: p.hp } : null
-        meName = p?.name ?? null
+        const m2 = JSON.parse(ev.data)
+        if (m2.type !== 'state') return
+        const p2 = m2.state.players?.[pub]
+        ME_MARK = p2 ? { x: p2.x, y: p2.y, hp: p2.hp } : null
+        ME_NAME = p2?.name ?? null
       } catch {}
     }
-  } catch { return }
-  const octx = cv.getContext('2d')
-  let t0 = performance.now()
-  const breathe = () => {
-    requestAnimationFrame(breathe)
-    if (!meP) return
-    // repaint the cached chart, then the mark atop it
-    octx.drawImage(buf, 0, 0)
-    const ph = (performance.now() - t0) / 900
-    const r = 2.2 + Math.sin(ph * Math.PI * 2) * 0.9
-    octx.beginPath(); octx.arc(meP.x + 0.5, meP.y + 0.5, r + 2, 0, Math.PI * 2)
-    octx.fillStyle = 'rgba(255,232,58,0.20)'; octx.fill()
-    octx.beginPath(); octx.arc(meP.x + 0.5, meP.y + 0.5, r, 0, Math.PI * 2)
-    octx.fillStyle = '#ffe83a'; octx.fill()
-    octx.strokeStyle = '#2c2216'; octx.lineWidth = 0.8; octx.stroke()
-    octx.font = '7px ui-monospace, monospace'
-    octx.textAlign = 'center'
-    const label = (meName ?? 'you') + (meP.hp <= 0 ? ' (fallen)' : '')
-    octx.fillStyle = '#1c1710'; octx.fillText(label, meP.x + 0.5 + 0.7, meP.y - 4 + 0.7)
-    octx.fillStyle = '#ffe83a'; octx.fillText(label, meP.x + 0.5, meP.y - 4)
+  } catch {}
+  let last2 = 0
+  const pulse = (t2) => {
+    requestAnimationFrame(pulse)
+    if (!ME_MARK || t2 - last2 < 80) return
+    last2 = t2; blit()
   }
-  breathe()
+  requestAnimationFrame(pulse)
 })()
 </script>
 </body>
