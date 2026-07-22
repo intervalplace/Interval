@@ -548,8 +548,38 @@ export function buildWorld(genesis) {
   counts.magicWilds     = scatter('wdmagic', A(54), (x, y) => B(x, y) === 'wilds', mrock)
   counts.magicCrags     = scatter('cgmagic', A(34), (x, y) => B(x, y) === 'crags' && x > W * 0.80, mrock)
 
+  // town copses: the chop-and-bank loop works at EVERY home. A handful
+  // of trees seeded just past each town's plots, so no settlement
+  // depends on the scatter's generosity for its firewood.
+  let copse = 0
+  for (const st of settlementsOf(g)) {
+    const r = rectOf(st)
+    let placed = 0
+    for (let att = 0; att < 120 && placed < 6; att++) {
+      const hb = H32('copse:' + st.name, att)
+      const x = r.x0 - 9 + (hb.readUInt16BE(0) % (r.x1 - r.x0 + 19))
+      const y = r.y0 - 9 + (hb.readUInt16BE(2) % (r.y1 - r.y0 + 19))
+      if (x >= r.x0 - 2 && x <= r.x1 + 2 && y >= r.y0 - 2 && y <= r.y1 + 2) continue // past walls and plots
+      if (!free(x, y) || onRoad(g, x, y)) continue
+      tree('copse-' + st.name + '-' + placed, x, y); taken.add(key(x, y)); placed++; copse++
+    }
+  }
+  counts.copseTrees = copse
+
   const mob = (kind) => (id, x, y) => E.addMob(w, id, kind, x, y)
-  counts.goblins = scatter('gob', A(168), (x, y) => { const b = B(x, y); return b === 'fens' || (b === 'heartlands' && (x < W * 0.4 || y > H * 0.55)) }, mob('goblin'))
+  // the Anchor commons (Lumbridge law): the first goblin is a sight
+  // from the capital's walls in ANY direction — a sparse ring, 18 to 60
+  // tiles out, thinned to a third of band density by the draw's own
+  // digest. The budget grows to fund it, so the fens stay as thick as
+  // ever; the commons is a petting zoo, the marshes are a war.
+  const ccx = Math.floor(W / 2), ccy = Math.floor(H / 2)
+  counts.goblins = scatter('gob', A(180), (x, y, h) => {
+    const b = B(x, y)
+    if (b === 'fens' || (b === 'heartlands' && (x < W * 0.4 || y > H * 0.55))) return true
+    if (b !== 'heartlands') return false
+    const dx = x - ccx, dy = y - ccy, d2 = dx * dx + dy * dy
+    return d2 >= 324 && d2 <= 3600 && h.readUInt16BE(4) % 3 === 0
+  }, mob('goblin'))
   counts.wolves  = scatter('wolf', A(108), (x, y) => { const b = B(x, y); return b === 'greenwood' || b === 'fens' }, mob('wolf'))
   counts.bears   = scatter('bear', A(62), (x, y) => B(x, y) === 'greenwood' && y < H * 0.22, mob('bear'))
   counts.trolls  = scatter('troll', A(70), (x, y) => { const b = B(x, y); return b === 'crags' || (b === 'wilds' && x < W * 0.10) }, mob('troll'))
