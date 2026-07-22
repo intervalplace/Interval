@@ -348,7 +348,7 @@ export function buildWorld(genesis) {
     return x >= r.x0 - 1 && x <= r.x1 + 1 && y >= r.y0 - 1 && y <= r.y1 + 1
   })
   const free = (x, y) => inB(x, y) && !taken.has(key(x, y)) && !isWater(g, x, y)
-    && !onRidge(g, x, y) && !onRoad(g, x, y) && !inAnySettlement(x, y)
+    && !onRidge(g, x, y) && !onRoad(g, x, y) && !fordAt(g, x, y) && !inAnySettlement(x, y)
 
   const H32 = (tag, i) => E.sha256(Buffer.from(g.genesisSeed + ':' + tag + ':' + i))
 
