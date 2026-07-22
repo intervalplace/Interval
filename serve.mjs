@@ -300,8 +300,11 @@ function hiscores() {
 const PAGES = { '/': 'index.html', '/quickstart': 'quickstart.html',
                 '/manual': 'manual.html', '/hiscores': 'hiscores.html',
                 '/board': 'board.html',
-                '/play': 'windows.html', '/windows': 'windows.html' }
-const MIME = { html: 'text/html', css: 'text/css', js: 'text/javascript' }
+                '/play': 'windows.html', '/windows': 'windows.html',
+                '/map': 'map.html', '/marks': 'marks.html' }
+const MIME = { html: 'text/html', css: 'text/css', js: 'text/javascript',
+               png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp',
+               svg: 'image/svg+xml', ico: 'image/x-icon' }
 
 const server = http.createServer((req, res) => {
   const path = req.url.split('?')[0]
@@ -525,6 +528,10 @@ const server = http.createServer((req, res) => {
       return sendFile('./site/' + f, MIME[ext] ?? 'text/plain')
     }
     if (PAGES[path]) return sendFile('./site/' + PAGES[path], 'text/html')
+    { // root assets: the chart of Tallyholm and its kin live in ./site
+      const am = /^\/([a-z0-9_-]+)\.(png|jpg|webp|svg|ico)$/.exec(path)
+      if (am) return sendFile('./site/' + am[1] + '.' + am[2], MIME[am[2]])
+    }
     res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('nothing here')
   } catch (e) {
     // A handler that has already begun its response cannot be given a 500, and
