@@ -3415,6 +3415,18 @@ sndEl.addEventListener('click', () => {
   if (soundOn) { startMusic('theme-flat'); SFX.trade() }
 })
 
+function fadeMusicOut(ms) { // the theme belongs to the DOOR: it bows out at the threshold
+  const a = MUSIC; if (!a) return
+  MUSIC = null // released now, so nothing restarts it
+  const v0 = a.volume, t0 = performance.now()
+  const step = () => {
+    const k = 1 - (performance.now() - t0) / ms
+    if (k <= 0) { a.pause(); return }
+    a.volume = v0 * k; requestAnimationFrame(step)
+  }
+  step()
+}
+document.getElementById('gatebtn').addEventListener('click', () => fadeMusicOut(2000))
 document.getElementById('gatebtn').addEventListener('click', enterWorld)
 document.getElementById('gatename').addEventListener('keydown', (e) => { if (e.key === 'Enter') enterWorld() })
 

@@ -5805,8 +5805,19 @@ document.getElementById('chatsend').onclick = chatgo
 document.getElementById('chatinput').addEventListener('keydown', (e) => { if (e.key === 'Enter') chatgo() })
 document.getElementById('enter').onclick = () => {
   pendingName = (document.getElementById('doorname')?.value ?? '').trim().slice(0, 12)
-  doorTarget = 0.24 // the theme ducks beneath the world and still gets to finish
-  if (DOORMUSIC) DOORMUSIC.volume = Math.min(DOORMUSIC.volume, 0.24)
+  { // the theme belongs to the DOOR: a two-second bow as the world's own sound wakes
+    const a2 = DOORMUSIC
+    if (a2) {
+      DOORMUSIC = null // released, so nothing restarts it
+      const v0 = a2.volume, t0 = performance.now()
+      const bow = () => {
+        const k = 1 - (performance.now() - t0) / 2000
+        if (k <= 0) { a2.pause(); return }
+        a2.volume = v0 * k; requestAnimationFrame(bow)
+      }
+      bow()
+    }
+  }
   entered = true
   initAudio() // the gesture that opens the window opens the ear
   document.getElementById('splash').remove()

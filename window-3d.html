@@ -5113,8 +5113,20 @@ function updateDoor3(st2, wid2) {
   const nm2 = document.getElementById('gate3dname')
   if (nm2) nm2.style.display = me2?.name ? 'none' : 'block'
 }
+function fadeMusicOut3(ms) { // the theme belongs to the DOOR: it bows out at the threshold
+  const a = MUSIC; if (!a) return
+  MUSIC = null
+  const v0 = a.volume, t0 = performance.now()
+  const step = () => {
+    const k = 1 - (performance.now() - t0) / ms
+    if (k <= 0) { a.pause(); return }
+    a.volume = v0 * k; requestAnimationFrame(step)
+  }
+  step()
+}
 document.getElementById('gate3dbtn').addEventListener('click', () => {
   pendingName3 = (document.getElementById('gate3dname')?.value ?? '').trim().slice(0, 12)
+  fadeMusicOut3(2000)
   entered = true
   startMusic('theme-deep') // usually already playing from the door; a no-op if so
   try { AC3 = new (window.AudioContext ?? window.webkitAudioContext)(); initAmbient() } catch {}
