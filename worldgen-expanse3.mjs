@@ -678,6 +678,39 @@ export function buildWorld(genesis) {
       }
     }
   }
+  // ---- the Lantern (v0.79b): a wayside inn on the east road, halfway
+  // between Anchor and the passes. Every long road earns one lit window
+  // at dusk. The house is a HOUSE in law, which means the brewpot
+  // statute applies: any brewer may raise their pots in the yard — the
+  // inn is built expecting to become a brewhouse, because inns always
+  // do. Rest, traveler; the fire is kept.
+  {
+    // the NORTH road to Cragfoot: the south road hugs the fens boundary
+    // its whole length, and no innkeeper builds a common room in a marsh
+    let ix = Math.round(W * 0.59), iy = Math.round(H * 0.42)
+    seekI: for (let rad = 0; rad < 60; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== rad) continue
+      const x = ix + dx, y = iy + dy
+      if (biomeAt(g, x, y) !== 'heartlands') continue
+      if (onRoad(g, x, y)) continue // beside the road, not on it
+      if (!(onRoad(g, x + 1, y) || onRoad(g, x - 1, y) || onRoad(g, x, y + 1) || onRoad(g, x, y - 1))) continue
+      // exactly the five tiles the inn stands on must be lawful ground
+      // (free() excludes road tiles by design, so a whole-block test
+      // failed everywhere the inn was REQUIRED to be: beside a road)
+      const spots = [[0, 0], [2, 0], [-1, 1], [1, 1], [0, 2]]
+      let ok = true
+      for (const [ox, oy] of spots) if (!free(x + ox, y + oy) || onRoad(g, x + ox, y + oy)) { ok = false; break }
+      if (ok) { ix = x; iy = y; break seekI }
+    }
+    put('inn-house', 'house', ix, iy)
+    put('inn-hearth', 'campfire', ix + 2, iy)
+    put('inn-well', 'well', ix - 1, iy + 1)
+    put('kpr-inn-lantern', 'keeper', ix + 1, iy + 1)
+    put('inn-sign', 'signpost', ix, iy + 2, { text: 'the Lantern \u00b7 rest, traveler' })
+    // the yard east of the house stays OPEN on purpose: the brewer's
+    // ground, waiting for its first pot (build_brewpot wants a house
+    // adjacent, and here one stands)
+  }
   // ---- scattered plots in the heartlands ----
   let pl = 0
   for (let i = 0; i < 1200 && pl < 62; i++) {
