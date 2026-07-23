@@ -106,7 +106,9 @@ export function makeBoard(opts = {}) {
     if (!/^[0-9a-f]{64}$/.test(String(post.key))) return { code: 400, why: 'that is not a citizen key' }
     if (!/^[0-9a-f]{128}$/.test(String(post.sig))) return { code: 400, why: 'that is not a signature' }
     const subject = String(post.subject).trim(), body = String(post.body).trim()
-    if (!subject) return { code: 400, why: 'say what it is about' }
+    // v0.79b: the message IS the post. Subject stays in the signed
+    // envelope (so old signatures verify) but may be empty; the field
+    // survives only as a signature-shape fossil.
     if (subject.length > C.subjectMax) return { code: 400, why: 'the subject is too long' }
     if (!body) return { code: 400, why: 'the post is empty' }
     if (body.length > C.bodyMax) return { code: 400, why: 'the post is too long (' + C.bodyMax + ' characters)' }
