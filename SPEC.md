@@ -619,6 +619,10 @@ bounds, free of nodes, and within Chebyshev distance 2 of the mob's
 **home** (its genesis position, stored as `hx, hy`). A mob under
 attack stands and fights. Mobs respawn at home. The goblins pace
 because the beacon says so; every node watches them pace identically.
+**Beasts and water (v0.78).** A wander step onto blocked terrain is
+skipped like any other refused step: the leash, the walls, and the
+water bind a beast equally. (Mobs placed in genesis are already placed
+on free ground; this closes the last door, the stroll.)
 
 **Mob kinds.** `goblin` (5 hp, meadow-dweller) and, from v0.25,
 `wolf` (8 hp, hits up to 2, drops bones and sometimes more bones); and, from
