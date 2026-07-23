@@ -12,8 +12,7 @@
   works, agreeing to meet at the north bank.</p>
 
   <div id="compose" style="display:none">
-    <input id="bsubject" maxlength="80" placeholder="Title">
-    <textarea id="bbody" rows="4" maxlength="2000" placeholder="Message"></textarea>
+    <textarea id="bbody" rows="4" maxlength="2000" placeholder="What do you want to arrange?"></textarea>
     <div class="brow">
       <button id="bsend" class="stab">Post</button>
       <span id="bnote"></span>
@@ -83,7 +82,7 @@ async function load() {
     return
   }
   $('posts').innerHTML = j.posts.map(p => '<article class="post' + (MINE?.pub === p.key ? ' mine' : '') + '">'
-    + '<div class="psubject">' + esc(p.subject) + '</div>'
+    + (p.subject ? '<div class="psubject">' + esc(p.subject) + '</div>' : '') // legacy posts keep their headline; new posts are pure message
     + '<div class="pmeta">'
       + '<a href="/hiscores?citizen=' + esc(p.key) + '" title="see this citizen on the hiscores as they are now">'
         + esc(p.name ?? 'unnamed') + '</a>'
@@ -103,9 +102,10 @@ async function load() {
 }
 
 async function send() {
-  const subject = $('bsubject').value.trim(), body = $('bbody').value.trim()
+  const subject = '' // the message IS the post (the field lives on inside the signature envelope)
+  const body = $('bbody').value.trim()
   const note = $('bnote')
-  if (!subject || !body) { note.textContent = 'a subject and something to say'; return }
+  if (!body) { note.textContent = 'something to say, first'; return }
   if (!MINE?.pk8) { note.textContent = 'no key in this window yet'; return }
   $('bsend').disabled = true; note.textContent = 'signing\u2026'
   try {
@@ -115,7 +115,7 @@ async function send() {
       new TextEncoder().encode(signedBytes(post))))
     const r = await fetch('/api/board', { method: 'POST', body: JSON.stringify(post) })
     const j = await r.json().catch(() => ({}))
-    if (r.ok) { $('bsubject').value = ''; $('bbody').value = ''; note.textContent = 'posted'; load() }
+    if (r.ok) { $('bbody').value = ''; note.textContent = 'posted'; load() }
     else note.textContent = j.error ?? 'the board did not take it'
   } catch (e) {
     note.textContent = 'this window could not sign that (' + (e.message ?? e) + ')'
