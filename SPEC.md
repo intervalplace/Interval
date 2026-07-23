@@ -1,4 +1,4 @@
-# Interval: Protocol Specification v0.78 ("The Constitution")
+# Interval: Protocol Specification v0.79 ("The Constitution")
 
 A decentralized, deterministic MMO protocol. The rules in this document
 **are** the game. Any client that implements this spec exactly is a valid
@@ -1146,11 +1146,23 @@ every node agrees without a word passing between them.
 `{ x, y, kind, bornAt }` (and a `ws` id when it is a rumor). Whenever
 the world holds fewer than `k`, the top-up mints replacements. Marker
 position and kind are drawn from `H(beacon || tick || index || salt)`,
-rejected until the tile is in-bounds, outside every city, and off every
-node: and **distance-weighted**, so most markers land in the near and
-middle country and the deep-Wilds ones are genuinely rare. A marker
-unclaimed after `MARKER_LIFE` (3000) ticks relocates: the frontier
-never goes stale.
+rejected until the tile is in-bounds, outside every city, off every
+node, and — v0.79 — **off any ground the world's terrain bars** (the
+sea, the ridge, the river away from its fords): a marker is a place a
+citizen can stand, because `survey` is standing there. A world whose
+generator registers no terrain replays bit-identically under this rule,
+since nothing is barred. Placement is also **distance-weighted**, so
+most markers land in the near and middle country and the deep-Wilds
+ones are genuinely rare. A marker unclaimed after `MARKER_LIFE` (3000)
+ticks relocates: the frontier never goes stale.
+
+*Why v0.79 exists:* the rejection list above predates terrain-bearing
+generators (v0.50 shipped when nothing but nodes barred the way). On
+the third expanse's geometry, roughly half of all candidate tiles are
+sea or stone; without this rule half the frontier minted unclaimable
+and sat dead until staleness relocated it, silently halving the
+effective `k`. The survey-simulation that founds a world's constants
+(7c) must be run against this rule, not the old one.
 
 Most markers are `ord` (ordinary). A minority are `ws` **rumors**,
 minted beside a waystone; surveying one yields that waystone's chart.
