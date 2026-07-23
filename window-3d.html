@@ -2147,7 +2147,7 @@ const KN = {}
 ;(async () => {
   try {
     const tags = settlementsE3().map(t => t.tag ?? t.name?.toLowerCase())
-    for (const [tag2, role2] of [['hollybarrow', 'farm'], ['sawyer', 'camp'], ['high', 'delve'], ['eel', 'sheds']]) {
+    for (const [tag2, role2] of [['hollybarrow', 'farm'], ['sawyer', 'camp'], ['high', 'delve'], ['eel', 'sheds'], ['lantern', 'inn']]) {
       const d2 = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('keeper|' + tag2 + '|' + role2))
       KN[role2 + '|' + tag2] = KEEPER_NAMES[new Uint8Array(d2)[0] % KEEPER_NAMES.length]
     }
@@ -2159,7 +2159,7 @@ const KN = {}
 })()
 const kName = (tag, role) => KN[tag + '|' + role] ?? 'the keeper'
 const kFromId = (id) => { // 'kpr-store2-anchor' / 'store-anchor' / 'bank-anchor'
-  const m = /^(?:kpr-)?(bank|store2|store|farm|camp|delve|sheds)-(.+)$/.exec(id ?? '')
+  const m = /^(?:kpr-)?(bank|store2|store|farm|camp|delve|sheds|inn)-(.+)$/.exec(id ?? '')
   return m ? kName(m[2], m[1]) : 'the keeper'
 }
 const REGION_NAMES = { sea: 'the Sea', greenwood: 'the Greenwood', crags: 'the Crags', fens: 'the Fens',
