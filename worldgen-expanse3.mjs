@@ -481,38 +481,45 @@ export function buildWorld(genesis) {
       if (free(ox + dx, oy + dy)) put('oldoak-child-' + dx + '-' + dy, 'tree', ox + dx, oy + dy)
     }
   }
+  // seatLandmark (v0.79b): every monument's seek, hardened. Ring-search
+  // from the nominal; if the rings exhaust (the Sentinel once landed in
+  // the SEA when no crags lay within thirty tiles of its nominal),
+  // raster-scan the whole country for the nearest lawful tile. A
+  // landmark may step far aside — but it stands on land, always.
+  const seatLandmark = (nomX, nomY, biome, maxRad = 60) => {
+    let x = nomX, y = nomY
+    for (let rad = 0; rad < maxRad; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== rad) continue
+      if (free(x + dx, y + dy) && (!biome || biomeAt(g, x + dx, y + dy) === biome)) return { x: x + dx, y: y + dy }
+    }
+    let best = null, bd = Infinity // the rings failed: the whole country answers
+    for (let yy = 2; yy < H - 2; yy += 3) for (let xx = 2; xx < W - 2; xx += 3) {
+      if (!free(xx, yy) || (biome && biomeAt(g, xx, yy) !== biome)) continue
+      const d2 = (xx - nomX) ** 2 + (yy - nomY) ** 2
+      if (d2 < bd) { bd = d2; best = { x: xx, y: yy } }
+    }
+    return best ?? { x: nomX, y: nomY }
+  }
   // the Elder Tree (v0.79): one giant in the open heartlands, north-east
   // of Anchor where the meadow runs widest. It cannot be cut; it was
   // here before the roads, and the roads bent around it. A world needs
   // at least one thing that is older than everyone and useful to no one.
   {
-    let ex = Math.round(W * 0.56), ey = Math.round(H * 0.36)
-    seek2: for (let rad = 0; rad < 24; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
-      if (Math.max(Math.abs(dx), Math.abs(dy)) !== rad) continue
-      if (free(ex + dx, ey + dy) && biomeAt(g, ex + dx, ey + dy) === 'heartlands') { ex += dx; ey += dy; break seek2 }
-    }
-    put('eldertree', 'landmark', ex, ey, { kind: 'elder-tree' })
+    const ep = seatLandmark(Math.round(W * 0.56), Math.round(H * 0.36), 'heartlands')
+    put('eldertree', 'landmark', ep.x, ep.y, { kind: 'elder-tree' })
   }
   // the Sentinel (v0.79): one pillar of stone on the high Crags,
   // standing over the passes. Miners swear it moves when nobody climbs.
   {
-    let sx9 = Math.round(W * 0.86), sy9 = Math.round(H * 0.30)
-    seekS: for (let rad = 0; rad < 30; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
-      if (Math.max(Math.abs(dx), Math.abs(dy)) !== rad) continue
-      if (free(sx9 + dx, sy9 + dy) && biomeAt(g, sx9 + dx, sy9 + dy) === 'crags') { sx9 += dx; sy9 += dy; break seekS }
-    }
-    put('sentinel', 'landmark', sx9, sy9, { kind: 'sentinel' })
+    const sp = seatLandmark(Math.round(W * 0.83), Math.round(H * 0.60), 'crags') // the SOUTH crags: one monument per shoulder of the country, the Delving holding the north
+    put('sentinel', 'landmark', sp.x, sp.y, { kind: 'sentinel' })
   }
   // the Drowned Bell (v0.79): a bell tower sunk to its shoulders in the
   // marsh. Nobody remembers the town it called to prayer; on some
   // mornings, the fenfolk say, the mud still rings.
   {
-    let bx9 = Math.round(W * 0.58), by9 = Math.round(H * 0.82)
-    seekB: for (let rad = 0; rad < 30; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
-      if (Math.max(Math.abs(dx), Math.abs(dy)) !== rad) continue
-      if (free(bx9 + dx, by9 + dy) && biomeAt(g, bx9 + dx, by9 + dy) === 'fens') { bx9 += dx; by9 += dy; break seekB }
-    }
-    put('drownedbell', 'landmark', bx9, by9, { kind: 'drowned-bell' })
+    const bp = seatLandmark(Math.round(W * 0.58), Math.round(H * 0.82), 'fens')
+    put('drownedbell', 'landmark', bp.x, bp.y, { kind: 'drowned-bell' })
   }
   // the Wreck (v0.79): a ship broken on the south shore. It implies the
   // largest thing on the island: a world beyond it, and a sea worth
