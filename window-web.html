@@ -2643,23 +2643,6 @@ function drawScene(now) {
         poly([[X+10,Y+22],[X+30,Y+22],[X+30,Y+17],[X+16,Y+17],[X+10,Y+19]], '#66625c', '#2c2a26')
         cx.fillStyle = 'rgba(255,255,255,.14)'; cx.fillRect(X+12, Y+18, 10, 1.6)
       }
-      if (n.type === 'watchfire') {
-        if (!adj(n) && !(me.x === n.x && me.y === n.y)) { intent = { kind: 'walk', x: n.x, y: n.y + 1 }; return }
-        const li = me.inventory.findIndex(sl => sl?.item === 'logs')
-        const lit = n.fuelUntil > (world?.tick ?? 0)
-        const mins = Math.max(0, Math.round((n.fuelUntil - (world?.tick ?? 0)) * 0.6 / 60))
-        const opts = []
-        if (li !== -1) opts.push({ label: 'stoke the fire (1 log)', act: () => {
-          send({ do: 'stoke', nodeId: id, slot: li })
-          feed('You feed the watchfire. It answers.')
-          tone(180, 0.22, { type: 'sawtooth', vol: 0.04 })
-        } })
-        opts.push({ label: lit ? 'leave it burning (' + mins + ' min of wood)' : 'it has gone cold', act: () => {
-          feed(lit ? 'The watchfire burns. Its light is nobody\u2019s and everybody\u2019s.'
-                   : 'Cold ash. It wants wood.')
-        } })
-        chooseAction(opts); return
-      }
       if (n.type === 'brewpot') {
         shadow(X, Y, 10)
         const fermenting = n.readyAt !== undefined && (world?.tick ?? 0) < n.readyAt
@@ -4070,6 +4053,26 @@ cv.addEventListener('click', (e) => {
         if (!adj(n)) { intent = { kind: 'walk', x: n.x, y: n.y + 1 }; feed('You head to the bank.') }
         else feed('The bank stands ready: tap items to deposit, tap the vault to withdraw.')
         return
+      }
+      if (n.type === 'watchfire') {
+        // (restored to its rightful scope, v0.79b: a merge had stranded
+        // this block inside the DRAW loop, where adj does not exist —
+        // blanking the whole viewport the moment a watchfire drew)
+        if (!adj(n) && !(me.x === n.x && me.y === n.y)) { intent = { kind: 'walk', x: n.x, y: n.y + 1 }; return }
+        const li = me.inventory.findIndex(sl => sl?.item === 'logs')
+        const lit = n.fuelUntil > (world?.tick ?? 0)
+        const mins = Math.max(0, Math.round((n.fuelUntil - (world?.tick ?? 0)) * 0.6 / 60))
+        const opts = []
+        if (li !== -1) opts.push({ label: 'stoke the fire (1 log)', act: () => {
+          send({ do: 'stoke', nodeId: id, slot: li })
+          feed('You feed the watchfire. It answers.')
+          tone(180, 0.22, { type: 'sawtooth', vol: 0.04 })
+        } })
+        opts.push({ label: lit ? 'leave it burning (' + mins + ' min of wood)' : 'it has gone cold', act: () => {
+          feed(lit ? 'The watchfire burns. Its light is nobody\u2019s and everybody\u2019s.'
+                   : 'Cold ash. It wants wood.')
+        } })
+        chooseAction(opts); return
       }
       if (n.type === 'campfire' || n.type === 'fire') {
         if (!adj(n)) { intent = { kind: 'gatherfire', id, msg: 'You warm your hands by the fire.' }; return }
