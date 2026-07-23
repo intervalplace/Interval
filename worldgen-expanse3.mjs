@@ -297,6 +297,7 @@ const KEEPER_NAMES = ['Maud', 'Aldric', 'Bess', 'Corwin', 'Delia', 'Edmund', 'Ff
   'Hild', 'Ivo', 'Joan', 'Kemp', 'Lettice', 'Miles', 'Nell', 'Osric', 'Peronel', 'Quill',
   'Rosamund', 'Sim', 'Tilda', 'Ulric', 'Verity', 'Wat', 'Ysolt', 'Zachary']
 export function keeperName(tag, role) {
+  if (role === 'wizard') return 'Oberon' // every keeper's name is a hash — except the wizard, who chose his own
   const h = E.sha256('keeper|' + tag + '|' + role)
   return KEEPER_NAMES[h[0] % KEEPER_NAMES.length]
 }
@@ -533,12 +534,40 @@ export function buildWorld(genesis) {
     }
     put('wreck', 'landmark', wx9, wy9, { kind: 'shipwreck' })
   }
+  // the First Tally (v0.80): the founding instrument, made monument.
+  // A tally is the split stick whose two halves prove each other — so
+  // the first one stands in two places: one half in Anchor's plaza,
+  // near where souls arrive; the other across the water on Shrine
+  // Isle. Neither is charted. A tally is found, not advertised.
+  {
+    const sp8 = spawnDry(g)
+    seekT: for (let rad = 2; rad < 12; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== rad) continue
+      const x = sp8.x + dx, y = sp8.y + dy
+      if ((x === sp8.x && y === sp8.y) || !inB(x, y) || taken.has(key(x, y)) || isWater(g, x, y)) continue
+      put('tally-anchor', 'landmark', x, y, { kind: 'tally-half' })
+      break seekT
+    }
+  }
   // the Ring: a circle of standing stones in the south heartlands
   {
     const rx0 = Math.round(W * 0.37), ry0 = Math.round(H * 0.655)
     const ring = [[4, 0], [3, 3], [0, 4], [-3, 3], [-4, 0], [-3, -3], [0, -4], [3, -3]]
     let n = 0
     for (const [dx, dy] of ring) if (free(rx0 + dx, ry0 + dy)) put('ring-' + (n++), 'landmark', rx0 + dx, ry0 + dy, { kind: 'standing-stone' })
+    // Oberon (v0.80): the wizard of the Ring. He lives among the stones
+    // he studies, sells nothing, wants nothing, and teaches the world's
+    // magic to whoever taps him. He is here because a world with a
+    // magic skill, a truce spell, and standing stones nobody remembers
+    // raising has EARNED its one wizard. His hearth burns beside him.
+    seekO: for (let rad = 1; rad < 10; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== rad) continue
+      if (free(rx0 + dx, ry0 + dy) && free(rx0 + dx + 1, ry0 + dy)) {
+        put('kpr-wizard-oberon', 'keeper', rx0 + dx, ry0 + dy)
+        put('oberon-hearth', 'campfire', rx0 + dx + 1, ry0 + dy)
+        break seekO
+      }
+    }
   }
   // the Ruined Tower: broken masonry in the wilds. Its old fixed site
   // was UNDERWATER on some seeds and the walls silently never stood —
@@ -565,6 +594,7 @@ export function buildWorld(genesis) {
       }
     }
     seat('waystone-shrine', 'waystone', 0, 0)
+    seat('tally-isle', 'landmark', -2, -2, { kind: 'tally-half' }) // the other half of the first tally
     seat('shrine-hearth', 'campfire', 3, 0)
     for (let k = 0; k < 4; k++) seat('shrine-stone-' + k, 'landmark', [-4, 4, 0, 0][k], [0, 2, -4, 4][k], { kind: 'standing-stone' })
   }
