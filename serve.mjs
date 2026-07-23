@@ -206,7 +206,8 @@ if (canResume) {
     // imports are FOUNDING data: they live inside the genesis, the worldId
     // commits to them, and worldgen applies them on every node identically
     GENESIS.imported = Object.entries(old.players).filter(([, p]) => lived(p)).map(([pid, p]) => ({
-      pid, skills: p.skills, name: E.isValidName(p.name) ? p.name : null, // constitutional or nothing (rev5 §3) hp: p.hp,
+      pid, skills: p.skills, name: E.isValidName(p.name) ? p.name : null, // constitutional or nothing (rev5 §3)
+      hp: p.hp, // (rescued again from the comment a bad merge swallowed it into)
       bank: Object.fromEntries(Object.entries(p.bank ?? {}).filter(([it]) => KNOWN_ITEMS.has(it))),
       inventory: (p.inventory ?? []).filter(sl => sl && KNOWN_ITEMS.has(sl.item)),
       weapon: p.equipment?.weapon && KNOWN_ITEMS.has(p.equipment.weapon.item) ? p.equipment.weapon : null,
