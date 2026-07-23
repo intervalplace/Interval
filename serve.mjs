@@ -28,11 +28,20 @@ const RULES_HASH = E.sha256(fs.readFileSync(new URL('./SPEC.md', import.meta.url
 // with INTERVAL_W / INTERVAL_H only when you know why
 const WORLD_W = Number(process.env.INTERVAL_W) || 0
 const WORLD_H = Number(process.env.INTERVAL_H) || 0
-const WORLD_FILE = 'checkpoints/world.json'   // the founding record
-const CP_FILE = 'checkpoints/web.json'        // the living state
+// ---- INTERVAL_DATA (v0.78): the world's MEMORY lives where deploys
+// cannot reach it. Every wipe this world has suffered — the lost
+// citizens, twice — traced to one cause: checkpoints and identities
+// sat inside the deploy directory, and a fresh unpack starts soulless.
+// Point INTERVAL_DATA at a persistent path (a volume, a home dir,
+// anywhere the deploy does not touch) and the class of loss ends.
+const DATA = (process.env.INTERVAL_DATA || '.').replace(/\/$/, '')
+if (DATA === '.') console.warn('INTERVAL_DATA is unset: world memory lives INSIDE the deploy directory. A replaced deploy is a wiped world. Set INTERVAL_DATA to a persistent path.')
+const WORLD_FILE = DATA + '/checkpoints/world.json'   // the founding record
+const CP_FILE = DATA + '/checkpoints/web.json'        // the living state
 
 fs.mkdirSync('identities', { recursive: true })
-fs.mkdirSync('checkpoints', { recursive: true })
+fs.mkdirSync(DATA + '/checkpoints', { recursive: true })
+fs.mkdirSync(DATA + '/identities', { recursive: true })
 
 const P2P_PORT = Number(process.env.INTERVAL_P2P_PORT || 4600)
 
@@ -53,7 +62,7 @@ try { if (fs.existsSync(CP_FILE)) savedCp = JSON.parse(fs.readFileSync(CP_FILE))
 // fact — listed in genesis, immutable for this world. Extra witnesses
 // and the quorum can be set at founding via env:
 //   INTERVAL_WITNESSES=pub1,pub2   INTERVAL_QUORUM=2
-const WITNESS = E.loadOrCreateIdentity(fs, 'identities/witness-pillar.json')
+const WITNESS = E.loadOrCreateIdentity(fs, DATA + '/identities/witness-pillar.json')
 const EXTRA_WITNESSES = (process.env.INTERVAL_WITNESSES || '').split(',').map(s => s.trim()).filter(s => /^[0-9a-f]{64}$/.test(s))
 
 // ---- founding vs resuming (fix brief §2.4) ----
@@ -99,7 +108,21 @@ const canResume = saved
 if (canResume) {
   GENESIS = saved.genesis
   const behind = gapOf(GENESIS)
-  if (behind > 600) { // more than ~6 minutes of world time to make up
+  // v0.78: the idle-world replay must NEVER manufacture ticks the
+  // witness already finalized — an empty replay across a finalized span
+  // rewrites signed history with fabricated silence, and once it
+  // checkpoints, the true ancestor is gone. If a frontier lies at or
+  // ahead of the state, stand down: the agreement layer recovers those
+  // ticks from certificates, and only the span PAST the frontier is
+  // truly idle.
+  let frontierAhead = false
+  try {
+    const wroot2 = DATA + '/witness-safety/' + E.worldId(GENESIS) + '/' + WITNESS.playerId
+    const f2 = JSON.parse(fs.readFileSync(wroot2 + '/frontier.json', 'utf8'))
+    const stTick = savedCp?.state?.tick ?? savedCp?.tick ?? -1
+    if (Number.isInteger(f2?.tick) && f2.tick >= stTick && stTick >= 0) frontierAhead = true
+  } catch { /* no frontier: nothing finalized, replay freely */ }
+  if (behind > 600 && !frontierAhead) { // more than ~6 minutes of world time to make up
     const mins = Math.round(behind * E.TICK_MS / 60000)
     const eta = Math.round(behind * 68 / 1000) // ~68ms per empty tick, measured
     console.log('')
@@ -219,9 +242,23 @@ if (canResume) {
       }
     } catch (e) { console.error('INTERVAL_IMPORT unreadable: ' + e.message); process.exit(1) }
   }
+  // FORENSICS: the founding names its sources, so the next mystery
+  // explains itself in one log line instead of costing a day
+  console.warn('FOUNDING sources: world.json ' + (saved ? 'present' : 'ABSENT')
+    + ' \u00b7 checkpoint ' + (savedCp ? 'present (tick ' + savedCp.tick + ')'
+      : fs.existsSync(CP_FILE) ? 'present-but-unreadable' : 'ABSENT')
+    + ' \u00b7 carrying ' + (GENESIS.imported?.length ?? 0) + ' citizen(s)')
+  // the checkpoint is ARCHIVED, never merely deleted: it may be the
+  // last copy of somebody's life
+  try {
+    if (fs.existsSync(CP_FILE)) {
+      const oldId = savedCp?.worldId ? String(savedCp.worldId).slice(0, 12) : 'unknown'
+      fs.copyFileSync(CP_FILE, DATA + '/checkpoints/web-' + oldId + '-t' + (savedCp?.tick ?? 0) + '.json')
+    }
+  } catch {}
   fs.rmSync(CP_FILE, { force: true })
   if (saved?.genesis) { // the old founding record is history, not debris
-    try { fs.writeFileSync('checkpoints/world-' + String(E.worldId(saved.genesis)).slice(0, 12) + '.json',
+    try { fs.writeFileSync(DATA + '/checkpoints/world-' + String(E.worldId(saved.genesis)).slice(0, 12) + '.json',
       JSON.stringify({ genesis: saved.genesis })) } catch {}
   }
   fs.writeFileSync(WORLD_FILE, JSON.stringify({ genesis: GENESIS }))
@@ -229,10 +266,10 @@ if (canResume) {
 
 let node
 try {
-  node = await new IntervalNode({ peerKeyFile: 'identities/peer-pillar.json',
+  node = await new IntervalNode({ peerKeyFile: DATA + '/identities/peer-pillar.json',
     genesis: GENESIS, buildWorld, name: 'web', checkpointFile: CP_FILE,
     witnessKey: WITNESS,                      // the pillar proposes and attests
-    safetyDir: 'witness-safety',              // world-namespaced vote lock + frontier (rev5 §1)
+    safetyDir: DATA + '/witness-safety',              // world-namespaced vote lock + frontier (rev5 §1)
     finalityBackend: process.env.INTERVAL_FINALITY_BACKEND || 'sqlite', // SQLite is the production default (final review §3); set 'flatfile' for the dev/compat backend
     // Every 200 ticks (2 min) rather than 1000 (10 min). A crash skips the
     // final write, so the newest checkpoint is up to one interval stale, and
@@ -263,7 +300,7 @@ if (migrated) console.log(`world refounded (rules changed, clock lapsed, or chec
 function identityFor(uid) {
   const safe = String(uid).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40)
   if (!safe) return null
-  return E.loadOrCreateIdentity(fs, 'identities/web-' + safe + '.json')
+  return E.loadOrCreateIdentity(fs, DATA + '/identities/web-' + safe + '.json')
 }
 
 // ---- the readable world: JSON API (hiscores sites are just windows) ----
