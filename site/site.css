@@ -194,7 +194,12 @@ h1 {
 }
 .pcompact select:focus { outline: none; border-color: var(--gold); }
 
-.prow { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-bottom: 3px; }
+.prow { display: flex; flex-wrap: nowrap; gap: 3px; align-items: flex-start; margin-bottom: 3px; }
+/* v0.80: the tabs keep their own box, so a row that overflows wraps UNDER
+   the tabs rather than under the label. Adding icons widened every tab and
+   pushed the last skill of a family onto a line of its own, adrift. */
+.ptabs { display: flex; flex-wrap: wrap; gap: 3px; flex: 1 1 auto; min-width: 0; }
+.plab { padding-top: 7px; }
 .prow-top { margin-bottom: 9px; }
 .plab {
   font: italic 10px Georgia, serif; color: var(--dim); letter-spacing: .3px;
@@ -203,7 +208,7 @@ h1 {
 .stab {
   font: bold 11px Verdana, sans-serif; letter-spacing: .3px; cursor: pointer;
   color: var(--gold); background: #241a0e; border: 1px solid #4a3c24;
-  padding: 6px 10px; border-radius: 3px;
+  padding: 6px 9px; border-radius: 3px;
 }
 .stab.wide { padding: 7px 18px; }
 .stab:hover { border-color: var(--gold); color: var(--gold-hi); }

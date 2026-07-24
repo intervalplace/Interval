@@ -112,11 +112,11 @@ function drawPicker() {
   for (const [label, group] of FAMILIES) {
     const present = group.filter(x => known.has(x))
     if (!present.length) continue
-    wide += '<div class="prow"><span class="plab">' + label + '</span>'
-      + present.map(x => tab(x, x)).join('') + '</div>'
+    wide += '<div class="prow"><span class="plab">' + label + '</span><div class="ptabs">'
+      + present.map(x => tab(x, x)).join('') + '</div></div>'
   }
-  if (rest.length) wide += '<div class="prow"><span class="plab">and</span>'
-    + rest.map(x => tab(x, x)).join('') + '</div>'
+  if (rest.length) wide += '<div class="prow"><span class="plab">and</span><div class="ptabs">'
+    + rest.map(x => tab(x, x)).join('') + '</div></div>'
   wide += '</div>'
 
   el.innerHTML = sel + wide
