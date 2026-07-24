@@ -27,13 +27,20 @@
       became a column beside the game until it was allowed to take its own line */
     min-height: 100vh; padding: 16px;
   }
-  #frame { display: flex; gap: 0; border: 3px solid var(--stone-dk); width: min(96vw, 1180px); }
+  /* the frame's width, in one place (v0.80). On a large desktop the world
+     is shown LARGER rather than wider: the tile count is unchanged, so the
+     view stays as close and sprite-forward as it is on a phone, and the
+     panel grows with it instead of staying a narrow strip beside a huge map. */
+  :root { --frame-w: min(96vw, 1180px); --panel-w: 232px; }
+  @media (min-width: 1500px) { :root { --frame-w: min(94vw, 1560px); --panel-w: 300px; } }
+  @media (min-width: 2100px) { :root { --frame-w: min(92vw, 1880px); --panel-w: 340px; } }
+  #frame { display: flex; gap: 0; border: 3px solid var(--stone-dk); width: var(--frame-w); }
   #view { flex: 1 1 auto; min-width: 0; align-self: flex-start; }
   /* the rest of the world (v0.80): a citizen inside /play had no way to
      learn that the chart, the manual, the hiscores and the board exist.
      Every link opens in a NEW TAB on purpose: leaving this one would drop
      the socket and stand your citizen still. */
-  #topnav { flex: 0 0 100%; width: min(96vw, 1180px); margin: 0 auto 8px;
+  #topnav { flex: 0 0 100%; max-width: var(--frame-w); margin: 0 auto 8px;
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
     padding: 5px 10px; font-size: 12px; letter-spacing: .04em; }
   #topnav a { color: var(--gold); text-decoration: none; }
@@ -66,7 +73,7 @@
     border-top: 2px solid var(--stone-lt); border-left: 2px solid var(--stone-lt);
     border-bottom: 2px solid var(--stone-dk); border-right: 2px solid var(--stone-dk);
   }
-  #panel { width: 232px; flex: 0 0 232px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+  #panel { width: var(--panel-w); flex: 0 0 var(--panel-w); padding: 8px; display: flex; flex-direction: column; gap: 8px; }
   @media (max-width: 900px) {
     #frame { flex-direction: column; }
     #panel { width: 100%; flex: 1 1 auto; }
@@ -78,7 +85,16 @@
   #hpfill { height: 100%; background: var(--hp); width: 100%; transition: width .3s; }
   #hptext { position: absolute; inset: 0; text-align: center; font-size: 10px; color: #fff; line-height: 14px; }
   #skills { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; font-size: 11px; }
+  @media (min-width: 1500px) { #skills { font-size: 12px; gap: 4px; } #panel { gap: 10px; } }
   #skills div { padding: 3px 5px; background: var(--stone-dk); }
+  /* v0.80: the level belongs on the same line as the skill. With an icon
+     added the three parts no longer fit and the number wrapped under the
+     name. The name shrinks (and clips if it must); the number never does. */
+  #skills > div { display: flex; align-items: center; flex-wrap: wrap; gap: 0 4px; }
+  #skills .skname { flex: 1 1 auto; min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  #skills > div > b { margin-left: auto; flex: 0 0 auto; }
+  #skills > div > div { flex: 0 0 100%; }
   #skills b { color: var(--parch); font-weight: normal; float: right; }
   #inv { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
   .slot { aspect-ratio: 1; background: var(--stone-dk); display: flex; align-items: center;
@@ -1285,7 +1301,8 @@ function onState(s, worldId) {
         if (xpDrops.length > 12) xpDrops.shift()
       }
       if (l2 > l1) {
-        feed('\u2728 LEVEL UP! Your ' + k + ' is now level ' + l2 + '. \u2728')
+        feed('<svg class="skico" width="16" height="16" viewBox="0 0 10 10" style="vertical-align:-3px;margin-right:4px">'
+          + '<use href="#sk-' + k + '"/></svg>\u2728 LEVEL UP! Your ' + k + ' is now level ' + l2 + '. \u2728')
         celebrate = { text: k.toUpperCase() + ' LEVEL ' + l2, at: performance.now() }
         SFX.levelup()
       }
@@ -3333,8 +3350,8 @@ function panel(s) {
         : Math.floor(100 * (xp - XP_TABLE[lvl]) / (XP_TABLE[lvl + 1] - XP_TABLE[lvl]))
       const hot = k === training
       return '<div' + (hot ? ' style="outline:1px solid var(--gold)"' : '') + '>'
-        + '<svg class="skico"><use href="#sk-' + k + '"/></svg>'
-        + k + ' <b style="' + (lvl >= 99 ? 'color:#e2b63e;text-shadow:0 0 6px rgba(226,182,62,.5)' : '') + '">' + lvl + '</b>'
+        + '<svg class="skico" width="20" height="20" viewBox="0 0 10 10"><use href="#sk-' + k + '"/></svg>'
+        + '<span class="skname">' + k + '</span><b style="' + (lvl >= 99 ? 'color:#e2b63e;text-shadow:0 0 6px rgba(226,182,62,.5)' : '') + '">' + lvl + '</b>'
         + '<div style="height:3px;background:#1c1710;margin-top:3px">'
         + '<div style="height:3px;width:' + pct + '%;background:' + (hot ? '#e2b63e' : '#8a7a4a') + '"></div></div></div>'
     }).join('')
