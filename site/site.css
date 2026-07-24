@@ -321,6 +321,7 @@ tr.mine .nameb { color: var(--gold-hi); font-weight: bold; }
 .cfind a:hover { text-decoration: underline; }
 /* skill marks: the same pixel grids every window draws */
 .skico { width: 18px; height: 18px; vertical-align: -4px; margin-right: 6px; shape-rendering: crispEdges; }
+.stab .skico { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
 .cname { color: var(--gold-hi); font: bold 20px Verdana, sans-serif; letter-spacing: 1px; }
 .ccall { color: var(--parch); font: italic 13px Georgia, serif; margin-top: 2px; }
 .ckey {
