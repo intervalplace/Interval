@@ -23,6 +23,8 @@
     background: #14100a; color: var(--gold);
     font: 13px/1.4 Verdana, Geneva, sans-serif;
     display: flex; justify-content: center; align-items: flex-start;
+    flex-wrap: wrap; /* v0.80: the body is a centred ROW, so the nav strip
+      became a column beside the game until it was allowed to take its own line */
     min-height: 100vh; padding: 16px;
   }
   #frame { display: flex; gap: 0; border: 3px solid var(--stone-dk); width: min(96vw, 1180px); }
@@ -31,8 +33,9 @@
      learn that the chart, the manual, the hiscores and the board exist.
      Every link opens in a NEW TAB on purpose: leaving this one would drop
      the socket and stand your citizen still. */
-  #topnav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-    padding: 5px 10px; margin: 0 0 8px; font-size: 12px; letter-spacing: .04em; }
+  #topnav { flex: 0 0 100%; width: min(96vw, 1180px); margin: 0 auto 8px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 5px 10px; font-size: 12px; letter-spacing: .04em; }
   #topnav a { color: var(--gold); text-decoration: none; }
   #topnav a:hover { text-decoration: underline; }
   #topnav .nhome { font-weight: bold; letter-spacing: .18em; }
