@@ -220,7 +220,7 @@ function drawCitizen(j) {
     const lvl = me.levels[sk] ?? 1
     const xp = (me.skillXp ?? {})[sk] ?? 0
     const r = rankIn(j.players, sk, PROFILE)
-    html += '<tr><td><svg class="skico"><use href="#sk-' + sk + '"/></svg>' + sk + '</td>'
+    html += '<tr><td><svg class="skico" width="18" height="18" viewBox="0 0 10 10"><use href="#sk-' + sk + '"/></svg>' + sk + '</td>'
       + '<td class="rank">' + (r ?? '\u2013') + '</td>'
       + '<td' + (lvl >= 99 ? ' style="color:#ffcc33;font-weight:bold"' : '') + '>' + lvl + '</td>'
       + '<td style="color:var(--dim)">' + xp.toLocaleString() + '</td></tr>'

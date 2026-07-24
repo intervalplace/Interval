@@ -315,6 +315,12 @@ tr.mine .nameb { color: var(--gold-hi); font-weight: bold; }
 
 /* one citizen, read downwards */
 .citizen { text-align: center; margin: 4px 0 14px; }
+/* the rank and the ground it stands on (v0.80) */
+.cfind { margin-top: 6px; font-size: 12px; }
+.cfind a { color: var(--gold); text-decoration: none; }
+.cfind a:hover { text-decoration: underline; }
+/* skill marks: the same pixel grids every window draws */
+.skico { width: 18px; height: 18px; vertical-align: -4px; margin-right: 6px; shape-rendering: crispEdges; }
 .cname { color: var(--gold-hi); font: bold 20px Verdana, sans-serif; letter-spacing: 1px; }
 .ccall { color: var(--parch); font: italic 13px Georgia, serif; margin-top: 2px; }
 .ckey {
