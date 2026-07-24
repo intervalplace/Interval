@@ -308,7 +308,7 @@ ids, defaults empty). New action: `recall`.
 
 ## 2l. The Expanse (v0.76): every direction means something
 
-The classic world says "a safe town, then danger" — a radial gradient,
+The classic world says "a safe town, then danger", a radial gradient,
 the same whichever way you walk, which is why it can be large without
 ever becoming a place you *know*. The second generator,
 **`interval-expanse-v1`**, says something else: **every direction means
@@ -319,7 +319,7 @@ world you return to rather than a level you finish.
 
 **Determinism is stricter here than anywhere.** Expanse terrain uses
 only operations IEEE-754 requires to be exactly rounded (`+ - * /`,
-`Math.sqrt`) over an integer avalanche hash — never `Math.sin`, whose
+`Math.sqrt`) over an integer avalanche hash, never `Math.sin`, whose
 last bit ECMA-262 leaves implementation-defined, and never SHA-256 in
 the hot path, so a window can paint the country tile-for-tile without a
 crypto library and without going async mid-frame. The classic world's
@@ -332,19 +332,19 @@ footpaths behave than a sine wave is.
 **The five countries.** With `W x H` the founding dimensions and
 `cx = floor(W/2), cy = floor(H/2)`:
 
-- **the Wilds** — `x <= round(W * 0.19)`, the whole western march
+- **the Wilds**, `x <= round(W * 0.19)`, the whole western march
   (sealed into `genesis.geo.wilds`, because recall and the Brand read
   it as law);
-- **the Greenwood** — `y <= H * 0.32`, the north wood;
-- **the Crags** — `x >= W * 0.70`, the eastern stone;
-- **the Fens** — `y >= H * 0.70`, the southern water;
-- **the Heartlands** — everything between, plus the settled disc
+- **the Greenwood**, `y <= H * 0.32`, the north wood;
+- **the Crags**, `x >= W * 0.70`, the eastern stone;
+- **the Fens**, `y >= H * 0.70`, the southern water;
+- **the Heartlands**, everything between, plus the settled disc
   around Anchor where `((x-cx)/W)^2 + ((y-cy)/H)^2 < 0.019`.
 
 **The water.** The great river falls out of the Greenwood, past
 Anchor, into the fens:
 `riverX(y) = cx + meander(21, y, 46, 26) + meander(22, y, 14, 5)`,
-water where `|x - riverX(y)| <= 1`. The southeast is open sea — the
+water where `|x - riverX(y)| <= 1`. The southeast is open sea, the
 bay, where `x > W*0.80` and `y > H*0.74` and the normalized reach
 `dx + dy > 0.55`. Fen pools scatter by hash through the wetland south
 of `y = H * 0.66`. `isWater` is the union of the three.
@@ -371,7 +371,7 @@ forges, garrisons, and mills keep an anvil and a smith; ports, timber
 towns, and mills keep a store; garrisons muster guards. The settled
 country farms: four plots stand outside every wall.
 
-**The roads.** Every road leads to Anchor — spokes, not a maze, but a
+**The roads.** Every road leads to Anchor, spokes, not a maze, but a
 world you can navigate by memory. Each spoke is two tiles wide,
 carries no nodes (it costs the tick nothing), and wanders by
 `meander(g, 90 + i, u, 26, 9)` scaled by the taper
@@ -383,8 +383,8 @@ on.
 a path that wanders around a boulder is a place, and "left at the
 split rock" is how people actually navigate. So the bends are computed
 first (`roadBendsOf`: every offset of at least 4 tiles, away from the
-gates), and the thing being avoided — an old boulder in stone country,
-an old tree in green — is placed **on the straight line the trail
+gates), and the thing being avoided, an old boulder in stone country,
+an old tree in green, is placed **on the straight line the trail
 declined to take**, which is the physically true position for it.
 
 **Node law.** Ground a node may occupy: in bounds, dry, unclaimed, off
@@ -542,20 +542,20 @@ The **state hash** is SHA-256 of the canonical JSON encoding.
 The genesis object is
 `{specVersion, rulesHash, genesisSeed, anchorMs, worldW, worldH,
 worldGenerator}`. `worldGenerator` names the deterministic generator
-that founds this world — `"interval-classic-v1"` or
+that founds this world, `"interval-classic-v1"` or
 `"interval-expanse-v1"` (§2l), `"interval-expanse-v2"` (§9b), or
 `"interval-expanse-v3"` (§9d), the third expanse being the canonical
-choice for new foundings — so a founding record can never be ambiguous about
+choice for new foundings, so a founding record can never be ambiguous about
 which world it founds; a node that does not implement the named
 generator refuses to build the world rather than guessing. The genesis schema is EXACT: the seven
 fields above plus the optional fields `witnesses`/`quorum`/`imported`/
-`importedFrom` — `importedFrom = {worldId, stateHash, tick}` names the
+`importedFrom`, `importedFrom = {worldId, stateHash, tick}` names the
 attested state the import list was carried from; the worldId commits
 to it, so a founder cannot later claim a different source, and anyone
 holding that world's certified state can recompute the lived-citizen
 list and check it. An import WITHOUT provenance is the founder's bare
 word, and wears that openly: whether such a founding is "the" world is
-a question for its witnesses and its citizens, never for the protocol —
+a question for its witnesses and its citizens, never for the protocol ,
 a genesis is sovereign, and canonicity is earned, not encoded  
 any other key is refused (a key execution ignores still changes the
 worldId, minting a distinct founding identity with identical behavior),
@@ -595,17 +595,17 @@ Gather yield table: `tree` → `logs` (woodcutting, 25 XP), `rock` →
 
 **Keepers, fences, hedges (v0.79).** A `keeper` is a person-shaped
 fixture: the named face of a town's trade, standing at their counter
-from the founding on. Their NAME is not stored — it is a pure function
+from the founding on. Their NAME is not stored, it is a pure function
 of the town and the role, computed identically by every window, so
 Maud is Maud in every mirror without a byte of state. Keepers hold
 their tile and answer to no verb (yet). `fence` and `hedge` are field
-boundaries: they block like walls and yield nothing — the land bearing
+boundaries: they block like walls and yield nothing, the land bearing
 the marks of being TENDED. All three exist so home looks kept, not
 merely generated.
 
 **Landmarks (v0.79).** A node of type `landmark` is a PLACE, not a
-resource: no verb in this constitution reaches it — it cannot be
-gathered, fought, lit, planted, read, or consumed — and it blocks its
+resource: no verb in this constitution reaches it, it cannot be
+gathered, fought, lit, planted, read, or consumed, and it blocks its
 tile like any node. A landmark bears exactly one extra field, `kind`,
 drawn from a closed set (`elder-tree`, `old-oak`, `standing-stone`,
 `broken-tower`, `sentinel`, `drowned-bell`, `shipwreck`, `tally-half`),
@@ -724,7 +724,7 @@ citizen id). It demands magic 85, consumes THREE sigils, reaches 6
 tiles (a spell of sight, not touch), and grants 150 magic experience.
 Its whole law is one sentence: **the stilled cannot act, and cannot be
 struck.** For 6 intervals the target neither moves, works, fights, nor
-suffers any blow — a truce, enforced, binding its speaker first (the
+suffers any blow, a truce, enforced, binding its speaker first (the
 caster's own action clears on cast). Fights touching the stilled END
 rather than pause. When it lifts, 15 intervals of immunity follow, and
 the caster's word sleeps 150 intervals. Citizens may be stilled but
@@ -734,9 +734,9 @@ never held: there is no still-then-kill, only still-then-leave.
 the gathering trades, simulated against the constitutional curve:
 pressing a sigil grants 60, `mend` 55, `anchor` 35. And `anchor`
 comes home: its fixed point is the REGISTERED spawn of the world's
-own generator — the old constant aimed at the classic plaza, which on
-this island is open sea. Three skills remain pure races by design —
-prayer, exploration, brewing — their levels being the achievement
+own generator, the old constant aimed at the classic plaza, which on
+this island is open sea. Three skills remain pure races by design ,
+prayer, exploration, brewing, their levels being the achievement
 itself. Magic now belongs to the trades that do things.
 
 **Melee geometry and occupancy (v0.79).** Movement is cardinal, and a
@@ -744,7 +744,7 @@ reach-1 weapon strikes only along lines the wielder could step: the
 four faced tiles, the same orthogonality §5 gives the axe and the
 pick. A long haft (reach 2 or more) may thrust past a corner. Nothing
 strikes the tile it stands on. And a living beast holds its tile: a
-`move` onto a tile occupied by a mob with `hp > 0` is invalid — the
+`move` onto a tile occupied by a mob with `hp > 0` is invalid, the
 troll bars the way.
 
 ## 5. Actions
@@ -853,7 +853,7 @@ A player need not exist in genesis to join a world.
 **The newcomer's quiver (v0.78).** Every soul wakes with twenty-five
 arrows in the first slot of their pack. The number is arithmetic, not
 generosity: at ranged 1 with a wooden bow, an arrow lands half the time
-for 1 damage, so a goblin costs about ten expected arrows — the quiver
+for 1 damage, so a goblin costs about ten expected arrows, the quiver
 is two goblins with slack. The archer need not first be a brawler,
 which is §7f's own principle brought home to combat's house. Spawning
 is creation-only, so death never refills the quiver; imported citizens
@@ -1197,7 +1197,7 @@ every node agrees without a word passing between them.
 the world holds fewer than `k`, the top-up mints replacements. Marker
 position and kind are drawn from `H(beacon || tick || index || salt)`,
 rejected until the tile is in-bounds, outside every city, off every
-node, and — v0.79 — **off any ground the world's terrain bars** (the
+node, and (v0.79) **off any ground the world's terrain bars** (the
 sea, the ridge, the river away from its fords): a marker is a place a
 citizen can stand, because `survey` is standing there. A world whose
 generator registers no terrain replays bit-identically under this rule,
@@ -1255,8 +1255,8 @@ ticks a human does.
 
 The world does not need an excavation profession; it needs a past. So a
 minority of survey markers are classed as what earlier hands left
-behind — a **burial**, an **old working**, a cold **camp**, a forgotten
-**cache** — and surveying one yields the single item its class names:
+behind, a **burial**, an **old working**, a cold **camp**, a forgotten
+**cache**, and surveying one yields the single item its class names:
 bones, ore, logs, or seeds. One item, always one, and never
 magic-stone: the one scarcity that is constitutional stays
 constitutional.
@@ -1264,7 +1264,7 @@ constitutional.
 The class is drawn at the marker's birth, from the same digest that
 placed it, and never changes; no randomness survives to the claim. The
 weighting is the country's: the generator that registered its terrain
-(§2l) also names its countries, and the classer listens — the dead
+(§2l) also names its countries, and the classer listens, the dead
 outnumber the living out west in the Wilds, the Crags keep old
 workings, the Greenwood cold camps, the fens keep what they take, and
 the settled Heartlands are mostly just ground. A world whose generator
@@ -1275,7 +1275,7 @@ A full pack forfeits the finding and the claim stands, exactly as
 charts have always behaved. Exploration XP is unchanged. Mining's
 primacy over ore is protected structurally, not by tuning: `k` markers,
 their lifetimes, relocation on claim, and the walk itself are the rate
-limit — and Prayer gains what it always lacked, a peaceful source of
+limit, and Prayer gains what it always lacked, a peaceful source of
 bones: the mourner need not first be a killer.
 ### 7d. Charts: knowledge as a portable capability
 
@@ -1693,14 +1693,14 @@ axis gates remain besides.
 
 **Every ford is visible.** Crossings are unchanged in law (the road
 pays for its crossings; every main street crosses on pilings), but a
-window that mirrors this generator must paint a ford tile — road or
-main street over water — as a **bridge**, never as open water. A
+window that mirrors this generator must paint a ford tile, road or
+main street over water, as a **bridge**, never as open water. A
 crossing the rules permit must be a crossing the eye can find.
 
 **The country is thicker.** Densities in the wild countries roughly
 double the first founding (the greenwood ~1,500 trees at the calibrated
 640 x 400, the crags ~860 rocks, the beasts in proportion), and each
-spoke carries a **wayside hearth** near its midpoint — a permanent
+spoke carries a **wayside hearth** near its midpoint, a permanent
 campfire a step off the trail, so the long walk has light, warmth, and
 somewhere to cook halfway to anywhere. A town's essential buildings
 (bank, well, hearth, signpost, anvils, stores) seat themselves by a
@@ -1723,27 +1723,27 @@ routing problems, and a border must be a thing you can stand beside.**
 Every border is now a physical feature, and the world's own edge is the
 first of them: **the world is an island, and the island is named
 Tallyholm.** A tally is the split stick whose two halves prove each
-other — which is how this world stays real — and a holm is what the old
+other (which is how this world stays real) and a holm is what the old
 tongue called an island. The name is written on the land itself, on the
 capital's signpost. The calibrated founding is
 896 x 512 via `makeExpanse3Genesis` (generator floor 448 x 256); the
 canvas grew so the island's land matches the second founding's rectangle
-within a few percent — tiles are functions, not state, so a silhouette
+within a few percent, tiles are functions, not state, so a silhouette
 costs nothing.
 
 **The coast.** The island's radius is a meander of its angle, and the
-angle is built from octant arithmetic (`+ - * /` and comparisons only) —
+angle is built from octant arithmetic (`+ - * /` and comparisons only) ,
 never `atan2`, which ECMA-262 leaves implementation-defined. The west
 reaches out in the Wilds cape past a pinched neck; the southeast is
 bitten by the bay; the fens meet the sea in an estuary.
 
 **The borders that are features.** The wilds end at the **Brandline**, a
-scorched march marked by standing stones and freely crossable — a line
+scorched march marked by standing stones and freely crossable, a line
 stepped over deliberately, never a gate. The legal wilds rectangle
 (`genesis.geo.wilds`) sits strictly *inside* the visual march: the land
 warns before the law binds. The crags begin at the **Ridge**, high stone
 that blocks like water and is crossed at the **North Pass** and the
-**South Pass** — or skirted the long way through the deep wood, where
+**South Pass**, or skirted the long way through the deep wood, where
 the ridge sinks beneath the trees. The treeline and fenline meander.
 
 **The waters.** The Great River rises in the northern wood, passes
@@ -1751,8 +1751,8 @@ Millbrook, gathers the western **Marchwater** at the **Watersmeet**, and
 reaches the bay as a widening delta with a distributary at Fenmarch.
 **Stillwater** lies in the eastern wood. Two islands stand off the
 coast: **Shrine Isle**, reached by a long causeway and carrying a
-waystone — the pilgrimage is walked once (§2k) and the recall is yours
-forever — and the **Farshore**, which is reached by nothing at all, and
+waystone, the pilgrimage is walked once (§2k) and the recall is yours
+forever, and the **Farshore**, which is reached by nothing at all, and
 shall remain so: the mystery is constitutional.
 
 **The roads.** A graph of routes through named junctions with three

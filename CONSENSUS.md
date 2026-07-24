@@ -1,8 +1,8 @@
 # Interval Consensus Specification v1.9 (Byzantine Safety Upgrade)
 
-*Release 0.80.0 · protocol spec v0.80 · rules hash `9fa16a8d52d920eb…`*
+*Release 0.80.0 · protocol spec v0.80 · rules hash `a1deaf2241a1979d…`*
 
-**Certified Interval Bundles — the agreement protocol for authoritative worlds.**
+**Certified Interval Bundles, the agreement protocol for authoritative worlds.**
 
 This document is normative for the agreement layer (`protocol.mjs`,
 `agreement.mjs`). The game rules live in SPEC.md ("the constitution",
@@ -46,7 +46,7 @@ These together guarantee that any two quorums intersect in **at least
 quorums shares **at least one honest witness**. Because an honest
 witness holds a durable vote lock (§4) and never signs two bundles for
 one tick, two conflicting certificates for the same tick are impossible
-unless **more than `f`** witnesses violate the constitution — at which
+unless **more than `f`** witnesses violate the constitution, at which
 point both certificates are portable, attributable evidence (§7). Nodes
 MUST refuse to operate in, and verifiers MUST refuse proofs from, a
 world violating this. (A solo world `n = 1, q = 1, f = 0` satisfies it;
@@ -59,7 +59,7 @@ at all.
 > fault tolerance. That was wrong. `2q > n` guarantees quorums share at
 > least one witness, but that witness can be a single Byzantine actor who
 > double-signs, producing two conflicting certificates each backed by a
-> valid quorum — a fork. Concretely, `n = 5, q = 3` has intersection
+> valid quorum, a fork. Concretely, `n = 5, q = 3` has intersection
 > `2q − n = 1`: one malicious witness in that intersection forks the
 > world. Genuine Byzantine tolerance requires `n ≥ 3f + 1` and
 > `q ≥ 2f + 1`, so the intersection is `≥ f + 1` and thus contains an
@@ -73,7 +73,7 @@ checkpoints and replay. **Safety never depends on timing.** Liveness
 assumes partial synchrony: quorum-many honest witnesses eventually
 connected with bounded delay.
 
-**Fault model — stated plainly.** With a genesis threshold `f`, this
+**Fault model, stated plainly.** With a genesis threshold `f`, this
 protocol is **Byzantine-fault-tolerant up to `f` witnesses**:
 
 - Safety against *crashes, restarts, partitions, delays, duplication,
@@ -86,7 +86,7 @@ protocol is **Byzantine-fault-tolerant up to `f` witnesses**:
   Every double-signature is portable evidence (§7); a node that ever
   sees two valid certificates for one finalized tick halts with both as
   attributable proof (`HALT_CONFLICTING_CERTIFICATES`).
-- Beyond `f` Byzantine witnesses, safety is not guaranteed — but a fork
+- Beyond `f` Byzantine witnesses, safety is not guaranteed, but a fork
   still leaves cryptographic proof naming the violators.
 - A quorum coalition can also *censor* inputs or *stall* the world.
   Choose `n` and `f` accordingly; the witness set is a founding, trusted
@@ -108,13 +108,13 @@ Encoders MUST reject `undefined`, `NaN`, `±Infinity`, and any other
 type. All signatures are ed25519 over `DOMAIN || canonical(object
 without sig)`.
 
-**SignedInput** — a player action:
+**SignedInput**, a player action:
 `{ worldId, tick, playerId, type, ..., sig }`, domain
-`INTERVAL_INPUT_V1|`. `inputHash = SHA-256(canonical(signed input))` —
+`INTERVAL_INPUT_V1|`. `inputHash = SHA-256(canonical(signed input))` ,
 it covers the signature, so re-signing the same action yields a distinct
 input (this is what makes equivocation provable).
 
-**IntervalBundle** — the proposed canonical input set for one tick:
+**IntervalBundle**, the proposed canonical input set for one tick:
 
 ```
 { v, worldId, tick, round, previousStateHash, proposer, inputs[], sig }
@@ -126,7 +126,7 @@ most `MAX_INPUTS_PER_PLAYER = 2` inputs per player and at most
 `MAX_INPUTS_PER_BUNDLE` total, and every input MUST be
 signature-valid, for this world, for this tick.
 
-**Attestation** — one witness's vote:
+**Attestation**, one witness's vote:
 
 ```
 { v, worldId, tick, round, bundleHash, resultingStateHash, witness, sig }
@@ -135,25 +135,25 @@ signature-valid, for this world, for this tick.
 domain `INTERVAL_ATTESTATION_V1|`. `resultingStateHash` is the hash the
 witness itself computed by applying the bundle to its finalized state.
 
-**FinalityRecord** — the portable proof:
+**FinalityRecord**, the portable proof:
 
 ```
 { tick, round, previousStateHash, bundleHash, resultingStateHash,
   bundle, attestations[] }
 ```
 
-**VoteLock** — a witness's durable promise (§4):
+**VoteLock**, a witness's durable promise (§4):
 `{ format: "interval-witness-lock-v1", worldId, tick, bundleHash, bundle,
 attestation }`. Durable safety records (the vote lock, the frontier, the finality index) are
 VERSIONED and schema-checked on load: exact format string, exact field
 types, exact lowercase-hex hash formats. An unversioned or malformed
 record refuses startup; it is never guessed at.
 
-**InputEquivocationEvidence** — `{ type: 'input-equivocation', playerId,
+**InputEquivocationEvidence**, `{ type: 'input-equivocation', playerId,
 tick, inputA, inputB }` where both inputs are signature-valid, same
 player, same tick, different `inputHash`, ordered by hash.
 
-**ProposerEquivocationEvidence** — `{ type: 'proposer-equivocation',
+**ProposerEquivocationEvidence**, `{ type: 'proposer-equivocation',
 tick, round, proposer, bundleA, bundleB }`: two validly-signed bundles,
 same `(worldId, tick, round, proposer)`, different hashes.
 
@@ -176,12 +176,12 @@ Round 0's proposer is deterministic but unpredictable before
 `previousStateHash(t)` exists; each later round walks one step through
 `W` in founding order. **A witness proposes only for the CURRENT
 round**: rounds whose windows have already passed when it looks (a late
-start, a long GC pause) are ceded, never proposed — a stale proposal
+start, a long GC pause) are ceded, never proposed, a stale proposal
 only competes with whatever the live network already locked on and
 widens lock splits.
 
-**Proposal rule.** When round `r` opens, `proposer(t, r)` — if it holds
-no lock for `t` — builds a bundle from its pending inputs and publishes
+**Proposal rule.** When round `r` opens, `proposer(t, r)`, if it holds
+no lock for `t`, builds a bundle from its pending inputs and publishes
 it. **Bundle building is by whole player groups**: players in ascending
 `playerId` order, each player's (≤ 2) input versions included together
 or not at all, stopping before the cap. An equivocation pair is never
@@ -199,7 +199,7 @@ Each witness maintains at most one **VoteLock** per tick:
   and only then broadcasts its attestation.
 - **LOCK-2 (one hash per tick, ever).** While a lock for `t` exists, the
   witness MUST NOT sign any attestation for a different `bundleHash` at
-  tick `t` — *regardless of round*. The same bundle may be re-attested
+  tick `t`, *regardless of round*. The same bundle may be re-attested
   and re-broadcast freely.
 - **LOCK-3 (restart).** On startup, a witness reloads its lock. A
   restored lock is untrusted bytes until verified IN FULL against the
@@ -209,7 +209,7 @@ Each witness maintains at most one **VoteLock** per tick:
   reproducing the attested result. A verified lock at the current
   frontier binds the witness to rebroadcast-only; an INVALID lock
   refuses startup entirely (a corrupted lock must neither poison the
-  witness nor be silently discarded — discarding re-opens
+  witness nor be silently discarded, discarding re-opens
   double-signing; a human decides). A lock for an already-finalized
   tick is archived and ignored.
 
@@ -217,19 +217,19 @@ Each witness maintains at most one **VoteLock** per tick:
 frontier protects history. Finalization is FAIL-CLOSED, in this order:
 (1) verify finality; (2) persist the frontier
 `{worldId, tick, resultingStateHash}` DURABLY (write, fsync, rename,
-fsync directory — as for locks); (3) update in-memory state; (4) retire
+fsync directory, as for locks); (3) update in-memory state; (4) retire
 the spent vote lock into the history journal
 (`<lockfile>.history/<tick>-<bundleHash>.json`, unique names, rename
 fsynced, bounded window; a journal failure is hygiene, not safety, and
 is tolerated); (5) checkpointing and callbacks. If step (2) fails, the
-witness HALTS with its active vote lock intact and adopts nothing — a
+witness HALTS with its active vote lock intact and adopts nothing, a
 cleared lock over an unrecorded finality is precisely the crash window
 that re-opens historical re-signing.
 
 On startup: a state at or behind the frontier tick REFUSES to start
 (restarting a witness from a stale checkpoint would re-run, and
 re-sign, finalized intervals). A state exactly AT the frontier height
-must also HASH to the frontier's `resultingStateHash` — height alone is
+must also HASH to the frontier's `resultingStateHash`, height alone is
 not identity, and a same-height impostor state is refused. A state
 AHEAD of the frontier is admitted only through a certified recovery
 path: a valid §6.2 finality proof for exactly that state (the disk
@@ -237,9 +237,9 @@ checkpoint's own proof, verified). Recovery from any refusal is syncing
 a current certified checkpoint, never deleting the frontier.
 
 **Safety-record namespacing (rev5).** Safety records live in a
-world-namespaced directory —
+world-namespaced directory ,
 `<safetyDir>/<worldId>/{active-lock.json, frontier.json,
-active-lock.json.history/}` — so reusing a filesystem path across worlds
+active-lock.json.history/}`, so reusing a filesystem path across worlds
 cannot cross records. A schema-valid record whose embedded `worldId`
 differs from the running world (path reuse, tampering) REFUSES startup;
 mismatched-world records are never silently ignored.
@@ -253,13 +253,13 @@ design.
 **Fail-closed persistence discipline.**
 - Reading a safety record fails CLOSED: a missing file means "no
   record"; a corrupt, truncated, empty, unreadable, or
-  permission-denied file REFUSES startup with the file preserved —
+  permission-denied file REFUSES startup with the file preserved ,
   trouble is never treated as absence.
 - Directory fsync after renaming a consensus record (lock, frontier) is
   STRICT: a platform where it fails cannot host a production witness.
   Best-effort fsync is acceptable only for non-consensus artifacts
   (checkpoints, journal archives).
-- A production witness REQUIRES all THREE durable safety stores — the
+- A production witness REQUIRES all THREE durable safety stores, the
   vote lock, the finality frontier, AND the finality index; in-memory
   stores exist only behind an explicit testing flag. The finality index
   is a safety record (historical accountability), so it is mandatory,
@@ -272,7 +272,7 @@ design.
   under `witness-safety/<worldId>/<witnessId>/`, and the lock is a
   Unix-domain socket (`process.lock.sock`) bound there: the KERNEL
   guarantees exclusive ownership of a live address ON THAT HOST and
-  releases it automatically when the holder dies — no PID guessing, no
+  releases it automatically when the holder dies, no PID guessing, no
   unsafe reclamation. This is a HOST-LOCAL lock, not a distributed one.
   The supported operating model (production brief §1, Option A) is:
   **one witness identity == one host**; safety directories live on
@@ -298,7 +298,7 @@ peers converge on the earliest lock.
 
 **Why this is safe.** Suppose records `R ≠ R'` are both final for tick
 `t`. Each carries `q` distinct witness signatures; the signer sets
-intersect in `≥ 2q − n > f` witnesses — that is, **at least `f + 1`** —
+intersect in `≥ 2q − n > f` witnesses, that is, **at least `f + 1`** ,
 each of which would have to sign two different bundle hashes for one
 tick, impossible for a witness obeying LOCK-1..3 (durability makes
 crash-and-forget no excuse). Since at most `f` witnesses are Byzantine,
@@ -330,8 +330,8 @@ evidence. Nothing is repaired silently.
 
 **Proposer equivocation.** Two validly-signed different bundles for one
 `(t, r, proposer)`: record the evidence and ignore the later bundle,
-always. The strongest response — accepting no further bundles from that
-proposer for tick `t` — applies only to a LIVE conflict (both bundles
+always. The strongest response, accepting no further bundles from that
+proposer for tick `t`, applies only to a LIVE conflict (both bundles
 claiming the node's current `previousStateHash`, unambiguous
 same-instance equivocation); a signed conflict with an alien lineage
 (a replayed stale bundle) is kept as evidence without poisoning, so a
@@ -340,7 +340,7 @@ for the next round; an existing lock stands.
 
 **Recovery after a quorum-loss halt.** When a witnessed world loses
 quorum and stalls, the surviving witnesses hold locks at the stalled
-tick, but their last *durable checkpoint* predates it — a stalled
+tick, but their last *durable checkpoint* predates it, a stalled
 witness checkpoints nothing forward. A witness cold-restarting into a
 fully halted world syncs only that older checkpoint and cannot on its
 own reconstruct the stalled frontier from finality records; recovery is
@@ -363,8 +363,8 @@ input signature-valid, for this world and tick.
 
 ### 6.2 Finality record verification (`verifyFinalityProof`)
 
-Everywhere a record is trusted — live finality, checkpoints, catch-up
-replay — one common verifier checks:
+Everywhere a record is trusted, live finality, checkpoints, catch-up
+replay, one common verifier checks:
 
 1. constitutional quorum: `n ≥ 3f+1`, `q ≥ 2f+1`, `2q−n > f`;
 2. record shape; bundle present; `bundleHash = H(bundle)`;
@@ -391,7 +391,7 @@ form is malformed, not merely unusual.
 - **Checkpoints** `{formatVersion, worldId, tick, stateHash, state,
   finalityProof}` require: worldId match; byte-identical genesis;
   `state.tick = tick`; recomputed `stateHash` (lowercase 64-hex);
-  engine-level state validation — genesis structure, coordinate bounds,
+  engine-level state validation, genesis structure, coordinate bounds,
   hp/xp/quantity ranges as safe integers, inventory/bank/equipment
   shapes, ground/mob/node shapes, bidirectional name-registry
   consistency, entity counts, serialized-size cap, bounded values for
@@ -409,18 +409,18 @@ adoption weight.
 validation accept exactly the same universe: every input `validInput`
 accepts produces, through `nextState`, a state `validateState` accepts
 (property-tested across hundreds of mixed transitions). Concretely for
-trades: exactly ONE of a constitutional item or positive integer gold —
+trades: exactly ONE of a constitutional item or positive integer gold ,
 both, neither, unknown items, and non-positive or fractional gold are
 refused at the input. Founding is gated the same way: `validateGenesis`
 runs before any world is built (imported citizens get a dedicated,
-complete validator — IDs, names, skills, XP, HP, inventories, banks,
+complete validator. IDs, names, skills, XP, HP, inventories, banks,
 equippable weapons, quantities, and cross-entry uniqueness), the world
 generator enforces its constitutional minimum dimensions, and every
 generated world is self-validated before it is returned: an accepted
 genesis ALWAYS yields a constitutionally valid initial state, and a
 generator bug aborts founding with the violated invariant named.
 
-**Round schedule — exponential backoff (adversarial-sim finding).**
+**Round schedule, exponential backoff (adversarial-sim finding).**
 Round *r* for a tick opens at `due + ROUND_TIMEOUT_MS · (2^min(r,CAP) −
 1)` (CAP = 6), not at flat multiples. Under heavy loss and delay, flat
 600 ms rounds mint a fresh competing proposal faster than lock
@@ -432,7 +432,7 @@ untouched (`roundStartMs`/`roundAt` in protocol.mjs). One observed consequence: 
 round's proposer dies *after* some but not all witnesses locked its
 bundle, the remaining honest witnesses hold a transient lock split and
 converge only once a backed-off round opens and rebroadcast delivers the
-majority bundle — seconds, not milliseconds, under real gossip. The
+majority bundle, seconds, not milliseconds, under real gossip. The
 world always converges or stalls; it never forks (confirmed live across
 real processes: a two-of-three witness set resumes finality after the
 third dies, given the convergence window).
@@ -446,10 +446,10 @@ refusals throw an `IntervalError` with an `ERR_*` code
 `ERR_INVALID_GENESIS`, `ERR_INVALID_BUILT_STATE`, `ERR_CORRUPT_IDENTITY`,
 `ERR_MISSING_STORES`, `ERR_CHECKPOINT_REJECTED`,
 `ERR_CHECKPOINT_UNCORROBORATED`, `ERR_CORRUPT_FINALITY_INDEX`); halts carry a `HALT_*` code with
-supporting evidence (`HALT_CERTIFIED_RESULT_MISMATCH` — a quorum
+supporting evidence (`HALT_CERTIFIED_RESULT_MISMATCH`, a quorum
 certified a result local replay could not reproduce;
-`HALT_PROPOSER_EQUIVOCATION` — one proposer signed two bundles for the
-same round; `HALT_CONFLICTING_CERTIFICATES` — two valid certificates for
+`HALT_PROPOSER_EQUIVOCATION`, one proposer signed two bundles for the
+same round; `HALT_CONFLICTING_CERTIFICATES`, two valid certificates for
 one finalized tick; `HALT_CERTIFIED_INVALID_BUNDLE`,
 `HALT_REPLAY_MISMATCH`, `HALT_FRONTIER_PERSIST_FAILED`,
 `HALT_FINALITY_INDEX_PERSIST_FAILED`,
@@ -480,20 +480,20 @@ verify certificate → persist frontier (durable) →
 
 If the index cannot be persisted, the node HALTS
 (`HALT_FINALITY_INDEX_PERSIST_FAILED`) with the frontier durable and the
-vote lock intact, and does not advance execution — losing the historical
+vote lock intact, and does not advance execution, losing the historical
 record would lose the ability to detect a future conflicting
 certificate. If the index cannot be READ during a historical conflict
 check, the node HALTS (`HALT_FINALITY_INDEX_READ_FAILED`) rather than
 treat missing history as "no prior finality". The index is idempotent
 per `(worldId, tick)`: an identical record is a no-op, a conflicting one
 halts as corruption (`HALT_FINALITY_INDEX_CORRUPT`). At startup the
-index is validated — every record parses, hashes are canonical,
+index is validated, every record parses, hashes are canonical,
 retained certificates verify against genesis, and no two entries for one
-tick conflict — and a corrupt accountability store refuses startup
+tick conflict, and a corrupt accountability store refuses startup
 (`ERR_CORRUPT_FINALITY_INDEX`), exactly like a corrupt lock or frontier.
-The store ENFORCES per-`(worldId, tick)` immutability itself — first
+The store ENFORCES per-`(worldId, tick)` immutability itself, first
 append wins, an identical append is idempotent, a conflicting append is
-rejected — so the invariant does not depend on the caller checking
+rejected, so the invariant does not depend on the caller checking
 first. Lookups use an in-memory `tick → byte-offset` index over the append log,
 so historical conflict detection is O(1) and does not degrade with
 history length; the on-disk format is a plain append log that a
@@ -501,7 +501,7 @@ SQLite/LevelDB backend can replace behind the same interface without a
 protocol change.
 
 **Storage is not consensus (storage brief).** The finality store is
-selectable behind one interface — `{ get, append, latestTick, validate,
+selectable behind one interface, `{ get, append, latestTick, validate,
 integrityCheck, health, backup, close }`. SQLite is the default
 EVERYWHERE; the flat-file append log is an explicit dev/compat option
 (`finalityBackend: 'flatfile'`), and an unknown backend value is
@@ -511,13 +511,13 @@ SQLite provides atomic transactions, an indexed primary key on
 immutability in the schema, WAL crash recovery, and `PRAGMA
 quick_check`/`integrity_check`. Durability is `journal_mode=WAL`,
 `synchronous=FULL`, `foreign_keys=ON`. The store enforces STRICT WORLD
-BINDING — a record that identifies no world, or a different world than
+BINDING, a record that identifies no world, or a different world than
 the store's configured one, is rejected (`ERR_WORLD_MISMATCH`), never
 silently mixed. A one-time migration copies a flat-file log into SQLite
-ATOMICALLY — validate source → build a temp database → verify row counts
+ATOMICALLY, validate source → build a temp database → verify row counts
 (via SQLite itself) and content hashes → integrity-check →
 WAL-checkpoint (TRUNCATE) → fsync the db → atomically rename → fsync the
-destination directory, preserving the original as a read-only backup —
+destination directory, preserving the original as a read-only backup ,
 so a failure never leaves a partial production database. Operational
 tooling (`storage-ops.mjs`: health, integrity, consistent online backup
 via `VACUUM INTO`, restore verification) operates on the store without
@@ -531,8 +531,8 @@ need not be written every tick. Checkpoints are written every
 `checkpointInterval` finalized ticks (default 1000) plus once on clean
 shutdown. On restart a witness loads the newest valid checkpoint and
 REPLAYS the certified finalized records from the finality index up to the
-durable frontier — each verified against genesis and re-executed
-byte-for-byte — before the agreement layer decides whether it may sign.
+durable frontier, each verified against genesis and re-executed
+byte-for-byte, before the agreement layer decides whether it may sign.
 A sparse checkpoint therefore costs a short certified replay, never a
 refusal and never a fork. Checkpoint frequency is an implementation
 tuning knob, not a protocol parameter.
@@ -544,8 +544,8 @@ checkpoint (in-flight and pending I/O) → close SQLite → release the
 process lock → stop networking. Steps through closing SQLite all run
 while exclusivity is still held. Startup is fail-safe: from the moment
 the process lock is acquired, any failure (SQLite init, libp2p, protocol
-registration) releases every partially-initialized resource — lock,
-database, networking — so a restart re-acquires immediately rather than
+registration) releases every partially-initialized resource, lock,
+database, networking, so a restart re-acquires immediately rather than
 finding a half-started witness holding the lock.
 
 **Bounded startup verification.** Startup validation is constant-time in
@@ -553,13 +553,13 @@ retained history: cheap column-format checks run on ALL rows via a single
 indexed SQL scan, while the expensive per-record work (JSON parse,
 canonical re-hash, and full signature/quorum re-verification) is bounded
 to the recent tail (`startupVerifyRecentN`). This bounded value is the
-GENERIC default EVERYWHERE — `IntervalNode`, `IntervalAgreement`, and the
+GENERIC default EVERYWHERE, `IntervalNode`, `IntervalAgreement`, and the
 `serve`/`join` launchers all resolve an omitted setting to one shared
 constant (`DEFAULT_STARTUP_VERIFY_RECENT_N` = 10000 in `errors.mjs`),
 never to full-history verification. Direct construction and the launchers
 therefore behave identically. Older records were fully verified when
 first accepted and cannot change under the append-only immutability
-invariant, so re-verifying them every boot is unnecessary — at one
+invariant, so re-verifying them every boot is unnecessary, at one
 million ticks this cuts startup validation from ~22 s to ~0.4 s.
 Structural corruption anywhere in history is still caught by the
 full-table scan, and database integrity checking (`integrityCheck()`,
@@ -573,11 +573,11 @@ Historical conflicting-certificate detection consults this index when
 the in-memory window has expired or a restart cleared it, so a
 conflicting certificate for a long-finalized tick is still caught and
 halts the node (`HALT_CONFLICTING_CERTIFICATES`) with both certificates
-as attributable evidence — accountability does not decay with the memory
+as attributable evidence, accountability does not decay with the memory
 window.
 
-**Finality catch-up (freeze-final).** A node that fell behind — a
-partition, a slow link — receives finality records for ticks ahead of
+**Finality catch-up (freeze-final).** A node that fell behind, a
+partition, a slow link, receives finality records for ticks ahead of
 its own. Rather than drop them (one missed record would strand the node
 forever, poisoning every record that follows), it buffers a bounded
 window of future records and drains them IN ORDER as the gap fills; each
@@ -589,8 +589,8 @@ what lets healed honest nodes reconverge to a single finalized frontier
 
 **Adversarial simulation results (freeze gate).** A deterministic,
 seeded, event-driven harness (advsim.mjs) runs honest witnesses under a
-hostile transport — delay, reorder, duplicate, up to 25% loss,
-asymmetric timed partitions — alongside Byzantine witnesses
+hostile transport, delay, reorder, duplicate, up to 25% loss,
+asymmetric timed partitions, alongside Byzantine witnesses
 (equivocating proposers publishing two bundles and double-signing both;
 attesters signing corrupted result hashes; replayers; garbage floods)
 and crash-restart witnesses recovering from durable stores, including
@@ -601,7 +601,7 @@ signs two bundle hashes for one tick (judged on the wire); **S3** every
 committed finality record verifies standalone against genesis; **S4**
 honest nodes halt only when Byzantine behavior is present. Under the
 "chaos" scenario (all faults plus two Byzantine actors at once) liveness
-degrades to near zero while all four invariants still hold — safety is
+degrades to near zero while all four invariants still hold, safety is
 sacrificed nowhere that liveness is. The harness classifies every honest halt against a set of
 protocol-defined reasons (an unrecognized halt reason fails the
 scenario as an implementation error), measures liveness as the SLOWEST
@@ -610,8 +610,8 @@ check, and treats any unexpected exception (one not matching a modelled
 safety refusal) as a scenario failure. The batteries run in CI
 (test/adversarial.test.mjs, 12 tests) and stand behind a live libp2p
 adversarial demo (demo7.mjs) and a real multi-process witness E2E
-(e2e-multiproc.sh). Reproducible evidence — environment, dependency
-lockfile, exact commands, exit codes, full logs — is generated by
+(e2e-multiproc.sh). Reproducible evidence, environment, dependency
+lockfile, exact commands, exit codes, full logs, is generated by
 freeze-evidence.sh.
 
 **The freeze invariant (pre-freeze rev).** One semantic action, one
@@ -620,7 +620,7 @@ accepted representation. Signed inputs carry all five base fields in
 exact formats (lowercase 64-hex ids, nonnegative tick, 128-hex
 signature) plus exactly their action's typed fields; trade offers spell
 out both demand fields (`wantItem: null` / `wantGold: 0` explicitly) so
-no two byte-strings mean the same trade. The genesis schema is closed —
+no two byte-strings mean the same trade. The genesis schema is closed ,
 unknown keys refused, `witnesses` ⇔ `quorum` paired. Clients build the
 object they sign through the ONE shared `normalizeInput`, so equivalent
 requests are byte-identical before signing. Structural validity (forms,
@@ -628,13 +628,13 @@ formats, vocabularies, canonical null/zero) and state-dependent
 validity (existence, adjacency, ownership) are separate layers. Every
 `buildWorld` result is validated at the node boundary regardless of its
 tick. Remaining work beyond this document is adversarial multi-node
-simulation and, only after profiling, incremental state commitments —
+simulation and, only after profiling, incremental state commitments ,
 never another representation of the same meaning.
 
 **Canonical forms (rev7).** There is exactly ONE representation of
 every valid input, persistent state, and founding record. Signed inputs
-follow per-type schemas — required fields present, unknown fields
-forbidden — enforced at intake, in bundle validation, and in the
+follow per-type schemas, required fields present, unknown fields
+forbidden, enforced at intake, in bundle validation, and in the
 engine, so a junk-padded twin of a legitimate action can never split
 witness locks over the same intent (clients normalize before signing:
 an absent optional is an absent key). Persisted trades obey the same
@@ -643,7 +643,7 @@ slot the shared `slotOf()` assigns; banks are sparse (zero quantity =
 absent key, in execution, validation, and imports). Founding records
 name their generator (`worldGenerator`), the node validates genesis,
 built state, and genesis-embedding at its OWN boundary, and once
-validation accepts a genesis, construction applies it verbatim —
+validation accepts a genesis, construction applies it verbatim ,
 per-field filtering after validation is forbidden.
 
 **Identity recovery (rev6).** Identity files follow the same
@@ -657,14 +657,14 @@ enforces membership, not just shape: player names satisfy the single
 shared name rule (spec §5a) in inputs, checkpoints, imports, and the
 registry alike; items belong to the single constitutional item registry
 in inventories, banks, equipment, ground, trades, and imports alike.
-Relational integrity is strict — NO dangling references are permitted:
+Relational integrity is strict. NO dangling references are permitted:
 attack targets, gather nodes, player targets, trade partners, and
 attuned waystones must all resolve (mobs and players are permanent
 entries, and expiring objects never receive persistent references).
 
 ---
 
-## 7. Fairness — what is and is not guaranteed
+## 7. Fairness, what is and is not guaranteed
 
 Guaranteed: deterministic execution; deterministic, portable finality;
 no forged inputs (all player-signed); no forged outcomes (all witnesses
@@ -672,8 +672,8 @@ recompute); equivocating players deterministically excluded for the
 tick when both versions are bundled.
 
 **Not guaranteed: complete input inclusion.** The round's proposer
-chooses the bundle from what it has seen. An input it omits — by
-partition, latency, or censorship — is simply not in the tick; since
+chooses the bundle from what it has seen. An input it omits, by
+partition, latency, or censorship, is simply not in the tick; since
 inputs are tick-bound, an omitted input dies with its tick and the
 client must observe state and resubmit (the shipped clients do).
 Sustained censorship requires the cooperation of every rotating
@@ -692,19 +692,19 @@ deterministic duplicate-exclusion.
 
 The world advances when `q` honest witnesses are connected, unlocked or
 locked on the same bundle, within a round window. Known stall
-conditions — all of which stop the world without forking it:
+conditions, all of which stop the world without forking it:
 
-- **H1** — fewer than `q` witnesses alive/reachable (crash, key loss,
+- **H1**, fewer than `q` witnesses alive/reachable (crash, key loss,
   partition): stalls until quorum returns.
-- **H2** — **lock split**: a multi-round partition can leave locks
+- **H2**, **lock split**: a multi-round partition can leave locks
   spread over ≥ 2 bundles such that no bundle can ever gather `q`
   (e.g., three isolated witnesses each locking their own proposal).
   Rebroadcast converges any split where one bundle can still reach
   quorum; otherwise the tick is permanently stuck. This is the accepted
   cost of LOCK-2: liveness is sacrificed, never safety.
-- **H3** — halt-on-mismatch (§5) on any node: that node stops; if
+- **H3**, halt-on-mismatch (§5) on any node: that node stops; if
   quorum-many witnesses halt, the world stops.
-- **H4** — proposer equivocation poisoning every round of a tick while
+- **H4**, proposer equivocation poisoning every round of a tick while
   witnesses stay unlocked: stalls until an honest round completes.
 
 Permanent stalls are recovered by §9, never by unlocking.
@@ -718,13 +718,13 @@ facts inside genesis; the worldId commits to them; there is no
 in-protocol addition, removal, rotation, or key revocation. This is
 deliberate: mutable validator sets are where consensus protocols hide
 their subtlest bugs, and Interval already has a first-class mechanism
-for constitutional change — **founding a new world**.
+for constitutional change, **founding a new world**.
 
 - *Key loss / crashed-forever witness*: the set's effective size
   shrinks; the world lives while `q` remain (H1 otherwise).
 - *Compromised witness*: a minority compromise (`< 2q − n`
   double-signers) cannot fork the world; misbehavior yields portable
-  evidence. There is no slashing — the remedy is social: refound
+  evidence. There is no slashing, the remedy is social: refound
   without them.
 - *Quorum permanently lost, lock split (H2), or halted world*: operators
   found a NEW world (new anchor, new worldId, new witness set) whose

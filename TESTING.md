@@ -1,55 +1,55 @@
-# Interval — Testing & Freeze Evidence
+# Interval. Testing & Freeze Evidence
 
 Release 0.80.0 · protocol spec v0.80 · consensus spec v1.9 · rules hash
-`9fa16a8d52d920eb…`.
+`a1deaf2241a1979d…`.
 
 This document states exactly what is tested, with what inputs, for how
-long. Coverage is **finite and enumerated** — the claims below are about
+long. Coverage is **finite and enumerated**, the claims below are about
 the specific scenarios, seeds, and durations listed, not about all
 possible executions.
 
 ## Unit + property suite (`npm test`)
 
-`node --test test/*.test.mjs` — 305 tests across:
+`node --test test/*.test.mjs`, 305 tests across:
 
-- `engine.test.mjs` — pure state-machine transitions
-- `node.test.mjs` — libp2p node boundary
-- `agreement.test.mjs` — proposer rotation, quorum, lock discipline
-- `safety.test.mjs` — one-vote-per-tick, intersecting quorums
-- `persistence.test.mjs` — durable stores, versioned records, stale-round
-- `crashsafety.test.mjs` — crash windows, durable-vote-before-broadcast
-- `recovery.test.mjs` — fail-closed reads, proof-gated recovery, halt-forward
-- `constitution.test.mjs` — names, items, relational validation, namespacing
-- `closure.test.mjs` — execution↔validation closure; a ~190-transition
+- `engine.test.mjs`, pure state-machine transitions
+- `node.test.mjs`, libp2p node boundary
+- `agreement.test.mjs`, proposer rotation, quorum, lock discipline
+- `safety.test.mjs`, one-vote-per-tick, intersecting quorums
+- `persistence.test.mjs`, durable stores, versioned records, stale-round
+- `crashsafety.test.mjs`, crash windows, durable-vote-before-broadcast
+- `recovery.test.mjs`, fail-closed reads, proof-gated recovery, halt-forward
+- `constitution.test.mjs`, names, items, relational validation, namespacing
+- `closure.test.mjs`, execution↔validation closure; a ~190-transition
   property test asserting `validateState(nextState(...)) === null`
-- `canonical.test.mjs` — trade XOR in state, slot correctness, node rules
-- `prefreeze.test.mjs` — per-action canonical schemas, genesis matrix,
+- `canonical.test.mjs`, trade XOR in state, slot correctness, node rules
+- `prefreeze.test.mjs`, per-action canonical schemas, genesis matrix,
   SDK byte-identity, all-29-types transition closure
-- `sdk.test.mjs` — every SDK action emits canonical input; gold/item trade
+- `sdk.test.mjs`, every SDK action emits canonical input; gold/item trade
   helpers; malformed calls refused before signing
-- `perf.test.mjs` — Phase 1 engine-scaling equivalence: native/fallback
+- `perf.test.mjs`. Phase 1 engine-scaling equivalence: native/fallback
   ed25519 backend parity (known-answer vectors, malformed material),
   bounded signature-verification cache correctness (positive and negative
   caching, collision-freedom, eviction neutrality, cold-vs-warm hash
   equality), identity-keyed state-hash memoization (memo equals the flat
   canonical hash, never crosses objects, never enters state), and the
   nextState purity discipline the memo relies on
-- `rulechange.test.mjs` — that a changed constitution or founding parameter is a
+- `rulechange.test.mjs`, that a changed constitution or founding parameter is a
   different world before any tick runs, and that a citizen who rewrites the
   engine computes a state no honest witness will certify.
-- `world-freeze.test.mjs` — the founded country, pinned. A generator name is a
+- `world-freeze.test.mjs`, the founded country, pinned. A generator name is a
   promise that the name builds that landscape forever; this fails loudly if the
   promise is broken, so a silent divergence becomes a deliberate fork.
-- `windows-sane.test.mjs` — the checks a browser would have made: that no window
+- `windows-sane.test.mjs`, the checks a browser would have made: that no window
   calls a name nothing defines, which is how two shipped bugs began.
-- `identity.test.mjs` — standing and calling (spec 10): proof that both windows
+- `identity.test.mjs`, standing and calling (spec 10): proof that both windows
   derive a citizen's identity, and the XP curve beneath it, exactly as the
   engine does, past mastery included.
-- `expanse.test.mjs` — the expanse world (spec 9a): determinism, the measured
+- `expanse.test.mjs`, the expanse world (spec 9a): determinism, the measured
   node/mob envelope, every country present, nothing founded on water, and the
   proof that window-web's integer terrain mirror matches the engine tile for
   tile across the whole map.
-- `phase2.test.mjs` — Phase 2 engine-scaling equivalence: the protocol-aware
+- `phase2.test.mjs`. Phase 2 engine-scaling equivalence: the protocol-aware
   state clone is canonically byte-identical to the JSON round trip
   (equivalence, deep independence, absence preservation, frozen-input and
   frozen-genesis campaigns, all clone modes transition-identical), and the
@@ -57,22 +57,22 @@ possible executions.
   answer (randomized query differentials, multi-match ordering, maintained
   context equals a fresh rebuild, indexed/unindexed and Phase-1/Phase-2
   transitions hash identically on every tick)
-- `adversarial.test.mjs` — the adversarial battery as CI (see below)
-- `errors.test.mjs` — typed protocol error codes: startup refusals and
+- `adversarial.test.mjs`, the adversarial battery as CI (see below)
+- `errors.test.mjs`, typed protocol error codes: startup refusals and
   halts carry stable `ERR_*`/`HALT_*` codes with evidence
-- `version.test.mjs` — every release reference agrees with `package.json`
+- `version.test.mjs`, every release reference agrees with `package.json`
   (README, TESTING, CONSENSUS, SPEC banners) and with the release manifest
-- `lifecycle.test.mjs` — startup/shutdown lifecycle: shutdown drains all
+- `lifecycle.test.mjs`, startup/shutdown lifecycle: shutdown drains all
   checkpoint I/O to genuine completion (no timeout) before releasing the
   process lock, fails closed if the final checkpoint cannot be written
   (lock retained), no writes after exclusivity release, pending-replacement
   drain, fail-safe startup cleanup, and immediate clean restart
-- `startupverify.test.mjs` — bounded startup verification is the generic
+- `startupverify.test.mjs`, bounded startup verification is the generic
   default: omitted config resolves to the shared bounded constant (never
   Infinity), explicit bounded / Infinity / zero all honored, structure
   checked on every row while cert verification is bounded, and direct
   construction matches the launcher default
-- `byzantine.test.mjs` — the constitutional fault model: quorum math
+- `byzantine.test.mjs`, the constitutional fault model: quorum math
   (incl. non-minimal witness sets), threshold validation, historical
   conflicting-certificate detection (immediate, after the memory window,
   and across restart via the durable finality index), cryptographic
@@ -87,12 +87,12 @@ possible executions.
 
 `advsim.mjs` is a deterministic, seeded, event-driven network under a
 hostile transport. Each run is a pure function of `(scenario, seed,
-durationMs)` — identical inputs replay identically (asserted by a
+durationMs)`, identical inputs replay identically (asserted by a
 determinism test).
 
 Every witnessed scenario declares a Byzantine threshold `f` and its
 actor count never exceeds it (a scenario that spawns more Byzantine
-actors than `n,q,f` tolerates is rejected as a scenario bug — testing
+actors than `n,q,f` tolerates is rejected as a scenario bug, testing
 outside the model would make a fork "expected").
 
 **Invariants asserted every scenario, every seed:**
@@ -118,8 +118,8 @@ outside it.
 
 | scenario | n/q | transport | faults | liveness floor |
 |---|---|---|---|---|
-| benign | 4/3 | clean | — | slowest ≥ 15 finalized |
-| lossy | 4/3 | 25% loss, 10–900ms, 30% dup | — | slowest ≥ 2 |
+| benign | 4/3 | clean |, | slowest ≥ 15 finalized |
+| lossy | 4/3 | 25% loss, 10–900ms, 30% dup |, | slowest ≥ 2 |
 | crashes | 4/3 | 5% loss | crash-restart, 50%/tick | fastest ≥ 5 |
 | partitions | 5/3 | 5% loss | asymmetric splits 70%/tick | fastest ≥ 4 |
 | equivocator | 4/3 | 5% loss | Byzantine proposer (2 bundles + double-sign) | fastest ≥ 0 |
@@ -134,7 +134,7 @@ outside it.
 Liveness floors are deliberately conservative: under simultaneous faults
 the model promises **safety always, liveness when able**. A "fastest ≥ 0"
 floor means the scenario asserts only safety and convergence, not
-progress — because a hard-enough fault storm may legitimately finalize
+progress, because a hard-enough fault storm may legitimately finalize
 nothing while never forking.
 
 **CI sample** (`test/adversarial.test.mjs`, 15 tests): each scenario at
@@ -145,17 +145,17 @@ check.
 × 30s). **Single scenario**: `node advsim.mjs <name> <seeds> <ms>`.
 
 Seeds are `seed_index × 7919`; the CLI default is 3 seeds. These are the
-tested seeds — other seeds are not claimed.
+tested seeds, other seeds are not claimed.
 
 ## Live surfaces (socket-binding; `INTERVAL_LIVE=1`)
 
-- `npm run demo7` — 4 witnesses (q=3) + observer over **real libp2p
+- `npm run demo7`, 4 witnesses (q=3) + observer over **real libp2p
   gossipsub**, a **real malicious peer** flooding forged bundles,
   attestations, and garbage on the real topics, an honest witness
   **killed and restarted from durable disk stores**, and a late observer
   proof-syncing through the flood. Asserts zero forks, zero invalid
   certificates.
-- `npm run e2e` — `serve` founds a 3-witness world (quorum 2); two
+- `npm run e2e`, `serve` founds a 3-witness world (quorum 2); two
   `join --witness` **separate OS processes** attest from isolated working
   copies with their own durable stores. Phases: 3 witnesses advance →
   kill one, 2-of-3 still advances → restart it, resumes → kill two, the
@@ -167,7 +167,7 @@ them in `freeze-evidence.sh`.
 
 ## Supported runtime
 
-Node `>=22.5.0` (declared in `package.json` `engines`) — the minimum for the built-in `node:sqlite` used by the production backend. The engine
+Node `>=22.5.0` (declared in `package.json` `engines`) the minimum for the built-in `node:sqlite` used by the production backend. The engine
 resolves SHA hashing through Node's built-in `crypto` when present and
 falls back to `@noble/hashes` in browsers; hashing is lazily resolved so
 concurrent dynamic `import()` of the engine is race-free across Node
@@ -177,10 +177,10 @@ runs under `node --test`.
 ## Release test structure
 
 Split by purpose (storage brief §8):
-- `npm run test:unit` — all non-adversarial suites (fast)
-- `npm run test:adversarial:ci` — the deterministic adversarial CI battery
-- `npm run test:adversarial:full` — `advsim all 3 30000` (long campaign, run separately)
-- `npm test` — unit + adversarial CI (the release gate)
+- `npm run test:unit`, all non-adversarial suites (fast)
+- `npm run test:adversarial:ci`, the deterministic adversarial CI battery
+- `npm run test:adversarial:full`, `advsim all 3 30000` (long campaign, run separately)
+- `npm test`, unit + adversarial CI (the release gate)
 
 ## Storage backends
 
@@ -196,10 +196,10 @@ never changes protocol records.
 
 `storage-ops.mjs` operates on a witness's SQLite finality store without
 touching consensus:
-- `npm run storage:health <db>` — sizes, row count, WAL state, quick_check
-- `node storage-ops.mjs integrity <db>` — full `PRAGMA integrity_check`
-- `npm run storage:backup <db> <dest>` — consistent online backup (VACUUM INTO), verified
-- `npm run storage:verify <db> [worldId]` — validate a backup/restore
+- `npm run storage:health <db>`, sizes, row count, WAL state, quick_check
+- `node storage-ops.mjs integrity <db>`, full `PRAGMA integrity_check`
+- `npm run storage:backup <db> <dest>`, consistent online backup (VACUUM INTO), verified
+- `npm run storage:verify <db> [worldId]`, validate a backup/restore
 
 ## Large-history benchmark
 
@@ -209,7 +209,7 @@ validation, integrity check, and online backup. At 1,000,000 ticks the
 SQLite backend measures (on this environment): batched append ≈168k
 rows/s, random lookup ≈15 µs, ≈402 bytes/row, integrity quick_check
 ≈275 ms, online backup ≈4.8 s. Bounded startup validation is ≈0.4 s vs
-≈22 s unbounded — startup is constant-time in history length.
+≈22 s unbounded, startup is constant-time in history length.
 
 ## Reproducible evidence (`npm run evidence`)
 

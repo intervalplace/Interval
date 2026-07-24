@@ -370,7 +370,7 @@ const ICONS = new Proxy({}, { get: (t, item) => typeof item === 'string'
   ? '<img src="' + itemSprite(item).toDataURL() + '" style="width:24px;height:24px;image-rendering:pixelated;vertical-align:middle">'
   : undefined, has: () => true })
 const EQUIPPABLE = new Set(['bronze-sword', 'bronze-hatchet', 'bronze-pickaxe', 'bronze-helm', 'bronze-plate', 'wooden-bow', 'star-sword', 'star-dagger', 'star-helm', 'star-plate', 'old-chain'])
-// >>> CONSTITUTIONAL IDENTITY BLOCK (spec 4b, spec 10) — character for
+// >>> CONSTITUTIONAL IDENTITY BLOCK (spec 4b, spec 10) character for
 // character the same in every window and in engine.js. test/identity.test.mjs
 // extracts this block from each window and compares it against the engine, so
 // no window can quietly invent its own idea of what a citizen is again.
@@ -527,7 +527,7 @@ const BRIDGE_TO_INPUT = (a) =>
                          wantItem: a.wantItem ?? null, wantGold: a.wantGold ?? 0 }
   : a.do === 'accept' ? { type: 'accept_trade', from: a.from }
   : a.do === 'cancel' ? { type: 'cancel_trade' }
-  : a.do === 'recall' ? { type: 'recall', waystoneId: a.waystoneId }
+  : a.do === 'recall' ? { type: 'recall', to: a.to } // v0.80: the law reads input.to; this bridge said waystoneId, so every recall was malformed before it left the window
   : a.do === 'name' ? { type: 'claim_name', name: a.name } // the engine's word since v0.4; a guessed translation cost weeks of nameless citizens
   : a.do === 'offer' ? { type: 'offer', to: a.to, slot: a.slot }
   : a.do === 'accept' ? { type: 'accept', from: a.from, slot: a.slot }
@@ -666,7 +666,7 @@ for (const ev of ['pointerdown', 'keydown']) {
 }
 // ...and TRY IMMEDIATELY, gesture or no: a browser that has learned to
 // trust this site (any returning citizen) permits it, and the door has
-// music the moment it opens — the login-screen tradition. A browser
+// music the moment it opens, the login-screen tradition. A browser
 // that refuses loses nothing: the attempt resets itself and the first
 // touch carries it instead.
 startMusic('theme-flat')
@@ -1011,7 +1011,7 @@ addEventListener('unhandledrejection', (e) => {
 })
 let xpDrops = []      // { amt, x, y, at }: floating +xp for gathering/cooking
 let arrowShots = []   // { x0, y0, x1, y1, at }: tracers for arrows in flight
-let stillRings = []   // { x, y, at }: the truce, spoken — one expanding white ring
+let stillRings = []   // { x, y, at }: the truce, spoken, one expanding white ring
 function updateGate(s, worldId) {
   const me = s.players[myId]
   const souls = Object.keys(s.players).length
@@ -1042,7 +1042,7 @@ function onState(s, worldId) {
   for (const n of Object.values(s.nodes)) {
     if (n.type !== 'fishing-spot') continue
     // O(1) Set lookups, not an O(n) scan per neighbour. On the epic world (~800
-    // water tiles) the old scan was ~4M ops per state — enough to fall behind the
+    // water tiles) the old scan was ~4M ops per state, enough to fall behind the
     // pillar's tick, so every stamped input was stale and silently rejected.
     const has = (x, y) => s._waterTiles.has(x + ',' + y)
     s._waterAdj[n.x + ',' + n.y] = { n: has(n.x, n.y - 1), s: has(n.x, n.y + 1), e: has(n.x + 1, n.y), w: has(n.x - 1, n.y) }
@@ -1076,7 +1076,7 @@ function onState(s, worldId) {
     buildGround()
   }
   prevState = curState; curState = s; curWorldId = worldId
-  // queue any milestone cries that happened since we last looked — but never
+  // queue any milestone cries that happened since we last looked, but never
   // replay history from before we joined (first state sets the watermark)
   if (_lastAnnounceTick === null) _lastAnnounceTick = s.tick
   for (const a of s.announce ?? []) if (a.tick > _lastAnnounceTick && a.tick <= s.tick) announceQueue.push(a.text)
@@ -1437,7 +1437,7 @@ function settlementsE() {
   if (GEN === 'interval-expanse-v3') return settlementsE3()
   const cx = Math.floor(W / 2), cy = Math.floor(H / 2)
   if (GEN === 'interval-expanse-v2') {
-    // v2: the water towns stand on their water — Millbrook and Fenmarch on
+    // v2: the water towns stand on their water. Millbrook and Fenmarch on
     // the river's east bank, Eastmere opening on the bay. Mirror of
     // worldgen-expanse2.mjs settlementsOf, tile for tile.
     const mby = Math.round(H * 0.24), fmy = Math.round(H * 0.84)
@@ -1506,7 +1506,7 @@ function fordE(x, y) { // mirror of fordAt: the road crosses, and every main str
 }
 // ---- the third expanse (interval-expanse-v3): the island, mirrored ----
 // An exact mirror of worldgen-expanse3.mjs: the coast by octant arithmetic
-// (no atan2 — ECMA-262 leaves it implementation-defined), the borders that
+// (no atan2. ECMA-262 leaves it implementation-defined), the borders that
 // are features, the road graph, and the fords painted as bridges.
 function angleOf3(dx, dy) {
   const ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy
@@ -1686,7 +1686,7 @@ function terrainOfE(x, y) {
 // a pure function of the founding record, identical in every window, so that
 // "meet me at the fens edge" means one place to everyone who hears it.
 
-// ---- the keepers' names (v0.79): mirrored from worldgen keeperName —
+// ---- the keepers' names (v0.79): mirrored from worldgen keeperName ,
 // same SHA-256, same list, precomputed once at boot, identical in every
 // window. Maud is Maud everywhere, and no byte of state stores her. ----
 const KEEPER_NAMES = ['Maud', 'Aldric', 'Bess', 'Corwin', 'Delia', 'Edmund', 'Ffion', 'Gareth',
@@ -1811,6 +1811,13 @@ function tileShade(x, y) {
   if (t === 'cobble') return ['#7a756b', '#827d73', '#726d63'][tileHash(x, y, 0) % 3]
   if (t === 'trail') return ['#8a7449', '#937d50', '#816c42'][tileHash(x, y, 0) % 3]
   if (t === 'plaza') return ['#6e5f3e', '#75663f', '#665837'][tileHash(x, y, 0) % 3]
+  // the surface canon (v0.79) reached the palettes and the minimap but
+  // never reached THIS, the painter the viewport actually uses: flagstone
+  // yards, gravel passes and shorelines all fell through to meadow, and
+  // Anchor has been standing on grass ever since
+  if (t === 'flag') return ['#847b66', '#8c836d', '#7c745f'][tileHash(x, y, 0) % 3]
+  if (t === 'gravel') return ['#8d8578', '#958d80', '#857d71'][tileHash(x, y, 0) % 3]
+  if (t === 'sand') return ['#c9b98a', '#d2c293', '#c0b082'][tileHash(x, y, 0) % 3]
   const meadow = ['#3d5a23', '#436327', '#365020', '#40592a', '#3a5726'][tileHash(x, y, 0) % 5]
   const hz = hazardClosenessC(x, y)
   if (hz <= 0.15) return meadow // the danger gradient (spec 2j): green fades toward stone as hazard nears
@@ -1824,7 +1831,7 @@ function tileShade(x, y) {
 const ground = document.createElement('canvas')
 let groundReady = false
 // paint ONE ground tile into context g at its world position. We no longer
-// pre-render the entire world into a single offscreen canvas — at 320x200 that
+// pre-render the entire world into a single offscreen canvas, at 320x200 that
 // canvas is ~100 megapixels and silently fails on mobile Safari (the black
 // screen). Instead drawScene paints only the on-screen tiles each frame.
 function paintGroundTile(g, x, y) {
@@ -1926,7 +1933,7 @@ function paintGroundTile(g, x, y) {
 function buildGround() { groundReady = true } // mobile-safe: ground now paints per visible tile each frame
 // ...but painting every tile every frame is expensive in HD (all those grass
 // strokes). So we bake a viewport-sized patch into `ground` and only re-bake it
-// when the camera crosses a tile — blitting the rest of the time. Small canvas
+// when the camera crosses a tile, blitting the rest of the time. Small canvas
 // (never the whole world), cheap frames.
 let gCacheKey = ''
 function ensureGroundCache() {
@@ -2111,7 +2118,7 @@ function drawCitizen(X, Y, o) {
       cx.fillStyle = '#5c4023'; cx.fillRect(-0.8, -1, 1.6, 9)
       cx.fillStyle = '#c9862a'; cx.fillRect(F > 0 ? 0.5 : -4.5, -1, 4, 3.4)
     } else if (o.wepItem === 'star-dagger') {
-      // a short starmetal blade — cyan, gleaming, half a sword
+      // a short starmetal blade, cyan, gleaming, half a sword
       cx.fillStyle = '#8ce0ff'; cx.fillRect(-0.7, 0, 1.4, 6)
       cx.fillStyle = '#dffaff'; cx.fillRect(-0.35, 0, 0.7, 6)
       cx.fillStyle = '#3a5a6a'; cx.fillRect(-2, -1, 4, 1.4)
@@ -2898,7 +2905,7 @@ function drawScene(now) {
     layer.push({ z: Z(iy, 4), draw: () => {
       if (dying) {
         // the fall (spec 6c): the body tips where it fell and fades, and a pale
-        // soul lifts away — the 5 ticks the world holds its breath.
+        // soul lifts away, the 5 ticks the world holds its breath.
         const prog = Math.max(0, Math.min(1, (s.tick + t - deadStart) / 5))
         const fx = px(ix) + 20, fy = py(iy) + 34
         cx.save()
@@ -2938,7 +2945,7 @@ function drawScene(now) {
       if ((p.rootedUntil ?? 0) > s.tick) rootBind(px(ix), py(iy))
       if ((p.brandedUntil ?? 0) > s.tick) {
         // The Brand (spec 6u): a citizen who struck the unprovoked in the Wilds
-        // wears a hot-iron mark. No mechanical weight — the state records it, the
+        // wears a hot-iron mark. No mechanical weight, the state records it, the
         // window paints it, the rest of us decide what it means.
         const bp = 0.5 + Math.sin(now / 300) * 0.5
         cx.save(); cx.globalAlpha = 0.22 + bp * 0.18 // a red stain at the feet, seen from afar
@@ -3024,7 +3031,7 @@ function drawScene(now) {
         cx.beginPath(); cx.arc(EX, EY - 4, 3 + (p2 - 0.75) * 40, 0, 7); cx.fill() }
       cx.globalAlpha = 1
     } else if (ef.kind === 'mend') {
-      // knit whole: a warm GREEN pulse + a plus of light + rising motes —
+      // knit whole: a warm GREEN pulse + a plus of light + rising motes ,
       // unmistakable mid-fight, never confused with the cyan of a spell
       cx.globalAlpha = (1 - p2) * 0.9
       cx.strokeStyle = '#5ef08a'; cx.lineWidth = 2.5
@@ -3534,7 +3541,7 @@ sunCv.style.cssText = "position:absolute;right:8px;top:8px;pointer-events:auto;c
 cv.parentNode.appendChild(sunCv)
 const sunCtx = sunCv.getContext("2d")
 // the minimap walks (v0.78): tap the little map and your citizen goes
-// there — the oldest navigation in the genre, finally wired. The
+// there, the oldest navigation in the genre, finally wired. The
 // country-name strip beneath is the door to the FULL chart at /map,
 // where your mark breathes on the island itself.
 sunCv.addEventListener('pointerup', (e2) => {
@@ -3551,7 +3558,7 @@ sunCv.addEventListener('pointerup', (e2) => {
   feed('you set out')
 })
 // the level-up banner rides its OWN overlay, appended last so it sits above BOTH
-// the GL layer and the minimap — no more banner trapped behind the map.
+// the GL layer and the minimap, no more banner trapped behind the map.
 const bannerCv = document.createElement("canvas")
 bannerCv.width = 1120; bannerCv.height = 800
 bannerCv.style.cssText = "position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;background:transparent;image-rendering:pixelated"
@@ -3561,7 +3568,7 @@ function drawBanner(now) {
   const g = bannerCtx
   g.setTransform(1, 0, 0, 1, 0, 0)
   g.clearRect(0, 0, 1120, 800)
-  // global milestone cries take the stage first — they outrank a personal level-up
+  // global milestone cries take the stage first, they outrank a personal level-up
   if (!announceShow && announceQueue.length) announceShow = { text: announceQueue.shift(), at: now }
   if (announceShow && now - announceShow.at >= 4800) announceShow = null
   if (announceShow) {
@@ -3752,7 +3759,7 @@ function invClick(i) {
   // Their menus gain a deposit option instead; plain goods still
   // deposit in one click, the banker's old convenience.
   const MENU_ITEMS = new Set(['logs', 'bones', 'sigil', 'magic-stone', 'arrows', 'ale'])
-  const hasMenu = MENU_ITEMS.has(it.item) || it.item.startsWith(CHART_PREFIX ?? 'ws-chart:')
+  const hasMenu = MENU_ITEMS.has(it.item) || isChart(it.item) // v0.80: a merge left CHART_PREFIX undeclared here, and a bare undefined identifier THROWS: every inventory click died on it
   if (nearBank && !hasMenu) { send({ do: 'deposit', slot: +i }); feed('You deposit the ' + it.item.replace('-', ' ') + '.'); return }
   const bankOpt = nearBank ? [{ label: 'deposit in bank', act: () => { send({ do: 'deposit', slot: +i }); feed('You deposit the ' + it.item.replace('-', ' ') + '.') } }] : []
   if (it.item === 'magic-stone') {
@@ -3783,7 +3790,7 @@ function invClick(i) {
       && !((world.players?.[myId]?.stillCdUntil ?? 0) > (world?.tick ?? 0)))
       opts.push({ label: 'cast: THE STILLING (3 sigils)', act: () => {
         window.__stillArm = true
-        feed('You hold the truce unspoken. Tap whom to still \u2014 beast or citizen, within six tiles.')
+        feed('You hold the truce unspoken. Tap whom to still , beast or citizen, within six tiles.')
       } })
     if (lvl('magic') >= 20) opts.push({ label: 'cast: mend (heal)', act: () => {
       send({ do: 'cast', spell: 'mend' })
@@ -3900,7 +3907,7 @@ cv.addEventListener('click', (e) => {
     const tx = best.kind === 'mob' ? best.m.x : best.p.x, ty = best.kind === 'mob' ? best.m.y : best.p.y
     if (Math.max(Math.abs(me.x - tx), Math.abs(me.y - ty)) > 6) { feed('Too far. The stilling reaches six tiles.'); return }
     send({ do: 'still', target: tid })
-    feed('You speak the truce. The fight simply stops \u2014 for them, and for you.')
+    feed('You speak the truce. The fight simply stops , for them, and for you.')
     stillRings.push({ x: tx, y: ty, at: performance.now() })
     tone(220, 0.5, { type: 'sine', vol: 0.05 }); tone(110, 0.8, { type: 'sine', vol: 0.04, at: 0.15 }) // a bell, descending into quiet
     flashClick(tx, ty, false)
@@ -3971,154 +3978,26 @@ cv.addEventListener('click', (e) => {
         if (!adj(n)) { intent = { kind: 'anvilgo', id }; feed('You head to the anvil.'); return }
         smithBest(me); return
       }
-      if (n.type === 'wall') {
-        const cxW = Math.floor(W / 2)
-        const onPerimeter = (n.y === 2 || n.y === 10 || n.x === cxW - 8 || n.x === cxW + 8)
-        if (!onPerimeter) { // workshop timber: lighter build, lower profile
-          poly([[X+6,Y+32],[X+34,Y+32],[X+34,Y+18],[X+6,Y+18]], '#5c4a30', '#2c2216')
-          cx.fillStyle = 'rgba(0,0,0,.16)'
-          cx.fillRect(X + 6, Y + 24.5, 28, 1.4)
-          cx.fillRect(X + 13, Y + 18, 1.4, 14); cx.fillRect(X + 26, Y + 18, 1.4, 14)
-          cx.fillStyle = 'rgba(255,255,255,.05)'; cx.fillRect(X + 6, Y + 18, 28, 1.6)
-          return
-        }
-        const v = tileHash(n.x, n.y, 5) % 3
-        poly([[X+2,Y+34],[X+38,Y+34],[X+38,Y+14],[X+2,Y+14]], ['#6e6a62', '#66625a', '#726e66'][v], '#2c2a26')
-        cx.fillStyle = 'rgba(0,0,0,.14)'
-        cx.fillRect(X + 2, Y + 20, 36, 1.6); cx.fillRect(X + 2, Y + 27, 36, 1.6)
-        cx.fillRect(X + 12 + (v * 5), Y + 14, 1.6, 6); cx.fillRect(X + 22 - (v * 3), Y + 21, 1.6, 6)
-        cx.fillStyle = 'rgba(255,255,255,.06)'; cx.fillRect(X + 2, Y + 14, 36, 2)
-      }
-      if (n.type === 'signpost') {
-        shadow(X, Y, 7)
-        cx.fillStyle = '#4a3a22'; cx.fillRect(X + 18.5, Y + 6, 3.4, 28)
-        cx.font = 'bold 4.5px Verdana'; cx.textAlign = 'center'
-        poly([[X+13,Y+9],[X+27,Y+9],[X+27,Y+3],[X+20,Y-1],[X+13,Y+3]], '#6e5433', '#2c2216')
-        cx.fillStyle = '#2c2216'; cx.fillText('ANCHOR', X + 20, Y + 7)
-        poly([[X+7,Y+12],[X+29,Y+12],[X+33,Y+14.5],[X+29,Y+17],[X+7,Y+17]], '#5f4a2c', '#2c2216')
-        cx.fillStyle = '#2c2216'; cx.fillText('EAST', X + 18, Y + 15.6)
-        poly([[X+33,Y+20],[X+11,Y+20],[X+7,Y+22.5],[X+11,Y+25],[X+33,Y+25]], '#6e5433', '#2c2216')
-        cx.fillStyle = '#2c2216'; cx.fillText('WEST', X + 22, Y + 23.6)
-      }
       if (n.type === 'waystone') {
-        shadow(X, Y, 8)
-        // a standing stone, leaning true, mossed at the foot
-        poly([[X+14,Y+32],[X+13,Y+12],[X+18,Y+5],[X+24,Y+7],[X+26,Y+30]], '#7a7770', '#3a3833')
-        poly([[X+16,Y+30],[X+15.5,Y+13],[X+19,Y+8],[X+23,Y+9.5],[X+24,Y+29]], '#8f8c84')
-        cx.fillStyle = '#4e6b3a'; cx.fillRect(X + 13, Y + 30, 14, 2.6) // moss
-        const gl = 0.55 + Math.sin(now / 600 + n.x) * 0.35
-        cx.save(); cx.globalAlpha = gl
-        cx.fillStyle = '#5fb0d9'
-        cx.fillRect(X + 18.6, Y + 13, 1.8, 10)
-        cx.fillRect(X + 15.6, Y + 16, 8, 1.8)
-        poly([[X+19.5,Y+10.5],[X+16,Y+15],[X+23,Y+15]], '#8fd6f2')
-        cx.restore(); cx.globalAlpha = 1
-      }
-      if (n.type === 'guard' || n.type === 'smith') {
-        shadow(X, Y, 8)
-        const bob = Math.sin(now / 900 + n.x) * 0.6
-        const isSmith = n.type === 'smith'
-        // body
-        cx.fillStyle = isSmith ? '#5a4632' : '#5a6b7d'
-        cx.fillRect(X + 14, Y + 15 + bob, 12, 12)
-        cx.fillStyle = isSmith ? '#3a2f22' : '#48576a'
-        cx.fillRect(X + 14, Y + 22 + bob, 12, 5)
-        // head + helm or soot
-        cx.fillStyle = '#d9b07a'; cx.fillRect(X + 15.5, Y + 7 + bob, 9, 9)
-        if (!isSmith) { cx.fillStyle = '#8a8a92'; cx.fillRect(X + 14.5, Y + 5.5 + bob, 11, 4.5) }
-        else { cx.fillStyle = '#3a2f22'; cx.fillRect(X + 15.5, Y + 6 + bob, 9, 3) }
-        cx.fillStyle = '#2b2b2b'; cx.fillRect(X + 21, Y + 10.5 + bob, 2, 2)
-        // legs
-        cx.fillStyle = '#2e2a24'; cx.fillRect(X + 15.5, Y + 27, 3.4, 6); cx.fillRect(X + 21, Y + 27, 3.4, 6)
-        if (!isSmith) { // the spear
-          cx.fillStyle = '#5c4023'; cx.fillRect(X + 27.5, Y + 4 + bob, 2.2, 26)
-          poly([[X+28.6,Y+bob],[X+26.2,Y+5+bob],[X+31,Y+5+bob]], '#b8b8b0', '#6a6a66')
-        } else { // the hammer, working
-          const swing = Math.sin(now / 500) * 0.7
-          cx.save(); cx.translate(X + 11, Y + 20 + bob); cx.rotate(-0.5 + swing)
-          cx.fillStyle = '#5c4023'; cx.fillRect(-1, -9, 2, 10)
-          cx.fillStyle = '#6a6a66'; cx.fillRect(-3.4, -12, 7, 3.4)
-          cx.restore()
+        const wsn = id.replace(/^waystone-/, '')
+        if ((me.attuned ?? []).includes(id)) {
+          chooseAction([
+            { label: 'recall to ' + wsn, act: () => {
+              send({ do: 'recall', to: id })
+              feed('You speak the way. The stone answers.')
+              tone(600, 0.3, { type: 'sine', vol: 0.05 }); tone(900, 0.35, { type: 'sine', vol: 0.04, at: 0.1 })
+            } },
+            { label: 'never mind', act: () => {} },
+          ]); return
         }
-      }
-      if (n.type === 'well') {
-        shadow(X, Y, 11)
-        cx.fillStyle = '#6e6a62'
-        cx.beginPath(); cx.ellipse(X + 20, Y + 26, 11, 6, 0, 0, 7); cx.fill()
-        cx.fillStyle = '#1f4a63'
-        cx.beginPath(); cx.ellipse(X + 20, Y + 25, 7.5, 3.8, 0, 0, 7); cx.fill()
-        cx.fillStyle = '#4a3a22'
-        cx.fillRect(X + 10, Y + 8, 2.4, 18); cx.fillRect(X + 27.5, Y + 8, 2.4, 18)
-        poly([[X+7,Y+9],[X+33,Y+9],[X+20,Y+2]], '#6e5433', '#2c2216')
-        cx.fillStyle = '#3a3a3e'; cx.fillRect(X + 19, Y + 10, 1.6, 8)
-      }
-      if (n.type === 'house') {
-        const v = tileHash(n.x, n.y, 5) % 2
-        shadow(X, Y, 15)
-        poly([[X+5,Y+34],[X+35,Y+34],[X+35,Y+18],[X+5,Y+18]], v ? '#5b4a33' : '#54453a', '#1c1710')
-        cx.fillStyle = 'rgba(0,0,0,.12)'
-        for (let i = 0; i < 3; i++) cx.fillRect(X + 6, Y + 21 + i * 4.4, 28, 1.2)
-        poly([[X+3,Y+18],[X+37,Y+18],[X+20,Y+6]], v ? '#6e5433' : '#7a5c36', '#2c2216')
-        cx.fillStyle = '#3a2f22'; cx.fillRect(X + 16.5, Y + 24, 7, 10)
-        cx.fillStyle = '#26501a'
-        const cyc2 = dayCyc((((s.tick + t) % 2400) / 2400))
-        const nightNow = (Math.sin(cyc2 * Math.PI * 2) + 1) / 2 < 0.42
-        cx.fillStyle = nightNow ? '#f4d03f' : '#2c2620'
-        cx.fillRect(X + 27, Y + 22, 5, 5)
-        cx.strokeStyle = '#1c1710'; cx.lineWidth = 1; cx.strokeRect(X + 27, Y + 22, 5, 5)
-        cx.fillStyle = '#4a4038'; cx.fillRect(X + 27, Y + 7, 5, 8) // the chimney breathes
-        for (let pf = 0; pf < 3; pf++) {
-          const st = ((now / (2200 + pf * 700)) + pf * 0.33 + n.x * 0.1) % 1
-          cx.fillStyle = 'rgba(200,200,195,' + (0.3 * (1 - st)) + ')'
-          cx.beginPath()
-          cx.arc(X + 29 + Math.sin(st * 5 + pf) * 4, Y + 5 - st * 16, 2 + st * 3.4, 0, 7)
-          cx.fill()
-        }
+        feed('The stone of ' + wsn + ' hums, but not for you: read its chart to learn the way.')
+        return
       }
       if (n.type === 'guard') { feed('The guard nods. "The road is watched, citizen."'); return }
       if (n.type === 'smith') { feed('The smith gestures at the anvil. "Ore and logs. The rest is rhythm."'); return }
       if (n.type === 'well') { feed('You peer into the well. Somewhere far below, a tick echoes.'); return }
       if (n.type === 'signpost') { feed(n.text || 'West: Westhearth. East: Eastmere. North: Anchor.'); return }
       if (n.type === 'wall') { feed('The wall is old, and it is not going anywhere.'); return }
-      if (n.type === 'plot') {
-        // tilled rows; then the crop, staged purely by elapsed ticks (spec 6o)
-        cx.fillStyle = '#4a3520'; cx.fillRect(X + 4, Y + 6, 32, 28)
-        cx.fillStyle = '#3a2a18'
-        for (let r2 = 0; r2 < 4; r2++) cx.fillRect(X + 5, Y + 9 + r2 * 7, 30, 2.2)
-        if (n.plantedAt > 0) {
-          const el2 = s.tick - n.plantedAt
-          const stage = el2 >= 1200 ? 3 : el2 >= 800 ? 2 : el2 >= 400 ? 1 : 0
-          for (let c2 = 0; c2 < 4; c2++) {
-            const gx = X + 8 + c2 * 8, gy = Y + 10 + (c2 % 2) * 14
-            if (stage === 0) { cx.fillStyle = '#7dbb45'; cx.fillRect(gx, gy + 4, 2, 3) }
-            else if (stage === 1) {
-              cx.strokeStyle = '#5c9e33'; cx.lineWidth = 1.6
-              cx.beginPath(); cx.moveTo(gx + 1, gy + 8); cx.lineTo(gx + 1, gy); cx.stroke()
-              cx.fillStyle = '#7dbb45'; cx.fillRect(gx - 1.4, gy - 1, 4.8, 2.4)
-            } else {
-              const sway = Math.sin(now / 900 + gx) * 1.2
-              cx.strokeStyle = stage === 3 ? '#a08a2a' : '#5c9e33'; cx.lineWidth = 1.8
-              cx.beginPath(); cx.moveTo(gx + 1, gy + 10); cx.lineTo(gx + 1 + sway, gy - 2); cx.stroke()
-              cx.fillStyle = stage === 3 ? '#e8c53a' : '#96c95e'
-              cx.beginPath(); cx.ellipse(gx + 1 + sway, gy - 3, 2.6, 4.2, 0.2, 0, 7); cx.fill()
-            }
-          }
-          if (stage === 3) { // ripe: a faint golden shimmer calls the sower home
-            cx.fillStyle = 'rgba(232,197,58,' + (0.06 + (Math.sin(now / 500) + 1) * 0.04) + ')'
-            cx.fillRect(X + 4, Y + 6, 32, 28)
-          }
-        }
-        return
-      }
-      if (n.type === 'store') {
-        shadow(X, Y, 14)
-        poly([[X+4,Y+34],[X+36,Y+34],[X+36,Y+16],[X+4,Y+16]], '#5b4a33', '#1c1710')
-        poly([[X+2,Y+16],[X+38,Y+16],[X+20,Y+6]], '#8a4a2a', '#2c1a10')
-        for (let k = 0; k < 4; k++) { cx.fillStyle = k % 2 ? '#c9a86a' : '#8a4a2a'; cx.fillRect(X + 5 + k * 7.6, Y + 14, 7.6, 4) }
-        cx.fillStyle = '#3a2f22'; cx.fillRect(X + 16.5, Y + 24, 7, 10)
-        cx.fillStyle = '#ffe08a'; cx.font = 'bold 5px Verdana'; cx.textAlign = 'center'
-        cx.fillText('STORE', X + 20, Y + 22)
-      }
       if (n.type === 'bank') {
         if (!adj(n)) { intent = { kind: 'walk', x: n.x, y: n.y + 1 }; feed('You head to the bank.') }
         else feed('The bank stands ready: tap items to deposit, tap the vault to withdraw.')
@@ -4126,7 +4005,7 @@ cv.addEventListener('click', (e) => {
       }
       if (n.type === 'watchfire') {
         // (restored to its rightful scope, v0.79b: a merge had stranded
-        // this block inside the DRAW loop, where adj does not exist —
+        // this block inside the DRAW loop, where adj does not exist ,
         // blanking the whole viewport the moment a watchfire drew)
         if (!adj(n) && !(me.x === n.x && me.y === n.y)) { intent = { kind: 'walk', x: n.x, y: n.y + 1 }; return }
         const li = me.inventory.findIndex(sl => sl?.item === 'logs')
@@ -4155,7 +4034,7 @@ cv.addEventListener('click', (e) => {
         if (n.by !== myId) { feed('This brewpot belongs to another brewer.'); return }
         if (!adj(n) && !(me.x === n.x && me.y === n.y)) { intent = { kind: 'walk', x: n.x, y: n.y + 1 }; return }
         if (n.readyAt !== undefined && (world?.tick ?? 0) >= n.readyAt) { send({ do: 'collect', nodeId: id }); feed('You draw off the finished ' + (n.brewKind ?? 'brew') + '.'); return }
-        if (n.readyAt !== undefined) { feed('Still fermenting \\u2014 come back when it\\u2019s ready.'); return }
+        if (n.readyAt !== undefined) { feed('Still fermenting \, come back when it\\u2019s ready.'); return }
         const gi = me.inventory.findIndex(s => s?.item === 'grain'), fi = me.inventory.findIndex(s => s?.item === 'raw-fish')
         const opts = []
         if (gi !== -1) opts.push({ label: 'brew ale (grain)', act: () => { send({ do: 'brew', nodeId: id, slot: gi }); feed('You set grain to ferment. Ale, in time.') } })
@@ -4239,7 +4118,7 @@ cv.addEventListener('click', (e) => {
 // (interval-key-v1.<pkcs8>.<pub>); IMPORT verifies the pair by signing
 // a test message before it will replace anything, and warns before
 // replacing a citizen this browser already holds. The string is a
-// BEARER INSTRUMENT: whoever holds it is the citizen — share it only
+// BEARER INSTRUMENT: whoever holds it is the citizen, share it only
 // with your own devices.
 const IK_hex = (h) => new Uint8Array(h.match(/../g).map((x) => parseInt(x, 16)))
 async function IK_verify(pk8, pub) {
