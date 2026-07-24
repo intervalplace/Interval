@@ -34,7 +34,7 @@ function hashImpl() {
       };
       return _hashImpl;
     }
-  } catch { /* not Node — fall through to noble */ }
+  } catch { /* not Node, fall through to noble */ }
   // browser/bundler path: pure-JS noble hashes
   const noble = require('@noble/hashes/sha2.js');
   _hashImpl = { sha256: noble.sha256, sha512: noble.sha512 };
@@ -47,7 +47,7 @@ function ensureEdHash() {
   if (!_sha512wired) { ed.hashes.sha512 = nobleSha512; _sha512wired = true; }
 }
 // public: any code using @noble/ed25519 directly (e.g. a simulator minting
-// keys) must call this once so ed25519 has its sha512 — the engine wires it
+// keys) must call this once so ed25519 has its sha512, the engine wires it
 // lazily now, rather than at import time, to stay race-free across Node
 // versions (§7).
 function initCrypto() { ensureEdHash(); _selectEdBackend(); }
@@ -80,7 +80,7 @@ const STRANGER_SHARE = 256;
 // engine throw that operators classify.
 const ENGINE_ERR = { CORRUPT_IDENTITY: 'ERR_CORRUPT_IDENTITY', BACKEND_DISAGREEMENT: 'ERR_ED25519_BACKEND_DISAGREEMENT' };
 function engineThrow(code, message) { const e = new Error(message); e.code = code; e.name = 'IntervalError'; throw e; }
-// Constitutional tables (rev4 brief §11): ONE shared source — execution,
+// Constitutional tables (rev4 brief §11): ONE shared source, execution,
 // validation, and tests all reference these. A validator with its own
 // copy of the constitution eventually disagrees with the engine (it
 // happened: signpost text), so neither may define these locally.
@@ -91,7 +91,7 @@ const NODE_TYPES = ['landmark', 'keeper', 'fence', 'hedge', 'tree', 'rock', 'mag
   'waystone', 'bank', 'anvil', 'campfire', 'fire', 'guard', 'house', 'signpost', 'smith', 'store', 'wall', 'well', 'brewpot', 'watchfire'];
 // The constitutional NAME rule (spec §5a) as ONE shared validator (rev5
 // §3): claim_name input validation, checkpoint validation, imports, and
-// the registry all call this — never a private regex.
+// the registry all call this, never a private regex.
 function isValidName(name) {
   return typeof name === 'string' && /^[a-z0-9-]{1,12}$/.test(name)
     && !name.startsWith('-') && !name.endsWith('-');
@@ -132,7 +132,7 @@ const SHELF_DECAY_SHIFT = 4;    // a sixteenth rots away: goods nobody wanted //
 const MAGIC_ROCK_MINING = 10; // the vein refuses an unpracticed pick
 const DEATH_TICKS = 5; // the world holds its breath; windows may grieve
 const BRAND_TICKS = 1500; // strike first in the Wilds, wear it 15 minutes
-// the star-dagger's root (v0.49): rare and expensive by design — a 3-tick
+// the star-dagger's root (v0.49): rare and expensive by design, a 3-tick
 // freeze on a 120-tick leash, and a 10-tick immunity after so no one is
 // chain-frozen. Landing it is a decision, not a rhythm.
 const ROOT_TICKS = 3, ROOT_IMMUNE = 10, ROOT_CD = 120;
@@ -145,7 +145,7 @@ const XP_COOK = 30;
 // rate now, and that rate is what makes a beast dangerous to the unready.
 const EAT_EVERY = 8;
 // the stilling (v0.80): magic's capstone. The stilled cannot act, and
-// cannot be struck — a truce, enforced, cast to break off a fight and
+// cannot be struck, a truce, enforced, cast to break off a fight and
 // never to end one. Magic is the skill of refusing combat: anchor
 // flees, mend endures, still denies.
 const STILL_LEVEL = 85;
@@ -188,7 +188,7 @@ const isRanged = (p) => weaponOf(p)?.ranged === true;
 const drawnAt = (p, t) => isRanged(p) && !adjacent(p, t);
 const inReach = (p, t) => {
   // melee geometry (v0.79): movement is cardinal, so a reach-1 weapon
-  // strikes only along lines you can step — the four faced tiles, the
+  // strikes only along lines you can step, the four faced tiles, the
   // same law §5 gives the axe and the pick. A long haft (reach 2+) may
   // thrust past a corner. NOTHING strikes the tile it stands on: two
   // bodies in one square is not a fight, it is an accident.
@@ -216,11 +216,11 @@ const MOB_STATS = {
             drops: [{ item: 'bones' }, { item: 'bones', chance: 32768 }, { item: 'bronze-hatchet', chance: 4096 },
                     { item: 'horn-bow', chance: 66 }] },
   // the skeleton-knight (v0.42): a horned, shield-bearing warrior of the frontier.
-  // Seldom alone — they muster in warbands in and around the Wilds. The round
+  // Seldom alone, they muster in warbands in and around the Wilds. The round
   // shield makes them hard to strike (high def); the longsword bites back. And
   // their bones are rich: a fallen knight gives up twice what a lesser thing does.
   'skeleton-knight': { maxHp: 18, atk: 5, def: 6, maxHit: 4, respawn: 120,
-            drops: [{ item: 'bones' }, { item: 'bones' },   // double bones — the warrior's due
+            drops: [{ item: 'bones' }, { item: 'bones' },   // double bones, the warrior's due
                     { item: 'ore', chance: 12288 },            // scavenged metal
                     { item: 'star-helm', chance: 328 }] },    // rare: the horned helm itself
 };
@@ -301,7 +301,7 @@ const TOOL_FOR = { tree: 'bronze-hatchet', rock: 'bronze-pickaxe' };
 
 // Canonical signed-input schemas (pre-freeze §1–§4): every semantic
 // action has EXACTLY one accepted signed representation. The shape
-// validator has one responsibility — accept only structurally canonical
+// validator has one responsibility, accept only structurally canonical
 // protocol inputs: exact base fields with exact formats, exact per-action
 // fields with exact primitive types, constitutional vocabularies, and
 // canonical null/zero conventions. State-dependent questions (does the
@@ -340,7 +340,7 @@ const INPUT_SCHEMAS = {
   attack: { mobId: T.id },
   attackp: { targetId: T.hex64 },
   recall: { to: T.id },
-  // pre-freeze §1: BOTH demand fields, always, explicitly — the canonical
+  // pre-freeze §1: BOTH demand fields, always, explicitly, the canonical
   // item trade carries wantGold: 0; the canonical gold trade carries
   // wantItem: null. Omission is not a representation.
   offer_trade: { to: T.hex64, giveSlots: T.slotList, wantItem: T.itemOrNull, wantGold: T.nonnegInt },
@@ -384,7 +384,7 @@ function validateInputShape(input) {
     if (r !== true) return `field ${k} on ${input.type} ${r}`;
   }
   // canonical demand convention (pre-freeze §1): exactly one of a
-  // constitutional item XOR positive gold — structural, because it is
+  // constitutional item XOR positive gold, structural, because it is
   // about REPRESENTATION, not about the world
   if (input.type === 'offer_trade'
     && (input.wantItem !== null) === (input.wantGold > 0)) return 'trade must want exactly one of item or gold';
@@ -435,7 +435,7 @@ function isAwake(p, tick) {
 // imports engine, never the reverse); loading a generator's module IS
 // implementing its country, and registering its walkability is part of
 // implementing it. Unregistered generators keep the old law (nothing
-// but the hedge and the nodes bars the way) — which is what every
+// but the hedge and the nodes bars the way) which is what every
 // world founded before this shipped replays under.
 const TERRAINS = Object.create(null);
 function registerTerrain(id, t) { TERRAINS[id] = t; }
@@ -486,7 +486,7 @@ const effLevel = (xp) => Math.min(levelForXp(xp), 99);
 // the software rather than of the person. It is derived here instead, so every
 // window agrees forever.
 //
-// STANDING is the sum of every skill's TRUE level — levelForXp, not effLevel,
+// STANDING is the sum of every skill's TRUE level, levelForXp, not effLevel,
 // because mastery at 99 is a milestone and not a ceiling. A citizen who keeps
 // going past mastery keeps rising, and standing has no maximum to hardcode.
 function standingOf(p) {
@@ -534,7 +534,7 @@ function callingOf(p) {
 
 // Canonical encoding (CONSENSUS.md §2): recursively key-sorted JSON over
 // null, booleans, FINITE numbers, strings, arrays, and plain objects.
-// Anything else is rejected loudly — a hash over silently-coerced data is
+// Anything else is rejected loudly, a hash over silently-coerced data is
 // a consensus bug waiting for its tick.
 function canonical(obj) {
   if (obj === undefined) throw new Error('canonical: undefined is not encodable');
@@ -568,7 +568,7 @@ function sha256(buf) {
 // once a state is unreferenced.
 //
 // Discipline this relies on (enforced by test/perf.test.mjs): any code that
-// mutates a state object in place — e.g. a tamper/rule-breaker hook — must
+// mutates a state object in place (e.g. a tamper/rule-breaker hook) must
 // do so BEFORE the object is first hashed. Every current call site
 // replaces state objects rather than mutating them.
 const _stateHashCache = new WeakMap();
@@ -687,7 +687,7 @@ function _selectEdBackend() {
   _nativeCrypto = nc;
   // Known-answer cross-check: every vector is strict, so the backends must
   // agree exactly. Disagreement here means one implementation is broken,
-  // and that is a startup failure — never a quiet fallback.
+  // and that is a startup failure, never a quiet fallback.
   ensureEdHash();
   const seed = new Uint8Array(32).fill(0x42);
   const katPub = ed.getPublicKey(seed);
@@ -706,7 +706,7 @@ function _selectEdBackend() {
     if (_fallbackVerify(p, m, s) !== expect)
       engineThrow(ENGINE_ERR.BACKEND_DISAGREEMENT, 'ed25519 fallback failed its own known-answer test');
     if (_nativeVerify(p, m, s) !== expect)
-      engineThrow(ENGINE_ERR.BACKEND_DISAGREEMENT, 'native and fallback ed25519 disagree on a strict known-answer vector — refusing to start with an untrustworthy backend');
+      engineThrow(ENGINE_ERR.BACKEND_DISAGREEMENT, 'native and fallback ed25519 disagree on a strict known-answer vector, refusing to start with an untrustworthy backend');
   }
   _edBackendName = 'native+fallback';
 }
@@ -815,8 +815,8 @@ function inputsDigest(inputs) {
 }
 function delayChain(prevBeacon, digest) {
   // PURE in (prevBeacon, digest): a bounded memo changes no output ever.
-  // Every witness computes the SAME chain for the same proposed bundle —
-  // once when attesting, again when replaying a finality record — and an
+  // Every witness computes the SAME chain for the same proposed bundle ,
+  // once when attesting, again when replaying a finality record, and an
   // in-process multi-node simulation computes it once per node. Cache it.
   const key = prevBeacon.toString('hex') + '|' + digest.toString('hex');
   const hit = delayChain._memo.get(key);
@@ -869,27 +869,27 @@ function makeGenesis(genesisSeed, rulesHash, anchorMs = 0, worldW = 320, worldH 
   // the generator is a FOUNDING choice, not a fate: pass
   // 'interval-expanse-v1' here and the new world gets meandering
   // trails, seven settlements, and the great river. An existing world
-  // cannot change — the genesis IS its identity — but the next one can.
+  // cannot change (the genesis IS its identity) but the next one can.
   if (!WORLD_GENERATORS.has(worldGenerator))
     throw new Error('unknown worldGenerator: ' + worldGenerator)
-  // rev7 §7: defaults are the CANONICAL world dimensions — the old 14x8
+  // rev7 §7: defaults are the CANONICAL world dimensions, the old 14x8
   // default predated the classic generator and misled (it is below the
   // generator's floor). Every field defaulted: a genesis with an
   // undefined member is not canonically encodable (see canonical()).
   return { specVersion: SPEC_VERSION, rulesHash, genesisSeed, anchorMs, worldW, worldH,
            worldGenerator,
            // exploration (v0.50): calibrated for THIS world's geometry by its own
-           // survey-sim — NOT a universal curve. A larger world founds its own.
+           // survey-sim. NOT a universal curve. A larger world founds its own.
            survey: { k: 8, base: 40, perTile: 10, max: 1800 },
            // brewing (v0.51): a profession rate-limited by fermentation; constants
-           // are THIS world's, in the founding record — a larger world tunes its own.
+           // are THIS world's, in the founding record, a larger world tunes its own.
            brew: { ferment: 4500, potCap: 4, xpPerBatch: 13500, buildLogs: 4, buildOre: 2, decayTicks: 432000 },
            // watchfires (v0.53): high-tier Firemaking as public infrastructure.
            watch: { level: 60, kindleLogs: 10, perLog: 300, cap: 6000, xpPerLog: 200, burnXp: 1, maxOwned: 2, decayTicks: 432000 } };
 }
 
 // Fix brief §2.1: the world identifier is the hash of the COMPLETE
-// canonical genesis — seed, anchor, dimensions, imports, everything
+// canonical genesis, seed, anchor, dimensions, imports, everything
 // consensus-relevant. A constitution prefix identifies rules; this
 // identifies one exact founded world. Never truncated for protocol use;
 // a short prefix is display-only.
@@ -918,19 +918,19 @@ function importIdentity(obj) {
 function loadOrCreateIdentity(fs, file) {
   // rev6 §8: three cases, never blurred. MISSING → create. A SUPPORTED
   // legacy format → migrate (preserved aside). CORRUPT → refuse startup:
-  // silently regenerating a key silently loses the identity it named —
+  // silently regenerating a key silently loses the identity it named ,
   // for a witness key, that is losing a founding role forever.
   if (fs.existsSync(file)) {
     let parsed;
     try { parsed = JSON.parse(fs.readFileSync(file)) } catch (e) {
-      engineThrow(ENGINE_ERR.CORRUPT_IDENTITY, `identity file ${file} is corrupt (${e.message}) — refusing to regenerate over it; restore it from backup or remove it EXPLICITLY to mint a new identity`);
+      engineThrow(ENGINE_ERR.CORRUPT_IDENTITY, `identity file ${file} is corrupt (${e.message}) refusing to regenerate over it; restore it from backup or remove it EXPLICITLY to mint a new identity`);
     }
     let id;
     try { id = importIdentity(parsed) } catch (e) {
-      engineThrow(ENGINE_ERR.CORRUPT_IDENTITY, `identity file ${file} is not a usable identity (${e.message}) — refusing to regenerate over it; restore or remove it explicitly`);
+      engineThrow(ENGINE_ERR.CORRUPT_IDENTITY, `identity file ${file} is not a usable identity (${e.message}) refusing to regenerate over it; restore or remove it explicitly`);
     }
     if (id.privateKey.length === 32) return id; // raw ed25519 secret
-    // pre-noble pkcs8 format: a SUPPORTED migration — preserve and re-mint
+    // pre-noble pkcs8 format: a SUPPORTED migration, preserve and re-mint
     fs.renameSync(file, file + '.old-format');
   }
   const id = generateIdentity();
@@ -961,7 +961,7 @@ function sameWorld(a, b) {
 // equipment, ground, mobs, nodes, names, genesis) are validated strictly,
 // field by field, against the shapes the engine actually writes; every
 // remaining gameplay field passes a bounded-value walk (safe integers,
-// short strings, shallow objects) so no field — present or future — can
+// short strings, shallow objects) so no field (present or future) can
 // smuggle in NaN, giant blobs, or unencodable types. Returns error|null.
 const MAX_ENTITIES = 100000;
 const MAX_XP = 1e12;
@@ -1005,7 +1005,7 @@ const GENESIS_REQUIRED = ['specVersion', 'rulesHash', 'genesisSeed', 'anchorMs',
 const GENESIS_OPTIONAL = new Set(['witnesses', 'quorum', 'byzantineTolerance', 'imported', 'importedFrom', 'survey', 'brew', 'watch', 'geo']);
 
 // Does THIS implementation support the named generator? (pre-freeze §9:
-// a separate question from structural validity — the seam matters once
+// a separate question from structural validity, the seam matters once
 // alternate deterministic generators exist.)
 function supportsWorldGenerator(name) { return WORLD_GENERATORS.has(name); }
 
@@ -1018,7 +1018,7 @@ function supportsWorldGenerator(name) { return WORLD_GENERATORS.has(name); }
 // witnesses it might contain by a majority), AND 2q-n > f, i.e.
 // q > (n+f)/2 (any two quorums intersect in > f witnesses). The second
 // dominates once n > 3f+1, so 2f+1 alone is unsafe for non-minimal witness
-// sets — take the max of both floors.
+// sets, take the max of both floors.
 function minQuorumFor(n, f) {
   return Math.max(2 * f + 1, Math.floor((n + f) / 2) + 1);
 }
@@ -1030,7 +1030,7 @@ function byzantineSafe(n, q, f) {
 
 function validateGenesis(g) {
   if (!g || typeof g !== 'object') return 'genesis not an object';
-  // pre-freeze §7: an EXACT schema — a key execution ignores still changes
+  // pre-freeze §7: an EXACT schema, a key execution ignores still changes
   // the worldId, minting a distinct founding identity with identical
   // behavior. One founding record, one representation.
   for (const k of GENESIS_REQUIRED) if (!(k in g)) return `genesis missing ${k}`;
@@ -1062,8 +1062,8 @@ function validateGenesis(g) {
     if (!wt || typeof wt !== 'object' || Object.keys(wt).sort().join(',') !== 'burnXp,cap,decayTicks,kindleLogs,level,maxOwned,perLog,xpPerLog') return 'non-constitutional genesis.watch';
     for (const wk of ['level', 'kindleLogs', 'perLog', 'cap', 'xpPerLog', 'burnXp', 'maxOwned', 'decayTicks']) if (!isInt(wt[wk], 0, 1e12)) return `genesis.watch.${wk} out of bounds`;
   }
-  // pre-freeze §8 + Byzantine upgrade: the witnessed-world triple —
-  // witnesses, quorum, byzantineTolerance — comes together or not at all.
+  // pre-freeze §8 + Byzantine upgrade: the witnessed-world triple ,
+  // witnesses, quorum, byzantineTolerance, comes together or not at all.
   const witnessedKeys = ['witnesses', 'quorum', 'byzantineTolerance'].filter(k => k in g);
   if (witnessedKeys.length !== 0 && witnessedKeys.length !== 3)
     return 'witnesses, quorum, and byzantineTolerance must be supplied together';
@@ -1107,7 +1107,7 @@ function validateGenesis(g) {
     // it, so a founder cannot later claim a different source; anyone
     // holding the named world's certified state can recompute the
     // lived-citizen list and check it matches. An import WITHOUT this
-    // field is unattested by construction — the founder's bare word —
+    // field is unattested by construction, the founder's bare word ,
     // and wears that openly.
     const f = g.importedFrom;
     if (!f || typeof f !== 'object' || Object.keys(f).sort().join(',') !== 'stateHash,tick,worldId')
@@ -1125,7 +1125,7 @@ function validateGenesis(g) {
 
 // Imported citizens are FOUNDING data: they enter the world before any
 // input is ever validated, so they get a dedicated, complete validator
-// (rev6 §2) — IDs, names, skills, XP, HP, inventory, bank, equipment,
+// (rev6 §2) IDs, names, skills, XP, HP, inventory, bank, equipment,
 // quantities, item vocabulary, and cross-entry uniqueness.
 const IMPORT_FIELDS = new Set(['pid', 'skills', 'name', 'hp', 'bank', 'inventory', 'weapon']);
 function validateImports(imported) {
@@ -1187,7 +1187,7 @@ function validateState(state) {
   if (totalEntities > MAX_ENTITIES) return 'aggregate entity count exceeds bounds'; // rev5 §8
 
   // ---- constitutional tables (final brief §7): the validator accepts
-  // exactly what THIS engine writes — nothing missing, nothing extra ----
+  // exactly what THIS engine writes, nothing missing, nothing extra ----
   const SKILL_SET = SKILLS;                 // shared constitutional tables
   const NODE_TYPE_SET = new Set(NODE_TYPES);
 const LANDMARK_KINDS = new Set(['elder-tree', 'old-oak', 'standing-stone', 'broken-tower', 'sentinel', 'drowned-bell', 'shipwreck', 'tally-half']); // (rev4 §11): defined ONCE, above
@@ -1232,7 +1232,7 @@ const LANDMARK_KINDS = new Set(['elder-tree', 'old-oak', 'standing-stone', 'brok
     }
     if (t.wantItem !== null && !isItemName(t.wantItem)) return 'malformed trade item';
     if (!isInt(t.wantGold, 0, MAX_QTY)) return 'malformed trade gold';
-    // rev7 §1: the SAME XOR invariant as validInput — a persisted trade
+    // rev7 §1: the SAME XOR invariant as validInput, a persisted trade
     // wants exactly one of an item or positive gold
     if ((t.wantItem !== null) === (t.wantGold > 0)) return 'trade must want exactly one of item or gold';
     return null;
@@ -1246,7 +1246,7 @@ const LANDMARK_KINDS = new Set(['elder-tree', 'old-oak', 'standing-stone', 'brok
       if (!PLAYER_REQUIRED.includes(k) && !PLAYER_OPTIONAL.has(k)) return `unknown player field ${k}`;
     if (!isInt(p.x, 0, W - 1) || !isInt(p.y, 0, H - 1)) return 'player out of bounds';
     if (!isInt(p.hp, 0, 100000)) return 'player hp out of bounds';
-    // skills: the COMPLETE constitutional set, exactly — a missing skill is
+    // skills: the COMPLETE constitutional set, exactly, a missing skill is
     // as hostile as an unknown one (both change transition behavior)
     if (!p.skills || typeof p.skills !== 'object') return 'player has no skills';
     const skeys = Object.keys(p.skills).sort();
@@ -1269,7 +1269,7 @@ const LANDMARK_KINDS = new Set(['elder-tree', 'old-oak', 'standing-stone', 'brok
       const worn = p.equipment[eq];
       if (!isSlot(worn)) return 'malformed equipment slot';
       if (worn !== null) {
-        // rev7 §2: the SHARED slotOf() decides where an item belongs —
+        // rev7 §2: the SHARED slotOf() decides where an item belongs ,
         // a helm in the weapon slot is as malformed as an unknown item
         if (!EQUIPPABLE.has(worn.item)) return 'equipped item is not equippable';
         if (slotOf(worn.item) !== eq) return `equipped item in the wrong slot (${worn.item} belongs in ${slotOf(worn.item)})`;
@@ -1335,7 +1335,7 @@ const LANDMARK_KINDS = new Set(['elder-tree', 'old-oak', 'standing-stone', 'brok
     for (const k of Object.keys(n)) if (!NODE_FIELDS.has(k)) return `unknown node field ${k}`;
     if (n.kind !== undefined) {
       // a LANDMARK is a place, not a resource (v0.79): it cannot be
-      // worked, fought, lit, or consumed — no verb in the constitution
+      // worked, fought, lit, or consumed, no verb in the constitution
       // reaches it. It blocks its tile like any node, and it exists so
       // that the map tells the truth. The kind names what stands there.
       if (n.type !== 'landmark') return 'only a landmark bears a kind';
@@ -1353,7 +1353,7 @@ const LANDMARK_KINDS = new Set(['elder-tree', 'old-oak', 'standing-stone', 'brok
     if (!isInt(n.x, 0, W - 1) || !isInt(n.y, 0, H - 1)) return 'node out of bounds';
     if (!isInt(n.depletedUntil ?? 0, 0, MAX_TIME)) return 'node depletion out of bounds';
     // type-specific rules (rev6 §6): each field belongs to exactly the
-    // node kinds the engine gives it to — ownership metadata on a static
+    // node kinds the engine gives it to, ownership metadata on a static
     // resource node is as malformed as a fire that never expires
     if (n.expiresAt !== undefined) {
       if (n.type !== 'fire') return 'only fires expire';
@@ -1391,7 +1391,7 @@ const LANDMARK_KINDS = new Set(['elder-tree', 'old-oak', 'standing-stone', 'brok
     }
   }
 
-  // ground entries: OBJECTS with a closed field set — { item, qty?, x, y,
+  // ground entries: OBJECTS with a closed field set, { item, qty?, x, y,
   // expiresAt }; qty is absent on mob drops
   for (const [gid, g] of Object.entries(state.ground)) {
     if (typeof gid !== 'string' || gid.length > 80) return 'malformed ground id';
@@ -1403,7 +1403,7 @@ const LANDMARK_KINDS = new Set(['elder-tree', 'old-oak', 'standing-stone', 'brok
     if (!isInt(g.expiresAt, 0, MAX_TIME)) return 'ground expiry out of bounds';
   }
 
-  // names: validated in BOTH directions (brief §9) — every registry entry
+  // names: validated in BOTH directions (brief §9) every registry entry
   // points at a player wearing that exact name, and every named player is
   // registered under it
   for (const [name, pid] of Object.entries(state.names)) {
@@ -1547,7 +1547,7 @@ function validInput(state, input, ctx) {
   if (input.tick !== state.tick) return false;
   // fix brief §2.3: an input signed for World A is meaningless in World B.
   // The worldId is inside the signed payload, so this check is enforced
-  // by the signature itself — forging it invalidates the sig.
+  // by the signature itself, forging it invalidates the sig.
   if (input.worldId !== worldId(state.genesis)) return false;
   if (!verifyInputSig(input)) return false;
   const p = state.players[input.playerId];
@@ -1567,11 +1567,11 @@ function validInput(state, input, ctx) {
       // rivers and the sea bar the way, and their fords are law too
       if (terrainBlocked(state.genesis, nx, ny)) return false;
       // a living beast holds its tile (v0.79): you do not walk THROUGH a
-      // troll, you deal with it — the troll bars the way. (Two bodies in
+      // troll, you deal with it, the troll bars the way. (Two bodies in
       // one square was how a fisher came to fight from inside a troll.)
       for (const m of Object.values(state.mobs)) if (m.hp > 0 && m.x === nx && m.y === ny) return false;
       // nodes are impassable (§5): you fish beside the water, not in it
-      return !blockingNodeAt(state, ctx, nx, ny); // brewpots are walkable — no wall-ins (v0.52)
+      return !blockingNodeAt(state, ctx, nx, ny); // brewpots are walkable, no wall-ins (v0.52)
     }
     case 'gather': {
       const n = state.nodes[input.nodeId];
@@ -1582,12 +1582,14 @@ function validInput(state, input, ctx) {
     case 'cook': {
       const slot = p.inventory[input.slot];
       if (!Number.isInteger(input.slot) || !slot || slot.item !== 'raw-fish') return false;
-      return hasAdjacentNode(state, ctx, p, _FIRE_TYPES);
+      // beside the flame, or standing in it: walkable fires made the second
+      // possible, and a citizen in a fire they cannot cook on is a trap
+      return hasAdjacentNode(state, ctx, p, _FIRE_TYPES) || fireOnTile(state, ctx, p.x, p.y);
     }
     case 'stop':
       return true;
     case 'recall': {
-      // spec 2k: recall to any waystone you have walked to. Never from the Wilds —
+      // spec 2k: recall to any waystone you have walked to. Never from the Wilds ,
       // magic will not carry you out of danger you chose to enter.
       if (p.hp <= 0 || inWilds(state.genesis, p.x, p.y)) return false;
       const ws = state.nodes[input.to];
@@ -1800,7 +1802,7 @@ function validInput(state, input, ctx) {
       const g2 = state.ground[input.groundId];
       if (!g2 || g2.x !== p.x || g2.y !== p.y) return false;
       // 7.4: execution merges arrows into an existing quiver, so validation
-      // must accept that path too — a full pack still has room in the quiver
+      // must accept that path too, a full pack still has room in the quiver
       if (g2.item === 'arrows' && p.inventory.some(sl => sl?.item === 'arrows')) return true;
       return firstFreeSlot(p.inventory) !== -1;
     }
@@ -1819,7 +1821,7 @@ function validInput(state, input, ctx) {
 // DETAIL: process-local, absent from canonical state, checkpoints, and
 // hashes, and rebuilt from canonical state whenever needed. The unindexed
 // scan remains the reference behavior (every helper below falls back to it
-// when no context is supplied — the test-only reference mode).
+// when no context is supplied, the test-only reference mode).
 
 // -- instrumentation (non-consensus; off unless a benchmark enables it) --
 let _p2on = false;
@@ -1990,7 +1992,13 @@ function nodeExistsAt(state, ctx, x, y) { // any node occupies the tile
   const ta = ctx.byTile.get(_tileKey(x, y));
   return !!ta && ta.length > 0;
 }
-const _WALKABLE_BUILT = new Set(['brewpot', 'watchfire']); // what citizens build never blocks a door (v0.52, v0.53)
+const _WALKABLE_BUILT = new Set(['brewpot', 'watchfire', 'fire']); // what citizens build never blocks a door (v0.52, v0.53, v0.80)
+// v0.80: the citizen's fire joins them. A fire is the only blocking node a
+// citizen could CREATE, and movement is cardinal, so four logs boxed a
+// stranger in and one log closed a ford for as long as it burned. The
+// hearths the world was founded with (campfire) still block: they are
+// furniture, not weather. Fires you can walk through are also fires you
+// can cook on, so the cook rule below counts the tile underfoot.
 function countOwnedNodes(state, ctx, type, owner) { // how many of `type` this citizen keeps
   if (_p2on) _p2c.fullNodeScans++;
   let n = 0;
@@ -2006,6 +2014,13 @@ function blockingNodeAt(state, ctx, x, y) { // movement rule: player-built nodes
   return false;
 }
 const _ORTH = [[1, 0], [-1, 0], [0, 1], [0, -1]]; // adjacent(): Manhattan distance exactly 1
+function fireOnTile(state, ctx, x, y) { // a fire you are standing IN is a fire you are at
+  if (!ctx) return Object.values(state.nodes).some(n => _FIRE_TYPES.has(n.type) && n.x === x && n.y === y);
+  const ta = ctx.byTile.get(_tileKey(x, y));
+  if (!ta) return false;
+  for (const id of ta) if (_FIRE_TYPES.has(state.nodes[id].type)) return true;
+  return false;
+}
 const _FIRE_TYPES = new Set(['campfire', 'fire']);
 function hasAdjacentNode(state, ctx, p, typeOrSet, pred) {
   const match = typeof typeOrSet === 'string' ? (t) => t === typeOrSet : (t) => typeOrSet.has(t);
@@ -2061,7 +2076,7 @@ function adjacentNodeIdsInOrder(state, ctx, p, type) {
   return found;
 }
 function waystoneIdsSorted(state, ctx) {
-  // reference: Object.keys(...).filter(waystone).sort() — sorted, so order-safe
+  // reference: Object.keys(...).filter(waystone).sort() sorted, so order-safe
   if (!ctx) { if (_p2on) _p2c.fullNodeScans++; return Object.keys(state.nodes).filter(id => state.nodes[id].type === 'waystone').sort(); }
   if (_p2on) _p2c.typeLookups++;
   return [...(ctx.byType.get('waystone') ?? [])].sort();
@@ -2077,7 +2092,7 @@ function brewpotsOwnedBy(state, ctx, pid) {
 // ---- exploration (v0.50): survey markers, placed by the beacon ----
 const MARKER_LIFE = 3000; // an unclaimed marker relocates after this many ticks
 // survey findings (v0.77): a minority of markers are the TRACES of
-// those who came before — classed at birth from the same digest that
+// those who came before, classed at birth from the same digest that
 // placed them, weighted by the country they lie in (the generator
 // registered what its countries are; an unregistered one keeps flat,
 // modest odds). The class never changes and the finding is the class:
@@ -2127,7 +2142,7 @@ function surveyMarker(s, ctx, index, salt) {
     return { x, y, kind: classifyMarker(g, x, y, h), bornAt: s.tick };
   }
   // fallback (v0.79): the old anchor+5 could itself be barred ground on a
-  // terrain world. Ring-scan outward from the anchor — deterministic, exact,
+  // terrain world. Ring-scan outward from the anchor, deterministic, exact,
   // and the anchor's own walkability is the spawn's guarantee.
   for (let r = 1; r < Math.max(g.worldW, g.worldH); r++)
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
@@ -2172,7 +2187,7 @@ function nextState(state, inputs, _legacyBeacon) {
   const beacon = Buffer.from(s.beacon, 'hex');
 
   // snapshot who has already mastered what, so the end-of-tick pass can tell who
-  // CROSSED a threshold this tick — regardless of which of the 18 XP sites paid it
+  // CROSSED a threshold this tick, regardless of which of the 18 XP sites paid it
   const _preMaster = {};
   for (const _pid in s.players) {
     const _done = new Set();
@@ -2191,11 +2206,11 @@ function nextState(state, inputs, _legacyBeacon) {
     if (s.tick - (s.markers[_i].bornAt ?? s.tick) > MARKER_LIFE) s.markers[_i] = surveyMarker(s, _ctx, _i, 'life');
   while (s.markers.length < _K) s.markers.push(surveyMarker(s, _ctx, s.markers.length, 'fill'));
   // brewpots abandoned past the decay window crumble, returning their tile to the
-  // commons — the world stays open to newcomers; active pots reset the clock (v0.52)
+  // commons, the world stays open to newcomers; active pots reset the clock (v0.52)
   const _decay = s.genesis.brew?.decayTicks ?? 0;
   if (_decay > 0) for (const [_nid, _n] of Object.entries(s.nodes))
     if (_n.type === 'brewpot' && s.tick - (_n.lastUsed ?? 0) > _decay) deleteIndexedNode(s, _ctx, _nid);
-  // watchfires (v0.53): while a fire burns it pays its keeper a slow trickle — the
+  // watchfires (v0.53): while a fire burns it pays its keeper a slow trickle, the
   // light is public, the vigil is theirs. A fire long cold crumbles to ash.
   const _wt = s.genesis.watch;
   if (_wt) for (const [_nid, _n] of Object.entries(s.nodes)) {
@@ -2233,7 +2248,7 @@ function nextState(state, inputs, _legacyBeacon) {
     if (inCity(s.genesis, nx, ny)) continue; // no mob enters Anchor (spec 2d)
     if (Math.max(Math.abs(nx - m.hx), Math.abs(ny - m.hy)) > 2) continue;
     if (nodeExistsAt(s, _ctx, nx, ny)) continue;
-    if (terrainBlocked(s.genesis, nx, ny)) continue; // v0.78: beasts respect the water like everyone else — a goblin was seen STANDING IN THE RIVER
+    if (terrainBlocked(s.genesis, nx, ny)) continue; // v0.78: beasts respect the water like everyone else, a goblin was seen STANDING IN THE RIVER
     m.x = nx; m.y = ny;
   }
   // v0.74: the shelves rot. Every SHELF_DECAY_EVERY intervals a sixteenth of
@@ -2304,7 +2319,7 @@ function nextState(state, inputs, _legacyBeacon) {
       // the newcomer's quiver (v0.78): every soul wakes with twenty-five
       // arrows. At ranged 1 with a wooden bow an arrow lands half the
       // time for 1, so a 5hp goblin costs ~10 expected: the quiver is
-      // two goblins with slack — the ARCHER need not first be a
+      // two goblins with slack, the ARCHER need not first be a
       // brawler (§7f's own principle, in combat's house). Spawn is
       // creation-only (§5b: the only input for unknown ids), so death
       // never re-fills it, and imported citizens arrive with their own
@@ -2314,7 +2329,7 @@ function nextState(state, inputs, _legacyBeacon) {
     }
     const p = s.players[pid];
     if (p) p.lastInput = s.tick; // presence (spec 5e)
-    if (p) { // spec 2k: attune to a waystone you stand beside — the road remembers who walked it
+    if (p) { // spec 2k: attune to a waystone you stand beside, the road remembers who walked it
       for (const nid of adjacentNodeIdsInOrder(s, _ctx, p, 'waystone')) {
         if (!p.attuned) p.attuned = [];
         if (!p.attuned.includes(nid)) p.attuned.push(nid);
@@ -2339,7 +2354,7 @@ function nextState(state, inputs, _legacyBeacon) {
     } else if (inp.type === 'stop') {
       p.action = null;
     } else if (inp.type === 'offer_trade') {
-      // the shape gate guarantees both demand fields, canonically — the
+      // the shape gate guarantees both demand fields, canonically, the
       // persisted trade is the signed trade, verbatim (pre-freeze §12)
       p.trade = { to: inp.to, giveSlots: inp.giveSlots.slice(), wantItem: inp.wantItem, wantGold: inp.wantGold };
     } else if (inp.type === 'cancel_trade') {
@@ -2504,12 +2519,12 @@ function nextState(state, inputs, _legacyBeacon) {
       const si = p.inventory.findIndex(sl => sl?.item === 'sigil');
       if (inp.spell === 'mend' && si !== -1) {
         p.inventory[si] = null;
-        p.hp = Math.min(effLevel(p.skills.hitpoints), p.hp + 20); // v0.41: a strong heal (+20), not a full reset — keeps mend premium without making sigil-stackers unkillable
+        p.hp = Math.min(effLevel(p.skills.hitpoints), p.hp + 20); // v0.41: a strong heal (+20), not a full reset, keeps mend premium without making sigil-stackers unkillable
         p.skills.magic += 55; // v0.80 parity retune
       } else if (inp.spell === 'anchor' && si !== -1) {
         p.inventory[si] = null;
         // v0.80: anchor comes HOME. The old target (cx, 7) was the classic
-        // generator's plaza — on Tallyholm, y=7 is open sea off the north
+        // generator's plaza, on Tallyholm, y=7 is open sea off the north
         // coast, and every cast stranded the caster on the waves. The fixed
         // point is the REGISTERED spawn: whatever world this is, anchor
         // returns you to where souls arrive.
@@ -2633,7 +2648,15 @@ function nextState(state, inputs, _legacyBeacon) {
           for (const [mx, my] of [[-1, 0], [1, 0], [0, 1], [0, -1]]) {
             const nx = p.x + mx, ny = p.y + my;
             if (nx < 1 || nx >= s.genesis.worldW - 1 || ny < 1 || ny >= s.genesis.worldH - 1) continue;
-    if (inCity(s.genesis, nx, ny)) continue; // no mob enters Anchor (spec 2d)
+            // v0.80: the step aside now obeys the same law as a step. It
+            // carried a MOB rule ("no mob enters Anchor"), spliced in at
+            // the wrong indentation, which skipped every tile inside a
+            // town: citizens lighting fires in Anchor never stepped back
+            // and stood in their own flame. It also obeyed neither the
+            // water nor the beast that holds its tile, so a fire on the
+            // bank could shove its maker into the river.
+            if (terrainBlocked(s.genesis, nx, ny)) continue;
+            if (Object.values(s.mobs).some(m2 => m2.hp > 0 && m2.x === nx && m2.y === ny)) continue;
             if (nodeExistsAt(s, _ctx, nx, ny)) continue;
             p.x = nx; p.y = ny;
             break;
@@ -2669,7 +2692,7 @@ function nextState(state, inputs, _legacyBeacon) {
       if (it) {
         p.inventory[inp.slot] = null;
         const gid = 'g' + s.tick + '-' + pid.slice(0, 8) + '-' + inp.slot;
-        // 7.2: the whole slot falls, quantity intact — 17 arrows dropped
+        // 7.2: the whole slot falls, quantity intact, 17 arrows dropped
         // are 17 arrows on the ground, matching death drops and pickup
         s.ground[gid] = { item: it.item, qty: it.qty ?? 1, x: p.x, y: p.y, expiresAt: s.tick + 100 };
       }
@@ -2697,7 +2720,7 @@ function nextState(state, inputs, _legacyBeacon) {
     } else if (inp.type === 'cook') {
       // re-check against new state; instant, same-tick resolution (§6a)
       const slot = p.inventory[inp.slot];
-      const nearFire = hasAdjacentNode(s, _ctx, p, _FIRE_TYPES);
+      const nearFire = hasAdjacentNode(s, _ctx, p, _FIRE_TYPES) || fireOnTile(s, _ctx, p.x, p.y); // v0.80: the tile underfoot counts, exactly as the validator says
       if (slot && slot.item === 'raw-fish' && nearFire) {
         const lvl = effLevel(p.skills.cooking);
         p.cooksTried = (p.cooksTried ?? 0) + 1; // the pan counts; it does not gamble

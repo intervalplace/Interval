@@ -717,6 +717,22 @@ gold trim for a second mastery, and a radiant cape for all nine.
 Mastery is proved by the state and verified by every node; the cape is
 simply what proof looks like from a distance.
 
+**Fires are walkable (v0.80).** A fire a citizen lights does not block
+its tile. Nodes are impassable as a rule, but everything a citizen
+MAKES is exempt (brewpot, watchfire, and now fire), because a blocking
+node any stranger can create is a weapon: movement is cardinal, so four
+logs fence a citizen in place and one log closes a ford. The hearths
+placed at the founding (`campfire`) still block, being furniture rather
+than weather. A fire underfoot counts as a fire at hand: `cook` accepts
+a fire on the cook's own tile as well as an adjacent one.
+
+**Stepping aside (v0.80).** A lit fire appears on the lighter's own
+tile, and nodes are impassable, so the lighter steps aside: west, east,
+south, north, the first tile that a `move` would have allowed. That
+step obeys every rule a step obeys, the walls, the water, and the beast
+that holds its tile. If no neighbour is lawful, the lighter keeps their
+tile and the fire burns where they stand.
+
 **The stilling (v0.80).** Magic completes its identity: the skill of
 refusing combat. `anchor` flees, `mend` endures, and `still` denies.
 The stilling is its own input (`still`, one field: `target`, a mob or
