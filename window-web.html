@@ -27,6 +27,22 @@
   }
   #frame { display: flex; gap: 0; border: 3px solid var(--stone-dk); width: min(96vw, 1180px); }
   #view { flex: 1 1 auto; min-width: 0; align-self: flex-start; }
+  /* the rest of the world (v0.80): a citizen inside /play had no way to
+     learn that the chart, the manual, the hiscores and the board exist.
+     Every link opens in a NEW TAB on purpose: leaving this one would drop
+     the socket and stand your citizen still. */
+  #topnav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 5px 10px; margin: 0 0 8px; font-size: 12px; letter-spacing: .04em; }
+  #topnav a { color: var(--gold); text-decoration: none; }
+  #topnav a:hover { text-decoration: underline; }
+  #topnav .nhome { font-weight: bold; letter-spacing: .18em; }
+  #topnav .nsep { color: var(--dim); }
+  #topnav .nspacer { flex: 1 1 auto; }
+  #topnav .nwin { color: var(--dim); font-size: 11px; }
+  @media (max-width: 640px) {
+    #topnav { gap: 10px; font-size: 11px; padding: 4px 8px; }
+    #topnav .nwin { display: none; }
+  }
   canvas { display: block; background: #253a17; image-rendering: pixelated; cursor: crosshair;
            width: 100%; height: auto; }
   /* the classic stone bevel: light top-left, dark bottom-right */
@@ -144,6 +160,16 @@
     </div>
   </div>
 </div>
+<nav id="topnav" class="stone" aria-label="the rest of the world">
+  <a class="nhome" href="/" target="_blank" rel="noopener">INTERVAL</a>
+  <span class="nsep">·</span>
+  <a href="/map" target="_blank" rel="noopener">map</a>
+  <a href="/manual" target="_blank" rel="noopener">manual</a>
+  <a href="/hiscores" target="_blank" rel="noopener">hiscores</a>
+  <a href="/board" target="_blank" rel="noopener">board</a>
+  <span class="nspacer"></span>
+  <span class="nwin">the flat window</span>
+</nav>
 <div id="frame">
   <div id="view" style="position:relative"><canvas id="world" width="560" height="400"></canvas></div>
   <div id="panel" class="stone">
