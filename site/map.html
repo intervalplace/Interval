@@ -36,6 +36,7 @@
     <div id="growing">the island is growing from the seed&hellip;</div>
     <div id="whereis"></div>
   </div>
+  <p id="findnote" style="color:var(--dim);font-size:12px;margin:6px 0 0"></p>
   <p class="maplegend"><b>Anchor</b> holds the center; the <b>Brandline</b> stones mark where the
   law of the Wilds begins; the <b>Ridge</b> is crossed at its two passes or skirted through the
   deep wood; the causeway to <b>Shrine Isle</b> is walked once and recalled to forever. One
@@ -88,7 +89,7 @@ function settlementsE() {
   if (GEN === 'interval-expanse-v3') return settlementsE3()
   const cx = Math.floor(W / 2), cy = Math.floor(H / 2)
   if (GEN === 'interval-expanse-v2') {
-    // v2: the water towns stand on their water — Millbrook and Fenmarch on
+    // v2: the water towns stand on their water. Millbrook and Fenmarch on
     // the river's east bank, Eastmere opening on the bay. Mirror of
     // worldgen-expanse2.mjs settlementsOf, tile for tile.
     const mby = Math.round(H * 0.24), fmy = Math.round(H * 0.84)
@@ -157,7 +158,7 @@ function fordE(x, y) { // mirror of fordAt: the road crosses, and every main str
 }
 // ---- the third expanse (interval-expanse-v3): the island, mirrored ----
 // An exact mirror of worldgen-expanse3.mjs: the coast by octant arithmetic
-// (no atan2 — ECMA-262 leaves it implementation-defined), the borders that
+// (no atan2. ECMA-262 leaves it implementation-defined), the borders that
 // are features, the road graph, and the fords painted as bridges.
 function angleOf3(dx, dy) {
   const ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy
@@ -387,7 +388,7 @@ function drawStones() {
 // nominal fractions, so the nominal is where the search began, not
 // where the monument stands. The nominals below are the pre-state
 // guess; the moment the world's state arrives, TRUE_PLACES replaces
-// them with the actual node coordinates — the chart cannot then
+// them with the actual node coordinates, the chart cannot then
 // disagree with the world, because it is reading the world.
 let TRUE_PLACES = null
 function placesFromState(nodes) {
@@ -437,7 +438,24 @@ function labelPoints() {
     ],
   }
 }
+function drawFind() { // the sought citizen: a cool ring, never the gold one
+  if (typeof FIND_MARK === 'undefined' || !FIND_MARK) return
+  const sx = (FIND_MARK.x + 0.5 - view.x) * view.z, sy = (FIND_MARK.y + 0.5 - view.y) * view.z
+  if (sx < -40 || sy < -40 || sx > cv.width + 40 || sy > cv.height + 40) return
+  const t = (performance.now() % 1600) / 1600
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.strokeStyle = 'rgba(214,224,236,' + (0.75 - t * 0.55) + ')'
+  ctx.lineWidth = 2
+  ctx.beginPath(); ctx.arc(sx, sy, 5 + t * 16, 0, 7); ctx.stroke()
+  ctx.fillStyle = '#d6e0ec'
+  ctx.beginPath(); ctx.arc(sx, sy, 3.2, 0, 7); ctx.fill()
+  const label = (FIND_NAME ?? String(FIND_ID).slice(0, 8) + '\u2026') + ((FIND_MARK.hp ?? 1) <= 0 ? ' (fallen)' : '')
+  ctx.font = 'bold 11px Verdana'; ctx.textAlign = 'center'
+  ctx.fillStyle = 'rgba(5,3,1,.85)'; ctx.fillText(label, sx + 1, sy - 11)
+  ctx.fillStyle = '#d6e0ec'; ctx.fillText(label, sx, sy - 12)
+}
 function drawMark() {
+  drawFind()
   if (typeof ME_MARK === 'undefined' || !ME_MARK) return
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   const sx = (ME_MARK.x + 0.5 - view.x) * view.z, sy = (ME_MARK.y + 0.5 - view.y) * view.z
@@ -458,7 +476,7 @@ function drawLabels() {
   const lp = labelPoints()
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   // coast-aware nameplates (v0.79b): a monument may stand at the water's
-  // edge, but its NAME stays over the land it names — hung below the
+  // edge, but its NAME stays over the land it names, hung below the
   // anchor when the sea lies above, nudged inland when it lies beside.
   const seaAt = (x, y) => {
     const xx = Math.max(1, Math.min(W - 2, Math.round(x))), yy = Math.max(1, Math.min(H - 2, Math.round(y)))
@@ -466,7 +484,7 @@ function drawLabels() {
   }
   // no name covers another (v0.79c): towns claim their ground first;
   // places then settle into clear space, stepping downward until they
-  // fit. And the sea probe is a band, not a pinprick — glyphs are
+  // fit. And the sea probe is a band, not a pinprick, glyphs are
   // taller than one sample, as the Old Oak found out over open water.
   const claimed = []
   const collides = (r) => claimed.some(c => r.x < c.x + c.w && r.x + r.w > c.x && r.y < c.y + c.h && r.y + r.h > c.y)
@@ -551,22 +569,44 @@ requestAnimationFrame(growRows)
 
 // ---- the living mark (v0.78): this chart knows who is reading it.
 // The key in this browser IS a citizen; if that citizen stands in the
-// world, their mark breathes on the island — inside the map's own
+// world, their mark breathes on the island, inside the map's own
 // view, so it pans and zooms with the land it stands on.
 let ME_MARK = null, ME_NAME = null
+// find a citizen on the chart (v0.80): /map?citizen=<key> follows a
+// name off the hiscores and onto the ground it stands on. The world's
+// positions are public to every node already; this only makes the
+// public thing legible.
+const FIND_ID = params.get('citizen')
+let FIND_MARK = null, FIND_NAME = null, findCentred = false
 ;(() => {
   let pub = null
   try { pub = JSON.parse(localStorage.getItem('interval-ownkey') ?? 'null')?.pub ?? null } catch {}
-  if (!pub) return
+  if (!pub && !FIND_ID) return // a stranger with no key still deserves the search
   try {
     const ws2 = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host)
     ws2.onmessage = (ev) => {
       try {
         const m2 = JSON.parse(ev.data)
         if (m2.type !== 'state') return
-        const p2 = m2.state.players?.[pub]
+        const p2 = pub ? m2.state.players?.[pub] : null
         ME_MARK = p2 ? { x: p2.x, y: p2.y, hp: p2.hp } : null
         ME_NAME = p2?.name ?? null
+        if (FIND_ID) {
+          const f2 = m2.state.players?.[FIND_ID]
+          FIND_MARK = f2 ? { x: f2.x, y: f2.y, hp: f2.hp } : null
+          FIND_NAME = f2?.name ?? null
+          const note = document.getElementById('findnote')
+          if (note) note.textContent = f2
+            ? 'showing ' + (FIND_NAME ?? String(FIND_ID).slice(0, 8) + '\u2026') + ' where they stand'
+            : 'that citizen is not standing in this world'
+          if (f2 && !findCentred) { // one centring only: the reader may pan freely after
+            findCentred = true
+            view.z = Math.min(8, Math.max(view.z, 4))
+            view.x = f2.x + 0.5 - (cv.width / 2) / view.z
+            view.y = f2.y + 0.5 - (cv.height / 2) / view.z
+            blit()
+          }
+        }
         if (!TRUE_PLACES && m2.state.nodes) {
           const tp = placesFromState(m2.state.nodes)
           if (tp.length) {
@@ -583,7 +623,7 @@ let ME_MARK = null, ME_NAME = null
   let last2 = 0
   const pulse = (t2) => {
     requestAnimationFrame(pulse)
-    if (!ME_MARK || t2 - last2 < 80) return
+    if ((!ME_MARK && !FIND_MARK) || t2 - last2 < 80) return
     last2 = t2; blit()
   }
   requestAnimationFrame(pulse)

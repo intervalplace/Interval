@@ -205,7 +205,10 @@ function drawCitizen(j) {
     + '<div class="cname">' + esc(me.name) + '</div>'
     + (me.calling ? '<div class="ccall">' + esc(me.calling) + '</div>' : '')
     + '<div class="ckey" title="' + esc(me.playerId) + '">'
-    + esc(String(me.playerId).slice(0, 16)) + '\u2026</div></div>'
+    + esc(String(me.playerId).slice(0, 16)) + '\u2026</div>'
+    // the rank and the ground it stands on (v0.80): a name here, a place there
+    + '<div class="cfind"><a href="/map?citizen=' + encodeURIComponent(me.playerId) + '">'
+    + 'see them on the chart</a></div></div>'
 
   html += '<table><tr><th>Skill</th><th class="rank">Rank</th><th>Level</th><th>Experience</th></tr>'
   html += '<tr class="crow-total"><td><b>standing</b></td>'
