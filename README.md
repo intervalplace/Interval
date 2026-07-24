@@ -28,9 +28,9 @@ Open [interval.place/play](https://interval.place/play). A key is minted
 in your browser, and you wake at the well in Anchor. Chop, mine, fish,
 fight, trade, light fires; everything you do is signed and witnessed.
 
-- **/play**: the flat window. Fast, complete, runs anywhere.
-- **/deluxe**: the 3D window.
-- **/photo**: the painterly window. Same world, golden hour.
+- **/play/flat/**: the flat window. Fast, complete, runs anywhere.
+- **/play/deep**: the 3D window.
+- **/play/photo**: the painterly window. Same world, golden hour.
 - **/map**: the living chart, computed in your browser from the seed.
   If the chart and the world ever disagreed, one of them would be in
   breach of the constitution.
